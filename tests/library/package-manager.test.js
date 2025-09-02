@@ -20,9 +20,9 @@ const MIN_HOURS_BETWEEN_RUNS = 2;
 const isCI = process.env.CI === 'true';
 
 function shouldRunSlowTests() {
-    if (isCI) {
-        return false;
-    }
+    // if (isCI) {
+    //     return false;
+    // }
     try {
         const stats = require('fs').statSync(TIMESTAMP_FILE);
         const lastRun = stats.mtime.getTime();
