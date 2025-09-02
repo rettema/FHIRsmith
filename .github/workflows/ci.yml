@@ -27,6 +27,7 @@ jobs:
         run: npm run test:ci
         env:
           SUPPRESS_LOGS: 'true'
+          NODE_OPTIONS: "--max-old-space-size=14000" 
 
       - name: Upload test results
         uses: actions/upload-artifact@v4
