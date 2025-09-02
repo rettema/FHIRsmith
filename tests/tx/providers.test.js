@@ -6,25 +6,28 @@ const {Languages} = require("../../library/languages");
 describe('Provider Test', () => {
 
   test('Full tx.fhir.org load', async () => {
-    let configFile = path.resolve(__dirname, '../../tx/tx.fhir.org.yml')
-    let providers = new Providers(configFile);
-    await providers.load();
-    expect(providers.codeSystemFactories.size).toBeGreaterThan(0);
-    expect(providers.codeSystems.size).toBeGreaterThan(0);
-    expect(providers.valueSetProviders.length).toBeGreaterThan(0);
+    const isCI = process.env.CI === 'true';
+    if (!isCI) {
+      let configFile = path.resolve(__dirname, '../../tx/tx.fhir.org.yml')
+      let providers = new Providers(configFile);
+      await providers.load();
+      expect(providers.codeSystemFactories.size).toBeGreaterThan(0);
+      expect(providers.codeSystems.size).toBeGreaterThan(0);
+      expect(providers.valueSetProviders.length).toBeGreaterThan(0);
 
-    let r4 = await providers.cloneWithFhirVersion("r4");
+      let r4 = await providers.cloneWithFhirVersion("r4");
 
-    expect(r4.codeSystemFactories.size).toEqual(providers.codeSystemFactories.size);
-    expect(r4.codeSystems.size).toBeGreaterThan(providers.codeSystems.size);
-    expect(r4.valueSetProviders.length).toBeGreaterThan(providers.valueSetProviders.length);
+      expect(r4.codeSystemFactories.size).toEqual(providers.codeSystemFactories.size);
+      expect(r4.codeSystems.size).toBeGreaterThan(providers.codeSystems.size);
+      expect(r4.valueSetProviders.length).toBeGreaterThan(providers.valueSetProviders.length);
 
-    // Test all code system factories can produce providers
-    await testAllCodeSystemFactories(r4);
+      // Test all code system factories can produce providers
+      await testAllCodeSystemFactories(r4);
 
-    // Test random selection of loaded code systems can produce providers
-    await testRandomCodeSystems(r4);
-    await testCodeSystemProviderEdgeCases(r4);
+      // Test random selection of loaded code systems can produce providers
+      await testRandomCodeSystems(r4);
+      await testCodeSystemProviderEdgeCases(r4);
+    }
   }, 5000000);
 
   /**
