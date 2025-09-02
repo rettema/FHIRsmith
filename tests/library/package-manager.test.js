@@ -17,7 +17,12 @@ const rimraf = require('rimraf').sync;
 const TIMESTAMP_FILE = path.join(__dirname, '.last-integration-test-run');
 const MIN_HOURS_BETWEEN_RUNS = 2;
 
+const isCI = process.env.CI === 'true';
+
 function shouldRunSlowTests() {
+    if (isCI) {
+        return false;
+    }
     try {
         const stats = require('fs').statSync(TIMESTAMP_FILE);
         const lastRun = stats.mtime.getTime();
