@@ -18,6 +18,7 @@ const VCLModule = require('./vcl/vcl.js');
 const xigModule = require('./xig/xig.js');
 const PackagesModule = require('./packages/packages.js');
 const RegistryModule = require('./registry/registry.js');
+const PublisherModule = require('./publisher/publisher.js');
 
 const htmlServer = require('./common/html-server');
 htmlServer.useLog(serverLog);
@@ -115,6 +116,18 @@ async function initializeModules() {
       throw error;
     }
   }
+
+  // Initialize Publisher module
+  if (config.modules.publisher && config.modules.publisher.enabled) {
+    try {
+      modules.publisher = new PublisherModule();
+      await modules.publisher.initialize(config.modules.publisher);
+      app.use('/publisher', modules.publisher.router);
+    } catch (error) {
+      serverLog.error('Failed to initialize Publisher module:', error);
+      throw error;
+    }
+  }
 }
 
 async function loadTemplates() {
@@ -135,6 +148,9 @@ async function loadTemplates() {
 
     const registryTemplatePath = path.join(__dirname, 'registry', 'registry-template.html');
     htmlServer.loadTemplate('registry', registryTemplatePath);
+
+    const publisherTemplatePath = path.join(__dirname, 'publisher', 'publisher-template.html');
+    htmlServer.loadTemplate('publisher', publisherTemplatePath);
 
   } catch (error) {
     serverLog.error('Failed to load templates:', error);
@@ -178,6 +194,13 @@ function buildRootPageContent() {
     content += '<li class="list-group-item">';
     content += '<a href="/tx-reg" class="text-decoration-none">Terminology Server Registry</a>: ';
     content += 'Discover and query FHIR terminology servers for code system and value set support';
+    content += '</li>';
+  }
+
+  if (config.modules.publisher && config.modules.publisher.enabled) {
+    content += '<li class="list-group-item">';
+    content += '<a href="/publisher" class="text-decoration-none">FHIR Publisher</a>: ';
+    content += 'Manage FHIR Implementation Guide publication tasks and approvals';
     content += '</li>';
   }
 
