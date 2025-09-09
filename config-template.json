@@ -59,5 +59,11 @@
       "userAgent": "YourServer/1.0",
       "apiKeys": {}
     }
+  },
+  "publisher": {
+    "enabled": true,
+    "database": "/absolute/path/to/publisher.db",
+    "sessionSecret": "change-this-to-a-secure-random-string",
+    "workspaceRoot": "/absolute/path/to/workspaces"
   }
 }
