@@ -170,6 +170,7 @@ class SnomedServices {
       '999000021000000109': 'UK Clinical Edition',
       '5631000179106': 'Uruguay Edition',
       '731000124108': 'US Edition',
+      '21000325107': 'Chilean Edition',
       '5991000124107': 'US Edition (with ICD-10-CM maps)'
     };
 

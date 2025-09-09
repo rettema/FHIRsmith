@@ -753,6 +753,7 @@ class RegistryModule {
       case '11000279109': edition = 'CX'; break;
       case '999000021000000109': edition = 'UK+Clinical'; break;
       case '5631000179106': edition = 'UY'; break;
+      case '21000325107': edition = 'CL'; break;
       case '5991000124107': edition = 'US+ICD10CM'; break;
       default: edition = editionCode ? '??' : ''; break;
     }

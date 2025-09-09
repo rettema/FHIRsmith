@@ -184,6 +184,7 @@ class SnomedModule extends BaseTerminologyModule {
       "2011000195101": { name: "Swiss Edition", needsBase: true, lang: "de-CH" },
       "999000021000000109": { name: "UK Clinical Edition", needsBase: true, lang: "en-GB" },
       "5631000179106": { name: "Uruguayan Edition", needsBase: true, lang: "es-UY" },
+      "21000325107": { name: "Chilean Edition", needsBase: false, lang: "es-CL" },
       "5991000124107": { name: "US Edition + ICD10CM", needsBase: true, lang: "en-US" }
     };
 
@@ -1035,6 +1036,9 @@ class SnomedImporter {
             caseSignificanceId: BigInt(parts[8])
           };
 
+          if (!desc.active) {
+            console.log('Inactive desc: '+desc.conceptId+": "+desc.term);
+          }
           descriptionList.push(desc);
         }
 
