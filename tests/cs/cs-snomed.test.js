@@ -12,7 +12,7 @@ const {
   SnomedReferenceSetMembers,
   SnomedReferenceSetIndex,
   SnomedFileReader
-} = require('../../tx/cs/cs-snomed-structures');
+} = require('../../tx/sct/structures');
 
 const {
   SnomedExpressionParser,
@@ -20,7 +20,7 @@ const {
   SnomedExpressionServices,
   SnomedExpressionContext,
   SnomedServicesRenderOption
-} = require('../../tx/cs/cs-snomed-expressions');
+} = require('../../tx/sct/expressions');
 
 const { SnomedServicesFactory } = require('../../tx/cs/cs-snomed');
 

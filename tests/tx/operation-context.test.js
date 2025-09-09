@@ -833,32 +833,6 @@ describe('OperationParameters', () => {
       });
     });
 
-    describe('Error Classes', () => {
-      test('TerminologyError should be instanceof Error', () => {
-        const error = new TerminologyError('test message');
-
-        expect(error).toBeInstanceOf(Error);
-        expect(error.name).toBe('TerminologyError');
-        expect(error.message).toBe('test message');
-      });
-
-      test('TooCostlyError should be instanceof Error', () => {
-        const error = new TooCostlyError('test message');
-
-        expect(error).toBeInstanceOf(Error);
-        expect(error.name).toBe('TooCostlyError');
-        expect(error.message).toBe('test message');
-        expect(error.diagnostics).toBe('');
-      });
-
-      test('TooCostlyError should allow setting diagnostics', () => {
-        const error = new TooCostlyError('test message');
-        error.diagnostics = 'test diagnostics';
-
-        expect(error.diagnostics).toBe('test diagnostics');
-      });
-    });
-
     describe('Edge Cases', () => {
       test('should handle very short time limits', () => {
         const context = new OperationContext('en-US', 'test-id', 0.001); // 1ms limit

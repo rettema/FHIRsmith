@@ -1,21 +1,7 @@
 const assert = require("assert");
 const {Languages} = require("../library/languages");
+const {TooCostlyError, TerminologyError} = require("./errors");
 
-// Custom error types
-class TerminologyError extends Error {
-  constructor(message) {
-    super(message);
-    this.name = 'TerminologyError';
-  }
-}
-
-class TooCostlyError extends Error {
-  constructor(message) {
-    super(message);
-    this.name = 'TooCostlyError';
-    this.diagnostics = '';
-  }
-}
 
 class TimeTracker {
   constructor() {
@@ -587,7 +573,5 @@ module.exports = {
   OperationContext,
   OperationParameters,
   ExpansionParamsVersionRuleMode,
-  TerminologyError,
-  TooCostlyError,
   TimeTracker
 };

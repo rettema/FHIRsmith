@@ -10,8 +10,8 @@ const {
   SnomedStrings, SnomedWords, SnomedStems, SnomedReferences,
   SnomedDescriptions, SnomedDescriptionIndex, SnomedConceptList,
   SnomedRelationshipList, SnomedReferenceSetMembers, SnomedReferenceSetIndex
-} = require('../cs/cs-snomed-structures');
-const {SnomedExpressionServices} = require("../cs/cs-snomed-expressions");
+} = require('../sct/structures');
+const {SnomedExpressionServices} = require("../sct/expressions");
 
 class SnomedModule extends BaseTerminologyModule {
 
@@ -184,6 +184,7 @@ class SnomedModule extends BaseTerminologyModule {
       "2011000195101": { name: "Swiss Edition", needsBase: true, lang: "de-CH" },
       "999000021000000109": { name: "UK Clinical Edition", needsBase: true, lang: "en-GB" },
       "5631000179106": { name: "Uruguayan Edition", needsBase: true, lang: "es-UY" },
+      "21000325107": { name: "Chilean Edition", needsBase: false, lang: "es-CL" },
       "5991000124107": { name: "US Edition + ICD10CM", needsBase: true, lang: "en-US" }
     };
 
@@ -1035,6 +1036,9 @@ class SnomedImporter {
             caseSignificanceId: BigInt(parts[8])
           };
 
+          if (!desc.active) {
+            console.log('Inactive desc: '+desc.conceptId+": "+desc.term);
+          }
           descriptionList.push(desc);
         }
 
@@ -2256,7 +2260,7 @@ class SnomedImporter {
     for (const concept of this.conceptList) {
       try {
         // Create expression with just this concept
-        const { SnomedExpression, SnomedConcept } = require('../cs/cs-snomed-expressions');
+        const { SnomedExpression, SnomedConcept } = require('../sct/expressions');
         const exp = new SnomedExpression();
         const snomedConcept = new SnomedConcept(concept.index);
         snomedConcept.code = concept.id.toString();
@@ -2266,7 +2270,7 @@ class SnomedImporter {
         const normalizedExp = services.normaliseExpression(exp);
 
         // Render with minimal formatting
-        const { SnomedServicesRenderOption } = require('../cs/cs-snomed-expressions');
+        const { SnomedServicesRenderOption } = require('../sct/expressions');
         const rendered = services.renderExpression(normalizedExp, SnomedServicesRenderOption.Minimal);
 
         // If the rendered form is different from just the concept ID, store it

@@ -4,11 +4,11 @@ const {
   SnomedDescriptions, SnomedDescriptionIndex, SnomedConceptList,
   SnomedRelationshipList, SnomedReferenceSetMembers, SnomedReferenceSetIndex,
   SnomedFileReader
-} = require('./cs-snomed-structures');
+} = require('../sct/structures');
 const {
   SnomedExpressionServices, SnomedExpression, SnomedConcept,
   SnomedExpressionParser, NO_REFERENCE, SnomedServicesRenderOption
-} = require('./cs-snomed-expressions');
+} = require('../sct/expressions');
 
 // Context kinds matching Pascal enum
 const SnomedProviderContextKind = {
@@ -170,6 +170,7 @@ class SnomedServices {
       '999000021000000109': 'UK Clinical Edition',
       '5631000179106': 'Uruguay Edition',
       '731000124108': 'US Edition',
+      '21000325107': 'Chilean Edition',
       '5991000124107': 'US Edition (with ICD-10-CM maps)'
     };
 

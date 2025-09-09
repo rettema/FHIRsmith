@@ -44,3 +44,4 @@
 <<421813008 |Class Hepaticopsida (organism)|
 <<441802002 |Imaging of liver (procedure)|
 <<119383005 |Specimen from liver (specimen)|
+129433002 |Inspection|
