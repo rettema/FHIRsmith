@@ -5,7 +5,7 @@ const Database = require('sqlite3').Database;
 const bcrypt = require('bcrypt');
 const session = require('express-session');
 const SQLiteStore = require('connect-sqlite3')(session);
-
+const lusca = require('lusca');
 class PublisherModule {
   constructor() {
     this.router = express.Router();
@@ -29,6 +29,9 @@ class PublisherModule {
       cookie: { secure: false, maxAge: 24 * 60 * 60 * 1000 } // 24 hours
       // Not using SQLiteStore to avoid the database conflict
     }));
+
+    // Add CSRF protection middleware
+    this.router.use(lusca.csrf());
 
     // Parse form data
     this.router.use(express.urlencoded({ extended: true }));
