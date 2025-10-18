@@ -159,7 +159,7 @@ class PackagesModule {
         params.push(condition.value);
       }
     });
-
+    console.log(`Query: ${query.replace(/\s+/g, ' ')} | Params: [${params.join(', ')}]`);
     return { query, params };
   }
 
