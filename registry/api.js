@@ -454,6 +454,32 @@ class RegistryAPI {
           }
         });
       });
+
+      // NEW: Fallback - if no matches found, check for authoritative pattern matches
+      if (result.authoritative.length === 0 && result.candidates.length === 0) {
+        data.registries.forEach(registry => {
+          registry.servers.forEach(server => {
+            // Check if server supports the requested usage tag
+            if (server.usageList.length === 0 ||
+              (usage && server.usageList.includes(usage))) {
+
+              // Check if server is authoritative for this code system
+              const isAuth = server.isAuthCS(codeSystem);
+
+              if (isAuth) {
+                server.versions.forEach(version => {
+                  if (ServerRegistryUtilities.versionMatches(normalizedVersion, version.version)) {
+                    result.authoritative.push(this.createServerEntry(server, version));
+                    if (!matchedServers.includes(server.code)) {
+                      matchedServers.push(server.code);
+                    }
+                  }
+                });
+              }
+            }
+          });
+        });
+      }
     } finally {
       data.unlock();
     }
