@@ -80,6 +80,17 @@ class LoincModule extends BaseTerminologyModule {
       config.mainOnly = options.mainOnly || false;
       config.estimatedDuration = this.getEstimatedDuration();
 
+      if (!options.version) {
+        const inquirer = require('inquirer');
+        const { version } = await inquirer.prompt({
+          type: 'input',
+          name: 'version',
+          message: 'LOINC version identifier:',
+          default: config.version
+        });
+        config.version = version;
+      }
+
       // Show confirmation unless --yes is specified
       if (!options.yes) {
         const confirmed = await this.confirmImport(config);
@@ -770,7 +781,8 @@ class LoincDataMigrator {
     // Property types
     const propertyTypes = [
       [1, 'CLASSTYPE'], [2, 'ORDER_OBS'], [3, 'EXAMPLE_UNITS'], [4, 'EXAMPLE_UCUM_UNITS'],
-      [5, 'PanelType'], [6, 'AskAtOrderEntry'], [7, 'UNITSREQUIRED'], [9, 'Copyright']
+      [5, 'PanelType'], [6, 'AskAtOrderEntry'], [7, 'UNITSREQUIRED'], [9, 'Copyright'],
+      [10, 'ValidHL7AttachmentRequest']
     ];
     propertyTypes.forEach(([key, desc]) => {
       db.run('INSERT INTO PropertyTypes (PropertyTypeKey, Description) VALUES (?, ?)', [key, desc]);
@@ -955,13 +967,14 @@ class LoincDataMigrator {
     this.addProperty(db, codeKey, this.props.get('AskAtOrderEntry'), items[35]);
     this.addProperty(db, codeKey, this.props.get('UNITSREQUIRED'), items[18]);
     this.addProperty(db, codeKey, this.props.get('Copyright'), items[23]);
+    this.addProperty(db, codeKey, this.props.get('ValidHL7AttachmentRequest'), items[38]);
 
     // Add descriptions
     this.addDescription(db, codeKey, 1, this.dTypes.get('LONG_COMMON_NAME'), description);
     this.addDescription(db, codeKey, 1, this.dTypes.get('ConsumerName'), items[12]);
     this.addDescription(db, codeKey, 1, this.dTypes.get('RELATEDNAMES2'), items[19]);
     this.addDescription(db, codeKey, 1, this.dTypes.get('SHORTNAME'), items[20]);
-    this.addDescription(db, codeKey, 1, this.dTypes.get('DisplayName'), items[38]);
+    this.addDescription(db, codeKey, 1, this.dTypes.get('DisplayName'), items[39]);
   }
 
   async processConsumerNames(db, sourceDir, step, options) {
@@ -1476,7 +1489,7 @@ function csvSplit(line, expectedCount) {
 
     if (!inQuoted && ch === ',') {
       if (currentField < expectedCount) {
-        result[currentField] = line.substring(fieldStart, i).replace(/^"|"$/g, '');
+        result[currentField] = line.substring(fieldStart, i).replace(/^"|"$/g, '').replace(/""/g, '"');
         currentField++;
         fieldStart = i + 1;
       }
@@ -1491,7 +1504,7 @@ function csvSplit(line, expectedCount) {
   }
 
   if (currentField < expectedCount) {
-    result[currentField] = line.substring(fieldStart).replace(/^"|"$/g, '');
+    result[currentField] = line.substring(fieldStart).replace(/^"|"$/g, '').replace(/""/g, '"');
   }
 
   return result;

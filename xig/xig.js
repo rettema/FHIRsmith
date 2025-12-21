@@ -1002,7 +1002,7 @@ async function buildSummaryStats(queryParams, baseUrl) {
     if (!realm || realm === '') {
       html += '<p><strong>By Realm</strong></p>';
       html += '<ul style="columns: 4; -webkit-columns: 4; -moz-columns: 4">';
-      
+
       let sql;
       if (currentFilter === '') {
         sql = 'SELECT Realm, COUNT(*) as count FROM Resources GROUP BY Realm ORDER BY Realm';
@@ -2617,7 +2617,7 @@ async function buildResourceSource(resourceKey) {
   let html = '';
   
   try {
-    html += '<hr/><h3>Source</h3>';
+    html += '<hr/><h3>Source1</h3>';
     
     if (!xigDb) {
       html += '<p style="color: #808080"><em>Database not available</em></p>';

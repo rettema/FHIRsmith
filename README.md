@@ -1,6 +1,21 @@
-# FHIR Development Server
+# FHIRsmith - FHIR Server toolkit
 
-This server provides various support functions to the FHIR community: package registry, implementation guide statistics, SMART Health Link Support, and ValueSet Compose Language processing.
+This server provides a set of server-side services that are useful for the FHIR Community. The set of are two kinds of services:
+
+## Modules useful to anyone in the community
+
+* (Coming) R4/R6 interconverter 
+* (Coming) tx.fhir.org server 
+* [SHL Server](shl/readme.md) - SHL/VHL support services 
+
+## Services useful the community as a whole
+
+* [TX Registry](registry/readme.md) - **Terminology System Registry** as [described by the terminology ecosystem specification](https://build.fhir.org/ig/HL7/fhir-tx-ecosystem-ig)(as running at http://tx.fhir.org/tx-reg)
+* [Package server](packages/readme.md) - **NPM-style FHIR package registry** with search, versioning, and downloads, consistent with the FHIR NPM Specification (as running at http://packages2.fhir.org/packages)
+* [XIG server](xig/readme.md) -  **Comprehensive FHIR IG analytics** with resource breakdowns by version, authority, and realm (as running at http://packages2.fhir.org/packages)
+* [Publisher](publisher/readme.md) - FHIR publishing services (coming)
+* [VCL](vcl/readme.md) - **Parse VCL expressions** into FHIR ValueSet resources for http://fhir.org/vcl
+* (Coming) Token services 
 
 ## Build Status
 ![CI Build](https://github.com/HealthIntersections/nodeserver/actions/workflows/ci.yml/badge.svg)
@@ -9,16 +24,6 @@ This server provides various support functions to the FHIR community: package re
 
 Note: In production, this server always runs behind an nginx reverse proxy, so there's no
 in-build support for SSL, rate limiting etc. 
-
-## Modules
-
-This server is composed of a set of modules:
-
-* [Tx Ecosystem Registry](registry): **Terminology System Registry** as [described by the terminology ecosystem specification](https://build.fhir.org/ig/HL7/fhir-tx-ecosystem-ig)
-* [FHIR Package Server](package): **NPM-style FHIR package registry** with search, versioning, and downloads, consistent with the FHIR NPM Specification
-* [XIG (Implementation Guide Statistics)](xig): **Comprehensive FHIR IG analytics** with resource breakdowns by version, authority, and realm 
-* [VCL (ValueSet Compose Language) Server](vcl): **Parse VCL expressions** into FHIR ValueSet resources for http://fhir.org/vcl
-* [SHL/VHL Services](shl): A set of services to support SHL And VHL usage on healthintersections.com.au
 
 ## Quick Start
 
@@ -78,6 +83,7 @@ npm start
 ```
 
 The server will be available at `http://localhost:{port}` using the port specified in the config.
+In the production servers listed above, the server always sits behind an NGINX server.
 
 ## Testing
 

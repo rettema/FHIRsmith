@@ -54,6 +54,10 @@ class CanonicalResource {
     return this.version ? this.url+'|' + this.version : this.url;
   }
 
+  get vurl() {
+    return this.version ? this.url+'|' + this.version : this.url;
+  }
+
   get fhirType() {
     return this.resourceType;
   }

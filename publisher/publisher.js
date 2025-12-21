@@ -1,15 +1,20 @@
 const express = require('express');
+const path = require('path');
 const fs = require('fs');
 const Database = require('sqlite3').Database;
 const bcrypt = require('bcrypt');
 const session = require('express-session');
-const lusca = require('lusca');
+const SQLiteStore = require('connect-sqlite3')(session);
+
 class PublisherModule {
   constructor() {
     this.router = express.Router();
     this.db = null;
     this.config = null;
     this.logger = null;
+    this.taskProcessor = null;
+    this.isProcessing = false;
+    this.shutdownRequested = false;
   }
 
   async initialize(config) {
@@ -24,12 +29,9 @@ class PublisherModule {
       secret: this.config.sessionSecret || 'your-secret-key-change-this',
       resave: false,
       saveUninitialized: false,
-      cookie: { secure: process.env.NODE_ENV === 'production', maxAge: 24 * 60 * 60 * 1000 } // 24 hours
+      cookie: { secure: false, maxAge: 24 * 60 * 60 * 1000 } // 24 hours
       // Not using SQLiteStore to avoid the database conflict
     }));
-
-    // Add CSRF protection middleware
-    this.router.use(lusca.csrf());
 
     // Parse form data
     this.router.use(express.urlencoded({ extended: true }));
@@ -37,19 +39,32 @@ class PublisherModule {
     // Set up routes
     this.setupRoutes();
 
+    // Start background task processor
+    this.startTaskProcessor();
+
     this.logger.info('Publisher module initialized');
   }
 
   async initializeDatabase() {
+    // Ensure database directory exists
+    const dbPath = this.config.database;
+    const dbDir = path.dirname(dbPath);
+
+    const fs = require('fs');
+    if (!fs.existsSync(dbDir)) {
+      fs.mkdirSync(dbDir, { recursive: true });
+      this.logger.info('Created database directory: ' + dbDir);
+    }
+
     return new Promise((resolve, reject) => {
-      this.db = new Database(this.config.database, (err) => {
+      this.db = new Database(dbPath, (err) => {
         if (err) {
           this.logger.error('Failed to connect to database:', err);
           reject(err);
           return;
         }
 
-        this.logger.info('Connected to SQLite database');
+        this.logger.info('Connected to SQLite database: ' + dbPath);
         this.createTables().then(resolve).catch(reject);
       });
     });
@@ -90,7 +105,7 @@ class PublisherModule {
 
       // Tasks table
       `CREATE TABLE IF NOT EXISTS tasks (
-                                            id TEXT PRIMARY KEY,
+                                            id INTEGER PRIMARY KEY AUTOINCREMENT,
                                             user_id INTEGER NOT NULL,
                                             website_id INTEGER NOT NULL,
                                             status TEXT DEFAULT 'queued',
@@ -211,6 +226,384 @@ class PublisherModule {
     this.router.get('/admin/users', this.requireAdmin.bind(this), this.renderUsers.bind(this));
     this.router.post('/admin/users', this.requireAdmin.bind(this), this.createUser.bind(this));
     this.router.post('/admin/permissions', this.requireAdmin.bind(this), this.updatePermissions.bind(this));
+  }
+
+  // Background Task Processing
+  startTaskProcessor() {
+    const pollInterval = this.config.pollInterval || 5000; // Default 5 seconds
+
+    this.logger.info('Starting task processor with ' + pollInterval + 'ms poll interval');
+
+    this.taskProcessor = setInterval(async () => {
+      if (!this.isProcessing && !this.shutdownRequested) {
+        await this.processNextTask();
+      }
+    }, pollInterval);
+  }
+
+  async processNextTask() {
+    this.isProcessing = true;
+
+    try {
+      // Look for queued tasks first (draft builds)
+      let task = await this.getNextQueuedTask();
+      if (task) {
+        await this.processDraftBuild(task);
+        return;
+      }
+
+      // Then look for approved tasks (publishing)
+      task = await this.getNextApprovedTask();
+      if (task) {
+        await this.processPublication(task);
+        return;
+      }
+
+      // No tasks to process
+    } catch (error) {
+      this.logger.error('Error in task processor:', error);
+    } finally {
+      this.isProcessing = false;
+    }
+  }
+
+  async getNextQueuedTask() {
+    return new Promise((resolve, reject) => {
+      this.db.get(
+        'SELECT * FROM tasks WHERE status = ? ORDER BY queued_at ASC LIMIT 1',
+        ['queued'],
+        (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        }
+      );
+    });
+  }
+
+  async getNextApprovedTask() {
+    return new Promise((resolve, reject) => {
+      this.db.get(
+        'SELECT * FROM tasks WHERE status = ? ORDER BY publishing_at ASC LIMIT 1',
+        ['publishing'],
+        (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        }
+      );
+    });
+  }
+
+  async updateTaskStatus(taskId, status, additionalFields = {}) {
+    const fields = ['status = ?'];
+    const values = [status];
+
+    // Add timestamp field based on status
+    if (status === 'building') {
+      fields.push('building_at = CURRENT_TIMESTAMP');
+    } else if (status === 'waiting for approval') {
+      fields.push('waiting_approval_at = CURRENT_TIMESTAMP');
+    } else if (status === 'complete') {
+      fields.push('completed_at = CURRENT_TIMESTAMP');
+    } else if (status === 'failed') {
+      fields.push('failed_at = CURRENT_TIMESTAMP');
+    }
+
+    // Add any additional fields
+    Object.keys(additionalFields).forEach(key => {
+      fields.push(key + ' = ?');
+      values.push(additionalFields[key]);
+    });
+
+    values.push(taskId);
+
+    return new Promise((resolve, reject) => {
+      this.db.run(
+        'UPDATE tasks SET ' + fields.join(', ') + ' WHERE id = ?',
+        values,
+        (err) => {
+          if (err) reject(err);
+          else resolve();
+        }
+      );
+    });
+  }
+
+  async logTaskMessage(taskId, level, message) {
+    return new Promise((resolve) => {
+      this.db.run(
+        'INSERT INTO task_logs (task_id, level, message) VALUES (?, ?, ?)',
+        [taskId.toString(), level, message],
+        () => resolve() // Don't fail if logging fails
+      );
+    });
+  }
+
+  async processDraftBuild(task) {
+    this.logger.info('Processing draft build for task #' + task.id + ' (' + task.npm_package_id + '#' + task.version + ')');
+
+    try {
+      // Update status to building
+      await this.updateTaskStatus(task.id, 'building');
+      await this.logTaskMessage(task.id, 'info', 'Started draft build');
+
+      // Run actual build process
+      await this.runDraftBuild(task);
+
+      // Update status to waiting for approval
+      await this.updateTaskStatus(task.id, 'waiting for approval');
+      await this.logTaskMessage(task.id, 'info', 'Draft build completed - waiting for approval');
+
+      this.logger.info('Draft build completed for task #' + task.id);
+
+    } catch (error) {
+      this.logger.error('Draft build failed for task #' + task.id + ':', error);
+      await this.updateTaskStatus(task.id, 'failed', {
+        failure_reason: error.message
+      });
+      await this.logTaskMessage(task.id, 'error', 'Draft build failed: ' + error.message);
+    }
+  }
+
+  async processPublication(task) {
+    this.logger.info('Processing publication for task #' + task.id + ' (' + task.npm_package_id + '#' + task.version + ')');
+
+    try {
+      await this.logTaskMessage(task.id, 'info', 'Started publication process');
+
+      // Simulate publication process (replace with actual publication logic later)
+      await this.simulatePublication(task);
+
+      // Update status to complete
+      await this.updateTaskStatus(task.id, 'complete');
+      await this.logTaskMessage(task.id, 'info', 'Publication completed successfully');
+
+      this.logger.info('Publication completed for task #' + task.id);
+
+    } catch (error) {
+      this.logger.error('Publication failed for task #' + task.id + ':', error);
+      await this.updateTaskStatus(task.id, 'failed', {
+        failure_reason: error.message
+      });
+      await this.logTaskMessage(task.id, 'error', 'Publication failed: ' + error.message);
+    }
+  }
+
+  async runDraftBuild(task) {
+    const taskDir = path.join(this.config.workspaceRoot, 'task-' + task.id);
+    const draftDir = path.join(taskDir, 'draft');
+    const logFile = path.join(taskDir, 'draft-build.log');
+
+    await this.logTaskMessage(task.id, 'info', 'Creating task directory: ' + taskDir);
+
+    // Step 1: Create/scrub task directory
+    await this.createTaskDirectory(taskDir);
+
+    // Step 2: Download latest publisher
+    const publisherJar = await this.downloadPublisher(taskDir, task.id);
+
+    // Step 3: Clone GitHub repository
+    await this.cloneRepository(task, draftDir);
+
+    // Step 4: Run IG publisher
+    await this.runIGPublisher(publisherJar, draftDir, logFile, task.id);
+
+    // Update task with build output path
+    await this.updateTaskStatus(task.id, task.status, {
+      build_output_path: logFile,
+      local_folder: taskDir
+    });
+
+    this.logger.info('Draft build completed for ' + task.npm_package_id + '#' + task.version);
+  }
+
+  async createTaskDirectory(taskDir) {
+    const rimraf = require('rimraf');
+
+    // Remove existing directory if it exists
+    if (fs.existsSync(taskDir)) {
+      await new Promise((resolve, reject) => {
+        rimraf(taskDir, (err) => {
+          if (err) reject(err);
+          else resolve();
+        });
+      });
+    }
+
+    // Create fresh directory
+    fs.mkdirSync(taskDir, { recursive: true });
+  }
+
+  async downloadPublisher(taskDir, taskId) {
+    const axios = require('axios');
+    const publisherJar = path.join(taskDir, 'publisher.jar');
+
+    await this.logTaskMessage(taskId, 'info', 'Downloading latest FHIR IG Publisher...');
+
+    try {
+      // Get latest release info from GitHub API
+      const releaseResponse = await axios.get('https://api.github.com/repos/HL7/fhir-ig-publisher/releases/latest');
+      const downloadUrl = releaseResponse.data.assets.find(asset =>
+        asset.name === 'publisher.jar'
+      )?.browser_download_url;
+
+      if (!downloadUrl) {
+        throw new Error('Could not find publisher.jar in latest release');
+      }
+
+      await this.logTaskMessage(taskId, 'info', 'Downloading from: ' + downloadUrl);
+
+      // Download the file
+      const response = await axios({
+        method: 'GET',
+        url: downloadUrl,
+        responseType: 'stream'
+      });
+
+      const writer = fs.createWriteStream(publisherJar);
+      response.data.pipe(writer);
+
+      await new Promise((resolve, reject) => {
+        writer.on('finish', resolve);
+        writer.on('error', reject);
+      });
+
+      await this.logTaskMessage(taskId, 'info', 'Publisher downloaded successfully');
+      return publisherJar;
+
+    } catch (error) {
+      throw new Error('Failed to download publisher: ' + error.message);
+    }
+  }
+
+  async cloneRepository(task, draftDir) {
+    const { spawn } = require('child_process');
+    const gitUrl = 'https://github.com/' + task.github_org + '/' + task.github_repo + '.git';
+
+    await this.logTaskMessage(task.id, 'info', 'Cloning repository: ' + gitUrl + ' (branch: ' + task.git_branch + ')');
+
+    return new Promise((resolve, reject) => {
+      const git = spawn('git', [
+        'clone',
+        '--branch', task.git_branch,
+        '--single-branch',
+        gitUrl,
+        draftDir
+      ], {
+        stdio: ['pipe', 'pipe', 'pipe']
+      });
+
+      let stdout = '';
+      let stderr = '';
+
+      git.stdout.on('data', (data) => {
+        stdout += data.toString();
+      });
+
+      git.stderr.on('data', (data) => {
+        stderr += data.toString();
+      });
+
+      git.on('close', async (code) => {
+        if (code === 0) {
+          await this.logTaskMessage(task.id, 'info', 'Repository cloned successfully');
+          resolve();
+        } else {
+          const error = 'Git clone failed with code ' + code + ': ' + stderr;
+          await this.logTaskMessage(task.id, 'error', error);
+          reject(new Error(error));
+        }
+      });
+
+      git.on('error', async (error) => {
+        await this.logTaskMessage(task.id, 'error', 'Git clone error: ' + error.message);
+        reject(error);
+      });
+    });
+  }
+
+  async runIGPublisher(publisherJar, draftDir, logFile, taskId) {
+    const { spawn } = require('child_process');
+
+    await this.logTaskMessage(taskId, 'info', 'Running FHIR IG Publisher...');
+
+    return new Promise((resolve, reject) => {
+      const java = spawn('java', [
+        '-jar',
+        '-Xmx20000m',
+        publisherJar,
+        '-ig',
+        '.'
+      ], {
+        cwd: draftDir,
+        stdio: ['pipe', 'pipe', 'pipe']
+      });
+
+      // Create log file stream
+      const logStream = fs.createWriteStream(logFile);
+
+      let hasOutput = false;
+
+      java.stdout.on('data', (data) => {
+        hasOutput = true;
+        logStream.write(data);
+      });
+
+      java.stderr.on('data', (data) => {
+        hasOutput = true;
+        logStream.write(data);
+      });
+
+      java.on('close', async (code) => {
+        logStream.end();
+
+        if (code === 0) {
+          await this.logTaskMessage(taskId, 'info', 'IG Publisher completed successfully');
+          resolve();
+        } else {
+          const error = 'IG Publisher failed with exit code: ' + code;
+          await this.logTaskMessage(taskId, 'error', error);
+          reject(new Error(error));
+        }
+      });
+
+      java.on('error', async (error) => {
+        logStream.end();
+        await this.logTaskMessage(taskId, 'error', 'IG Publisher error: ' + error.message);
+        reject(error);
+      });
+
+      // Timeout after 30 minutes
+      const timeout = setTimeout(async () => {
+        java.kill();
+        logStream.end();
+        await this.logTaskMessage(taskId, 'error', 'IG Publisher timed out after 30 minutes');
+        reject(new Error('IG Publisher timed out'));
+      }, 30 * 60 * 1000);
+
+      java.on('close', () => {
+        clearTimeout(timeout);
+      });
+    });
+  }
+
+  async simulatePublication(task) {
+    // Simulate some work
+    await new Promise(resolve => setTimeout(resolve, 3000)); // 3 second delay
+
+    // Simulate occasional failures (5% chance)
+    if (Math.random() < 0.05) {
+      throw new Error('Simulated publication failure');
+    }
+
+    this.logger.info('Simulated publication for ' + task.npm_package_id + '#' + task.version);
+  }
+
+  stopTaskProcessor() {
+    if (this.taskProcessor) {
+      clearInterval(this.taskProcessor);
+      this.taskProcessor = null;
+      this.logger.info('Task processor stopped');
+    }
   }
 
   // Middleware
@@ -420,7 +813,7 @@ class PublisherModule {
       } else {
         content += '<div class="table-responsive">';
         content += '<table class="table table-striped">';
-        content += '<thead><tr><th>Package</th><th>Version</th><th>Website</th><th>Status</th><th>Queued</th><th>User</th><th>Actions</th></tr></thead>';
+        content += '<thead><tr><th>ID</th><th>Package</th><th>Version</th><th>Website</th><th>Status</th><th>Queued</th><th>User</th><th>Actions</th></tr></thead>';
         content += '<tbody>';
 
         for (const task of tasks) {
@@ -428,6 +821,7 @@ class PublisherModule {
             await this.userCanApprove(req.session.userId, task.website_id);
 
           content += '<tr>';
+          content += '<td><strong>#' + task.id + '</strong></td>';
           content += '<td><code>' + task.npm_package_id + '</code></td>';
           content += '<td>' + task.version + '</td>';
           content += '<td>' + task.website_name + '</td>';
@@ -477,31 +871,30 @@ class PublisherModule {
         return res.status(403).send('You do not have permission to create tasks for this website');
       }
 
-      // Check for duplicate tasks
-      const existingTask = await this.findExistingTask(npm_package_id, version);
-      if (existingTask && existingTask.status !== 'complete' && existingTask.status !== 'failed') {
-        return res.status(400).send('A task for this package and version is already in progress');
+      // Check for duplicate active tasks (only block if there's an active task for this package/version)
+      const existingTask = await this.findActiveTask(npm_package_id, version);
+      if (existingTask) {
+        return res.status(400).send('An active task for this package and version is already in progress. Wait for it to complete or fail before resubmitting.');
       }
 
-      // Generate task ID
-      const taskId = npm_package_id + '#' + version;
-
-      // Insert task
-      await new Promise((resolve, reject) => {
+      // Insert task (ID will be auto-generated)
+      const result = await new Promise((resolve, reject) => {
         this.db.run(
-          'INSERT INTO tasks (id, user_id, website_id, github_org, github_repo, git_branch, npm_package_id, version) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-          [taskId, req.session.userId, website_id, github_org, github_repo, git_branch, npm_package_id, version],
+          'INSERT INTO tasks (user_id, website_id, github_org, github_repo, git_branch, npm_package_id, version) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          [req.session.userId, website_id, github_org, github_repo, git_branch, npm_package_id, version],
           function(err) {
             if (err) reject(err);
-            else resolve();
+            else resolve(this.lastID);
           }
         );
       });
 
-      // Log the action
-      this.logUserAction(req.session.userId, 'create_task', taskId, req.ip);
+      const taskId = result;
 
-      this.logger.info('Task created: ' + taskId + ' by user ' + req.session.userId);
+      // Log the action
+      this.logUserAction(req.session.userId, 'create_task', taskId.toString(), req.ip);
+
+      this.logger.info('Task created: ID=' + taskId + ' (' + npm_package_id + '#' + version + ') by user ' + req.session.userId);
       res.redirect('/publisher/tasks');
     } catch (error) {
       this.logger.error('Error creating task:', error);
@@ -659,19 +1052,6 @@ class PublisherModule {
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#039;');
-  }
-
-  async getTaskLogs(taskId) {
-    return new Promise((resolve, reject) => {
-      this.db.all(
-        'SELECT * FROM task_logs WHERE task_id = ? ORDER BY timestamp ASC',
-        [taskId.toString()],
-        (err, rows) => {
-          if (err) reject(err);
-          else resolve(rows || []);
-        }
-      );
-    });
   }
 
   async renderWebsites(req, res) {
@@ -963,6 +1343,19 @@ class PublisherModule {
     });
   }
 
+  async getTaskLogs(taskId) {
+    return new Promise((resolve, reject) => {
+      this.db.all(
+        'SELECT * FROM task_logs WHERE task_id = ? ORDER BY timestamp ASC',
+        [taskId.toString()],
+        (err, rows) => {
+          if (err) reject(err);
+          else resolve(rows || []);
+        }
+      );
+    });
+  }
+
   async getUserWebsites(userId) {
     return new Promise((resolve, reject) => {
       this.db.all(
@@ -997,6 +1390,19 @@ class PublisherModule {
         (err, row) => {
           if (err) reject(err);
           else resolve(row && row.can_approve);
+        }
+      );
+    });
+  }
+
+  async findActiveTask(packageId, version) {
+    return new Promise((resolve, reject) => {
+      this.db.get(
+        'SELECT * FROM tasks WHERE npm_package_id = ? AND version = ? AND status NOT IN (?, ?) ORDER BY queued_at DESC LIMIT 1',
+        [packageId, version, 'complete', 'failed'],
+        (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
         }
       );
     });
@@ -1046,6 +1452,42 @@ class PublisherModule {
     });
   }
 
+  async shutdown() {
+    this.logger.info('Shutting down publisher module...');
+
+    // Stop accepting new tasks
+    this.shutdownRequested = true;
+
+    // Stop the task processor
+    this.stopTaskProcessor();
+
+    // Wait for current task to finish (with timeout)
+    const maxWaitTime = 30000; // 30 seconds
+    const startTime = Date.now();
+
+    while (this.isProcessing && (Date.now() - startTime) < maxWaitTime) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+
+    if (this.isProcessing) {
+      this.logger.warn('Task processor did not finish within timeout period');
+    }
+
+    // Close database
+    if (this.db) {
+      return new Promise((resolve) => {
+        this.db.close((err) => {
+          if (err) {
+            this.logger.error('Error closing database:', err);
+          } else {
+            this.logger.info('Database closed');
+          }
+          resolve();
+        });
+      });
+    }
+  }
+
   getStatusColor(status) {
     const colors = {
       'queued': 'secondary',
@@ -1071,21 +1513,13 @@ class PublisherModule {
   getStatus() {
     return {
       enabled: true,
-      status: this.db ? 'Running' : 'Database not connected'
+      status: this.db ? 'Running' : 'Database not connected',
+      taskProcessor: {
+        running: this.taskProcessor !== null,
+        processing: this.isProcessing,
+        shutdownRequested: this.shutdownRequested
+      }
     };
-  }
-
-  async shutdown() {
-    if (this.db) {
-      return new Promise((resolve) => {
-        this.db.close((err) => {
-          if (err) {
-            this.logger.error('Error closing database:', err);
-          }
-          resolve();
-        });
-      });
-    }
   }
 }
 

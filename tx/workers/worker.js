@@ -1,6 +1,6 @@
-const { TerminologyError } = require('./operation-context');
-const { CodeSystem } = require('./library/codesystem');
-const {VersionUtilities} = require("../library/version-utilities");
+const { TerminologyError } = require('../operation-context');
+const { CodeSystem } = require('../library/codesystem');
+const {VersionUtilities} = require("../../library/version-utilities");
 
 /**
  * Custom error for terminology setup issues

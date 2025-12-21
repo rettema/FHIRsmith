@@ -33,3 +33,7 @@ test-cache/
 tests/vs/.vsac-last-run
 
 .package-cache/
+
+shl/private-key.pem
+
+shl/public-key.pem

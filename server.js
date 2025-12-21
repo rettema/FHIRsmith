@@ -19,6 +19,8 @@ const xigModule = require('./xig/xig.js');
 const PackagesModule = require('./packages/packages.js');
 const RegistryModule = require('./registry/registry.js');
 const PublisherModule = require('./publisher/publisher.js');
+const TokenModule = require('./token/token.js');
+const NpmProjectorModule = require('./npmprojector/npmprojector.js');
 
 const htmlServer = require('./common/html-server');
 htmlServer.useLog(serverLog);
@@ -128,6 +130,31 @@ async function initializeModules() {
       throw error;
     }
   }
+
+  // Initialize Token module
+  if (config.modules.token && config.modules.token.enabled) {
+    try {
+      modules.token = new TokenModule();
+      await modules.token.initialize(config.modules.token);
+      app.use('/token', modules.token.router);
+    } catch (error) {
+      serverLog.error('Failed to initialize Token module:', error);
+      throw error;
+    }
+  }
+
+  // Initialize NpmProjector module
+  if (config.modules.npmprojector && config.modules.npmprojector.enabled) {
+    try {
+      modules.npmprojector = new NpmProjectorModule();
+      await modules.npmprojector.initialize(config.modules.npmprojector);
+      const basePath = NpmProjectorModule.getBasePath(config.modules.npmprojector);
+      app.use(basePath, modules.npmprojector.router);
+    } catch (error) {
+      serverLog.error('Failed to initialize NpmProjector module:', error);
+      throw error;
+    }
+  }
 }
 
 async function loadTemplates() {
@@ -151,6 +178,10 @@ async function loadTemplates() {
 
     const publisherTemplatePath = path.join(__dirname, 'publisher', 'publisher-template.html');
     htmlServer.loadTemplate('publisher', publisherTemplatePath);
+
+    // Load Token template
+    const tokenTemplatePath = path.join(__dirname, 'token', 'token-template.html');
+    htmlServer.loadTemplate('token', tokenTemplatePath);
 
   } catch (error) {
     serverLog.error('Failed to load templates:', error);
@@ -204,6 +235,18 @@ function buildRootPageContent() {
     content += '</li>';
   }
 
+  if (config.modules.token && config.modules.token.enabled) {
+    content += '<li class="list-group-item">';
+    content += '<a href="/token" class="text-decoration-none">Token Server</a>: ';
+    content += 'OAuth authentication and API key management for FHIR services';
+    content += '</li>';
+  }
+  if (config.modules.npmprojector && config.modules.npmprojector.enabled) {
+    content += '<li class="list-group-item">';
+    content += '<a href="/npmprojector" class="text-decoration-none">NpmProjector</a>: ';
+    content += 'Hot-reloading FHIR server with FHIRPath-based search indexes';
+    content += '</li>';
+  }
   content += '</ul>';
   content += '</div>';
 

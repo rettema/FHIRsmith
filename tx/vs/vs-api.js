@@ -4,6 +4,22 @@
  */
 class AbstractValueSetProvider {
   /**
+   * {int} Unique number assigned to this provider
+   */
+  spaceId;
+
+  /**
+   * ensure that the ids on the value sets are unique, if they are
+   * in the global namespace
+   *
+   * @param {Set<String>} ids
+   */
+  // eslint-disable-next-line no-unused-vars
+  assignIds(ids) {
+    throw new Error('assignIds must be implemented by subclass');
+  }
+
+  /**
    * Fetches a specific value set by URL and version
    * @param {string} url - The URL/identifier of the value set
    * @param {string} version - The version of the value set

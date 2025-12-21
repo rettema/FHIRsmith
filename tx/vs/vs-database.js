@@ -44,7 +44,8 @@ class ValueSetDatabase {
           // Main value sets table
           db.run(`
             CREATE TABLE valuesets (
-              url TEXT PRIMARY KEY,
+              id TEXT PRIMARY KEY,
+              url TEXT,
               version TEXT,
               date TEXT,
               description TEXT,
@@ -63,7 +64,7 @@ class ValueSetDatabase {
           // Identifiers table (0..* Identifier)
           db.run(`
             CREATE TABLE valueset_identifiers (
-              valueset_url TEXT,
+              valueset_id TEXT,
               system TEXT,
               value TEXT,
               use_code TEXT,
@@ -76,7 +77,7 @@ class ValueSetDatabase {
           // Jurisdictions table (0..* CodeableConcept with 0..* Coding)
           db.run(`
             CREATE TABLE valueset_jurisdictions (
-              valueset_url TEXT,
+              valueset_id TEXT,
               system TEXT,
               code TEXT,
               display TEXT,
@@ -87,13 +88,14 @@ class ValueSetDatabase {
           // Systems table (from compose.include[].system)
           db.run(`
             CREATE TABLE valueset_systems (
-              valueset_url TEXT,
+              valueset_id TEXT,
               system TEXT,
               FOREIGN KEY (valueset_url) REFERENCES valuesets(url)
             )
           `);
 
           // Create indexes for better search performance
+          db.run('CREATE INDEX idx_valuesets_url ON valuesets(url, version)');
           db.run('CREATE INDEX idx_valuesets_version ON valuesets(version)');
           db.run('CREATE INDEX idx_valuesets_status ON valuesets(status)');
           db.run('CREATE INDEX idx_valuesets_name ON valuesets(name)');
@@ -164,10 +166,11 @@ class ValueSetDatabase {
 
               db.run(`
                 INSERT OR REPLACE INTO valuesets (
-                  url, version, date, description, effectivePeriod_start, effectivePeriod_end,
+                  id, url, version, date, description, effectivePeriod_start, effectivePeriod_end,
                   expansion_identifier, name, publisher, status, title, content, last_seen
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%s', 'now'))
               `, [
+                valueSet.id,
                 valueSet.url,
                 valueSet.version || null,
                 valueSet.date || null,
@@ -235,10 +238,10 @@ class ValueSetDatabase {
 
         db.run(`
           INSERT INTO valueset_identifiers (
-            valueset_url, system, value, use_code, type_system, type_code
+            valueset_id, system, value, use_code, type_system, type_code
           ) VALUES (?, ?, ?, ?, ?, ?)
         `, [
-          valueSet.url,
+          valueSet.id,
           id.system || null,
           id.value || null,
           id.use || null,
@@ -259,10 +262,10 @@ class ValueSetDatabase {
             pendingOperations++;
             db.run(`
               INSERT INTO valueset_jurisdictions (
-                valueset_url, system, code, display
+                valueset_id, system, code, display
               ) VALUES (?, ?, ?, ?)
             `, [
-              valueSet.url,
+              valueSet.id,
               coding.system || null,
               coding.code || null,
               coding.display || null
@@ -282,8 +285,8 @@ class ValueSetDatabase {
           pendingOperations++;
 
           db.run(`
-            INSERT INTO valueset_systems (valueset_url, system) VALUES (?, ?)
-          `, [valueSet.url, include.system], function(err) {
+            INSERT INTO valueset_systems (valueset_id, system) VALUES (?, ?)
+          `, [valueSet.id, include.system], function(err) {
             if (err) {
               operationError(new Error(`Failed to insert system: ${err.message}`));
             } else {

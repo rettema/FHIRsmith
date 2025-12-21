@@ -1,4 +1,4 @@
-const {Providers} = require("../../tx/provider");
+const {Library} = require("../../tx/library");
 const path = require("path");
 const {OperationContext} = require("../../tx/operation-context");
 const {Languages} = require("../../library/languages");
@@ -9,17 +9,17 @@ describe('Provider Test', () => {
     const isCI = process.env.CI === 'true';
     if (!isCI) {
       let configFile = path.resolve(__dirname, '../../tx/tx.fhir.org.yml')
-      let providers = new Providers(configFile);
-      await providers.load();
-      expect(providers.codeSystemFactories.size).toBeGreaterThan(0);
-      expect(providers.codeSystems.size).toBeGreaterThan(0);
-      expect(providers.valueSetProviders.length).toBeGreaterThan(0);
+      let library = new Library(configFile);
+      await library.load();
+      expect(library.codeSystemFactories.size).toBeGreaterThan(0);
+      expect(library.codeSystemProviders.length).toBeGreaterThan(0);
+      expect(library.valueSetProviders.length).toBeGreaterThan(0);
 
-      let r4 = await providers.cloneWithFhirVersion("r4");
+      let r4 = await library.cloneWithFhirVersion("r4");
 
-      expect(r4.codeSystemFactories.size).toEqual(providers.codeSystemFactories.size);
-      expect(r4.codeSystems.size).toBeGreaterThan(providers.codeSystems.size);
-      expect(r4.valueSetProviders.length).toBeGreaterThan(providers.valueSetProviders.length);
+      expect(r4.codeSystemFactories.size).toEqual(library.codeSystemFactories.size);
+      expect(r4.codeSystems.size).toBeGreaterThan(library.codeSystemProviders.length);
+      expect(r4.valueSetProviders.length).toBeGreaterThanOrEqual(library.valueSetProviders.length);
 
       // Test all code system factories can produce providers
       await testAllCodeSystemFactories(r4);
@@ -33,15 +33,15 @@ describe('Provider Test', () => {
   /**
    * Test that all loaded code system factories can successfully create CodeSystemProvider instances
    */
-  async function testAllCodeSystemFactories(providers) {
-    console.log(`\nTesting ${providers.codeSystemFactories.size} code system factories...`);
+  async function testAllCodeSystemFactories(library) {
+    console.log(`\nTesting ${library.codeSystemFactories.size} code system factories...`);
 
     const opContext = new OperationContext(Languages.fromAcceptLanguage("en"));
     let successCount = 0;
     let failureCount = 0;
     const failures = [];
 
-    for (const [key] of providers.codeSystemFactories.entries()) {
+    for (const [key] of library.codeSystemFactories.entries()) {
       try {
         // Parse system and version from key
         let system, version;
@@ -54,7 +54,7 @@ describe('Provider Test', () => {
 
         // Attempt to get a provider using getCodeSystemProvider
         const startTime = performance.now();
-        const provider = await providers.getCodeSystemProvider(opContext, system, version, []);
+        const provider = await library.getCodeSystemProvider(opContext, system, version, []);
         const endTime = performance.now();
 
         if (provider) {
@@ -88,11 +88,11 @@ describe('Provider Test', () => {
   /**
    * Test a random selection of loaded CodeSystem resources can create providers
    */
-  async function testRandomCodeSystems(providers) {
-    console.log(`\nTesting random selection of ${providers.codeSystems.size} loaded code systems...`);
+  async function testRandomCodeSystems(library) {
+    console.log(`\nTesting random selection of ${library.codeSystems.size} loaded code systems...`);
 
     const opContext = new OperationContext(Languages.fromAcceptLanguage('en'));
-    const codeSystemEntries = Array.from(providers.codeSystems.entries());
+    const codeSystemEntries = Array.from(library.codeSystems.entries());
 
     // Test up to 20 random code systems, or all if less than 20
     const sampleSize = Math.min(20, codeSystemEntries.length);
@@ -105,7 +105,7 @@ describe('Provider Test', () => {
     for (const [key, codeSystem] of randomSample) {
       try {
         // Test createCodeSystemProvider directly
-        const provider = await providers.createCodeSystemProvider(opContext, codeSystem, []);
+        const provider = await library.createCodeSystemProvider(opContext, codeSystem, []);
 
         if (provider) {
           successCount++;
@@ -166,23 +166,23 @@ describe('Provider Test', () => {
 
   /**
    * Test edge cases for createCodeSystemProvider
-   */async function testCodeSystemProviderEdgeCases(providers) {
+   */async function testCodeSystemProviderEdgeCases(library) {
     const opContext = new OperationContext(Languages.fromAcceptLanguage('en'));
 
     // Test with invalid parameters
-    await expect(providers.createCodeSystemProvider(null, {}, []))
+    await expect(library.createCodeSystemProvider(null, {}, []))
       .rejects.toThrow("opContext must be a provided");
 
-    await expect(providers.createCodeSystemProvider(opContext, null, []))
+    await expect(library.createCodeSystemProvider(opContext, null, []))
       .rejects.toThrow("codeSystem must be a provided");
 
-    await expect(providers.createCodeSystemProvider(opContext, providers.codeSystems.get("http://terminology.hl7.org/CodeSystem/ADAAreaOralCavitySystem"), "not-an-array"))
+    await expect(library.createCodeSystemProvider(opContext, library.codeSystems.get("http://terminology.hl7.org/CodeSystem/adjudication-error"), "not-an-array"))
       .rejects.toThrow("supplements must be an array");
 
     // Test with valid CodeSystem if available
-    if (providers.codeSystems.size > 0) {
-      const firstCodeSystem = providers.codeSystems.values().next().value;
-      const provider = await providers.createCodeSystemProvider(opContext, firstCodeSystem, []);
+    if (library.codeSystems.size > 0) {
+      const firstCodeSystem = library.codeSystems.values().next().value;
+      const provider = await library.createCodeSystemProvider(opContext, firstCodeSystem, []);
       expect(provider).not.toBeNull();
     }
   }

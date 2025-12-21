@@ -1,4 +1,4 @@
-const { TerminologyWorker, TerminologySetupError } = require('../../tx/worker');
+const { TerminologyWorker, TerminologySetupError } = require('../../tx/workers/worker');
 const { OperationContext } = require('../../tx/operation-context');
 const {CodeSystem} = require("../../tx/library/codesystem");
 const ValueSet = require("../../tx/library/valueset");

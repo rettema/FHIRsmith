@@ -159,7 +159,7 @@ class SnomedModule extends BaseTerminologyModule {
 
     const editions = {
       "900000000000207008": { name: "International", needsBase: false, lang: "en-US" },
-      "731000124108": { name: "US Edition", needsBase: true, lang: "en-US" },
+      "731000124108": { name: "US Edition", needsBase: false, lang: "en-US" },
       "32506021000036107": { name: "Australian Edition", needsBase: true, lang: "en-AU" },
       "449081005": { name: "Spanish Edition (International)", needsBase: true, lang: "es" },
       "11000279109": { name: "Czech Edition", needsBase: false, lang: "cs-CZ" },
@@ -1036,9 +1036,6 @@ class SnomedImporter {
             caseSignificanceId: BigInt(parts[8])
           };
 
-          if (!desc.active) {
-            console.log('Inactive desc: '+desc.conceptId+": "+desc.term);
-          }
           descriptionList.push(desc);
         }
 
