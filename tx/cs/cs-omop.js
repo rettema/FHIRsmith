@@ -601,7 +601,7 @@ class OMOPServices extends CodeSystemProvider {
     await this.#ensureContext(codeA);
     await this.#ensureContext(codeB);
     
-    return false;
+    return 'not-subsumed';
   }
 
   // Translation support

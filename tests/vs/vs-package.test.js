@@ -108,10 +108,9 @@ describe('PackageValueSetProvider', () => {
       expect(valueSet.version).toBe('0.8.0'); // Should resolve to existing 0.8.0
     });
 
-    test('should throw error for non-existent valueset', async () => {
-      await expect(
-        provider.fetchValueSet('http://example.com/non-existent', '1.0.0')
-      ).rejects.toThrow('Value set not found');
+    test('should return null non-existent valueset', async () => {
+      const result = await provider.fetchValueSet('http://example.com/non-existent', '1.0.0')
+      expect(result).toBeNull();
     });
 
     test('should validate input parameters', async () => {
@@ -120,8 +119,8 @@ describe('PackageValueSetProvider', () => {
       ).rejects.toThrow('URL must be a non-empty string');
 
       await expect(
-        provider.fetchValueSet('http://example.com/test', '')
-      ).rejects.toThrow('Version must be a non-empty string');
+        provider.fetchValueSet('http://example.com/test', 1.0)
+      ).rejects.toThrow('Version must be a string');
     });
   });
 

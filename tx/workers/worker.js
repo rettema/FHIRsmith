@@ -1,5 +1,6 @@
 const { TerminologyError } = require('../operation-context');
 const { CodeSystem } = require('../library/codesystem');
+const ValueSet = require('../library/valueset');
 const {VersionUtilities} = require("../../library/version-utilities");
 
 /**
@@ -16,7 +17,7 @@ class TerminologySetupError extends Error {
  * Abstract base class for terminology operations
  */
 class TerminologyWorker {
-  additionalResources = []; // to be documented
+  additionalResources = []; // Resources provided via tx-resource parameter or cache
 
   /**
    * @param {OperationContext} opContext - Operation context
@@ -91,9 +92,9 @@ class TerminologyWorker {
       if (url && ((resource.url === url) || (resource.vurl === url)) &&
         (!version || version === resource.version)) {
 
-        if (resource.fhirType !== resourceType) {
+        if (resource.resourceType !== resourceType) {
           if (error) {
-            throw new Error(`Attempt to reference ${url} as a ${resourceType} when it's a ${resource.fhirType}`);
+            throw new Error(`Attempt to reference ${url} as a ${resourceType} when it's a ${resource.resourceType}`);
           } else {
             return null;
           }
@@ -138,9 +139,9 @@ class TerminologyWorker {
     codeSystemResource = this.findInAdditionalResources(url, version, 'CodeSystem', !nullOk);
 
     if (codeSystemResource) {
-      if (codeSystemResource.contentMode() === 'complete') {
+      if (codeSystemResource.content === 'complete') {
         // Create provider from complete code system
-        provider = await this.provider.createCodeSystemProvider(codeSystemResource, supplements);
+        provider = await this.provider.createCodeSystemProvider(this.opContext, codeSystemResource, supplements);
       }
     }
 
@@ -150,8 +151,8 @@ class TerminologyWorker {
     }
 
     // If still no provider but we have a code system with allowed content mode
-    if (!provider && codeSystemResource && kinds.includes(codeSystemResource.contentMode())) {
-      provider = await this.createCodeSystemProvider(codeSystemResource, supplements);
+    if (!provider && codeSystemResource && kinds.includes(codeSystemResource.content)) {
+      provider = await this.provider.createCodeSystemProvider(this.opContext, codeSystemResource, supplements);
     }
 
     if (!provider && !nullOk) {
@@ -181,6 +182,7 @@ class TerminologyWorker {
     // Check additional resources
     if (this.additionalResources) {
       for (const resource of this.additionalResources) {
+        this.deadCheck('listVersions-additional');
         if (resource.url === url && resource.version) {
           versions.add(resource.version);
         }
@@ -190,6 +192,7 @@ class TerminologyWorker {
     // Check main provider
     const providerVersions = await this.provider.listCodeSystemVersions(url);
     for (const version of providerVersions) {
+      this.deadCheck('listVersions-provider');
       versions.add(version);
     }
 
@@ -210,6 +213,7 @@ class TerminologyWorker {
     }
 
     for (const resource of this.additionalResources) {
+      this.deadCheck('loadSupplements');
       if (resource.resourceType === 'CodeSystem' && resource instanceof CodeSystem) {
         const cs = resource;
         // Check if this code system supplements the target URL
@@ -270,6 +274,315 @@ class TerminologyWorker {
         this.requiredSupplements.splice(i, 1);
       }
     }
+  }
+
+  /**
+   * Find a ValueSet by URL and optional version
+   * @param {string} url - ValueSet URL (may include |version)
+   * @param {string} version - ValueSet version (optional, overrides URL version)
+   * @returns {ValueSet|null} Found ValueSet or null
+   */
+  async findValueSet(url, version = '') {
+    if (!url) {
+      return null;
+    }
+
+    // Parse URL|version format
+    let effectiveUrl = url;
+    let effectiveVersion = version;
+
+    if (!effectiveVersion && url.includes('|')) {
+      const parts = url.split('|');
+      effectiveUrl = parts[0];
+      effectiveVersion = parts[1];
+    }
+
+    // First check additional resources
+    const fromAdditional = this.findInAdditionalResources(effectiveUrl, effectiveVersion, 'ValueSet', false);
+    if (fromAdditional) {
+      return fromAdditional;
+    }
+
+    // Then try the provider
+    if (this.provider && this.provider.findValueSet) {
+      const vs = await this.provider.findValueSet(this.opContext, effectiveUrl, effectiveVersion);
+      if (vs) {
+        return vs;
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Apply version pinning rules from parameters
+   * @param {string} url - ValueSet URL
+   * @returns {string} Potentially versioned URL
+   */
+  pinValueSet(url) {
+    if (!url || !this.params) {
+      return url;
+    }
+
+    // Check for system-version parameters that might pin this ValueSet
+    // Format: system-version=url|version or valueset-version=url|version
+    const vsVersions = this.params.getAll ? this.params.getAll('valueset-version') : [];
+
+    for (const vsv of vsVersions) {
+      if (vsv && vsv.startsWith(url + '|')) {
+        return vsv; // Return the pinned version
+      }
+      if (vsv && vsv.includes('|')) {
+        const parts = vsv.split('|');
+        if (parts[0] === url) {
+          return vsv;
+        }
+      }
+    }
+
+    return url;
+  }
+
+  /**
+   * Build a canonical URL from system and version
+   * @param {string} system - System URL
+   * @param {string} version - Version (optional)
+   * @returns {string} Canonical URL (system|version or just system)
+   */
+  canonical(system, version = '') {
+    if (!system) return '';
+    if (!version) return system;
+    return `${system}|${version}`;
+  }
+
+  /**
+   * Parse a canonical URL into system and version parts
+   * @param {string} canonical - Canonical URL (may include |version)
+   * @returns {{system: string, version: string}}
+   */
+  parseCanonical(canonical) {
+    if (!canonical) {
+      return { system: '', version: '' };
+    }
+
+    const pipeIndex = canonical.indexOf('|');
+    if (pipeIndex < 0) {
+      return { system: canonical, version: '' };
+    }
+
+    return {
+      system: canonical.substring(0, pipeIndex),
+      version: canonical.substring(pipeIndex + 1)
+    };
+  }
+
+  // ========== Additional Resources Handling ==========
+
+  /**
+   * Set up additional resources from tx-resource parameters and cache
+   * @param {Object} params - Parameters resource
+   */
+  setupAdditionalResources(params) {
+    if (!params || !params.parameter) return;
+
+    // Collect tx-resource parameters (resources provided inline)
+    const txResources = [];
+    for (const param of params.parameter) {
+      this.deadCheck('setupAdditionalResources');
+      if (param.name === 'tx-resource' && param.resource) {
+        let res = this.wrapRawResource(param.resource);
+        if (res) {
+          txResources.push(res);
+        }
+      }
+    }
+
+    // Check for cache-id
+    const cacheIdParam = this.findParameter(params, 'cache-id');
+    const cacheId = cacheIdParam ? this.getParameterValue(cacheIdParam) : null;
+
+    if (cacheId && this.opContext.resourceCache) {
+      // Merge tx-resources with cached resources
+      if (txResources.length > 0) {
+        this.opContext.resourceCache.add(cacheId, txResources);
+      }
+
+      // Set additional resources to all resources for this cache-id
+      this.additionalResources = this.opContext.resourceCache.get(cacheId);
+    } else {
+      // No cache-id, just use the tx-resources directly
+      this.additionalResources = txResources;
+    }
+  }
+
+  /**
+   * Wrap a raw resource in its appropriate class wrapper
+   * @param {Object} resource - Raw resource object
+   * @returns {CodeSystem|ValueSet|null} Wrapped resource or null
+   */
+  wrapRawResource(resource) {
+    if (resource.resourceType === 'CodeSystem') {
+      return new CodeSystem(resource);
+    }
+    if (resource.resourceType === 'ValueSet') {
+      return new ValueSet(resource);
+    }
+    return null;
+  }
+
+  // ========== Parameters Handling ==========
+
+  /**
+   * Convert query parameters to a Parameters resource
+   * @param {Object} query - Query parameters
+   * @returns {Object} Parameters resource
+   */
+  queryToParameters(query) {
+    const params = {
+      resourceType: 'Parameters',
+      parameter: []
+    };
+
+    if (!query) return params;
+
+    for (const [name, value] of Object.entries(query)) {
+      if (Array.isArray(value)) {
+        // Repeating parameter
+        for (const v of value) {
+          params.parameter.push({ name, valueString: v });
+        }
+      } else {
+        params.parameter.push({ name, valueString: value });
+      }
+    }
+
+    return params;
+  }
+
+  /**
+   * Convert form body to a Parameters resource, merging with query params
+   * @param {Object} body - Form body
+   * @param {Object} query - Query parameters
+   * @returns {Object} Parameters resource
+   */
+  formToParameters(body, query) {
+    const params = {
+      resourceType: 'Parameters',
+      parameter: []
+    };
+
+    // Add query params first
+    if (query) {
+      for (const [name, value] of Object.entries(query)) {
+        if (Array.isArray(value)) {
+          for (const v of value) {
+            params.parameter.push({ name, valueString: v });
+          }
+        } else {
+          params.parameter.push({ name, valueString: value });
+        }
+      }
+    }
+
+    // Add/override with body params
+    if (body) {
+      for (const [name, value] of Object.entries(body)) {
+        if (Array.isArray(value)) {
+          for (const v of value) {
+            params.parameter.push({ name, valueString: v });
+          }
+        } else {
+          params.parameter.push({ name, valueString: value });
+        }
+      }
+    }
+
+    return params;
+  }
+
+  /**
+   * Find a parameter in a Parameters resource
+   * @param {Object} params - Parameters resource
+   * @param {string} name - Parameter name
+   * @returns {Object|null} Parameter object or null
+   */
+  findParameter(params, name) {
+    if (!params || !params.parameter) return null;
+    return params.parameter.find(p => p.name === name) || null;
+  }
+
+  /**
+   * Get the value from a parameter (handles various value types)
+   * @param {Object} param - Parameter object
+   * @returns {*} Parameter value
+   */
+  getParameterValue(param) {
+    if (!param) return null;
+
+    // Check for resource
+    if (param.resource) return param.resource;
+
+    // Check for various value types
+    const valueTypes = [
+      'valueString', 'valueCode', 'valueUri', 'valueCanonical', 'valueUrl',
+      'valueBoolean', 'valueInteger', 'valueDecimal',
+      'valueDateTime', 'valueDate', 'valueTime',
+      'valueCoding', 'valueCodeableConcept',
+      'valueIdentifier', 'valueQuantity'
+    ];
+
+    for (const vt of valueTypes) {
+      if (param[vt] !== undefined) {
+        return param[vt];
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Get a string parameter value
+   * @param {Object} params - Parameters resource
+   * @param {string} name - Parameter name
+   * @returns {string|null} Parameter value or null
+   */
+  getStringParam(params, name) {
+    const p = this.findParameter(params, name);
+    if (!p) return null;
+    return p.valueString || p.valueCode || p.valueUri || null;
+  }
+
+  /**
+   * Get a resource parameter value
+   * @param {Object} params - Parameters resource
+   * @param {string} name - Parameter name
+   * @returns {Object|null} Resource or null
+   */
+  getResourceParam(params, name) {
+    const p = this.findParameter(params, name);
+    return p?.resource || null;
+  }
+
+  /**
+   * Get a Coding parameter value
+   * @param {Object} params - Parameters resource
+   * @param {string} name - Parameter name
+   * @returns {Object|null} Coding or null
+   */
+  getCodingParam(params, name) {
+    const p = this.findParameter(params, name);
+    return p?.valueCoding || null;
+  }
+
+  /**
+   * Get a CodeableConcept parameter value
+   * @param {Object} params - Parameters resource
+   * @param {string} name - Parameter name
+   * @returns {Object|null} CodeableConcept or null
+   */
+  getCodeableConceptParam(params, name) {
+    const p = this.findParameter(params, name);
+    return p?.valueCodeableConcept || null;
   }
 
   /**

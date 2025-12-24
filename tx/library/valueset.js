@@ -369,6 +369,46 @@ class ValueSet extends CanonicalResource {
   }
 
   /**
+   * Finds a contains entry in the expansion by system, version, and code
+   * Searches recursively through nested contains
+   * @param {string} systemUri - Code system URL
+   * @param {string} version - Code system version (can be empty string)
+   * @param {string} code - Code value
+   * @returns {Object|null} The contains entry or null if not found
+   */
+  findContains(systemUri, version, code) {
+    if (!this.jsonObj.expansion || !this.jsonObj.expansion.contains) {
+      return null;
+    }
+    return this._findContainsInList(this.jsonObj.expansion.contains, systemUri, version, code);
+  }
+
+  /**
+   * Recursively searches for a contains entry in a list
+   * @param {Object[]} list - Array of contains entries
+   * @param {string} systemUri - Code system URL
+   * @param {string} version - Code system version
+   * @param {string} code - Code value
+   * @returns {Object|null} The contains entry or null
+   * @private
+   */
+  _findContainsInList(list, systemUri, version, code) {
+    for (const cc of list) {
+      if (systemUri === cc.system && code === cc.code &&
+        (!version || version === cc.version)) {
+        return cc;
+      }
+      if (cc.contains && cc.contains.length > 0) {
+        const found = this._findContainsInList(cc.contains, systemUri, version, code);
+        if (found) {
+          return found;
+        }
+      }
+    }
+    return null;
+  }
+
+  /**
    * Gets all codes in this value set expansion
    * @returns {Object[]} Array of {system, version, code, display} objects
    */

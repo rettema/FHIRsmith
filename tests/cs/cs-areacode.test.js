@@ -293,8 +293,8 @@ describe('AreaCodeServices', () => {
 
   describe('Subsumption', () => {
     test('should not support subsumption', async () => {
-      expect(await provider.subsumesTest('840', '150')).toBe(false);
-      expect(await provider.subsumesTest('150', '840')).toBe(false);
+      expect(await provider.subsumesTest('840', '150')).toBe('not-subsumed');
+      expect(await provider.subsumesTest('150', '840')).toBe('not-subsumed');
     });
 
     test('should return error for locateIsA', async () => {

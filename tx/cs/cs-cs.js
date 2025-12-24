@@ -111,7 +111,7 @@ class FhirCodeSystemProvider extends CodeSystemProvider {
     this.hasHierarchyFlag = codeSystem.hasHierarchy();
 
     // Parse the default language if specified
-    this.defaultLanguage = codeSystem.language();
+    this.defaultLanguage = codeSystem.langCode();
   }
 
   // ============ Metadata Methods ============
@@ -148,7 +148,7 @@ class FhirCodeSystemProvider extends CodeSystemProvider {
    * @returns {string} Content mode for the CodeSystem
    */
   contentMode() {
-    return this.codeSystem.contentMode();
+    return this.codeSystem.content;
   }
 
   /**
@@ -412,17 +412,38 @@ class FhirCodeSystemProvider extends CodeSystemProvider {
       return false;
     }
 
-    // Check for inactive property
     if (ctxt.concept.property && Array.isArray(ctxt.concept.property)) {
-      const inactiveProp = ctxt.concept.property.find(p =>
-        p.code === 'inactive' ||
-        p.uri === 'http://hl7.org/fhir/concept-properties#inactive'
-      );
-      if (inactiveProp && inactiveProp.valueBoolean) {
-        return true;
+      for (const p of ctxt.concept.property) {
+        // Check inactive property with boolean value
+        if (p.code === 'inactive' && p.valueBoolean === true) {
+          return true;
+        }
+        // Check inactive property with code value 'true'
+        if (p.code === 'inactive' && p.valueCode === 'true') {
+          return true;
+        }
+        // Check status property for inactive or retired
+        if (p.code === 'status') {
+          const value = p.valueCode || p.valueString || (p.value && p.value.toString());
+          if (value === 'inactive' || value === 'retired') {
+            return true;
+          }
+        }
       }
     }
 
+    // Check standards-status extension for withdrawn
+    if (ctxt.concept.extension && Array.isArray(ctxt.concept.extension)) {
+      const standardsStatus = ctxt.concept.extension.find(e =>
+        e.url === 'http://hl7.org/fhir/StructureDefinition/structuredefinition-standards-status'
+      );
+      if (standardsStatus) {
+        const value = standardsStatus.valueCode || standardsStatus.valueString || '';
+        if (value.toLowerCase() === 'withdrawn') {
+          return true;
+        }
+      }
+    }
     return false;
   }
 

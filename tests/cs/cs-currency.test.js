@@ -449,8 +449,8 @@ describe('Iso4217Services', () => {
 
   describe('Subsumption - Not Supported', () => {
     test('should not support subsumption', async () => {
-      expect(await provider.subsumesTest('USD', 'EUR')).toBe(false);
-      expect(await provider.subsumesTest('GBP', 'JPY')).toBe(false);
+      expect(await provider.subsumesTest('USD', 'EUR')).toBe('not-subsumed');
+      expect(await provider.subsumesTest('GBP', 'JPY')).toBe('not-subsumed');
     });
 
     test('should return error for locateIsA', async () => {

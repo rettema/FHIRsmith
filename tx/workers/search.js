@@ -90,6 +90,7 @@ class SearchWorker extends TerminologyWorker {
 
     } catch (error) {
       this.log.error(`Error searching ${resourceType}:`, error);
+      console.error('$lookup error:', error); // Full stack trace for debugging
       return res.status(500).json({
         resourceType: 'OperationOutcome',
         issue: [{
@@ -119,6 +120,7 @@ class SearchWorker extends TerminologyWorker {
     const hasSearchParams = Object.keys(searchParams).length > 0;
 
     for (const [key, cs] of this.provider.codeSystems) {
+      this.deadCheck('searchCodeSystems');
       if (key == cs.vurl) {
         const json = cs.jsonObj;
 
@@ -179,9 +181,11 @@ class SearchWorker extends TerminologyWorker {
     }
 
     for (const vsp of this.provider.valueSetProviders) {
+      this.deadCheck('searchValueSets-providers');
       const results = await vsp.searchValueSets(searchParams, elements);
       if (results && Array.isArray(results)) {
         for (const vs of results) {
+          this.deadCheck('searchValueSets-results');
           allMatches.push(vs.jsonObj || vs);
         }
       }

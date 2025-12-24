@@ -9,7 +9,7 @@ const express = require('express');
 const path = require('path');
 const Logger = require('../common/logger');
 const { Library } = require('./library');
-const { OperationContext } = require('./operation-context');
+const { OperationContext, ResourceCache, ExpansionCache } = require('./operation-context');
 const { LanguageDefinitions } = require('../library/languages');
 const { I18nSupport } = require('../library/i18nsupport');
 const txHtml = require('./tx-html');
@@ -17,12 +17,13 @@ const txHtml = require('./tx-html');
 // Import workers
 const ReadWorker = require('./workers/read');
 const SearchWorker = require('./workers/search');
-const ExpandWorker = require('./workers/expand');
+const { ExpandWorker } = require('./workers/expand');
 const ValidateWorker = require('./workers/validate');
 const TranslateWorker = require('./workers/translate');
 const LookupWorker = require('./workers/lookup');
 const SubsumesWorker = require('./workers/subsumes');
 const ClosureWorker = require('./workers/closure');
+const { MetadataHandler } = require('./workers/metadata');
 
 class TXModule {
   constructor() {
@@ -34,6 +35,7 @@ class TXModule {
     this.requestIdCounter = 0; // Thread-safe request ID counter
     this.languages = null; // LanguageDefinitions
     this.i18n = null; // I18nSupport
+    this.metadataHandler = null; // MetadataHandler
   }
 
   /**
@@ -77,6 +79,19 @@ class TXModule {
     this.log.info(`Loading translations from: ${translationsPath}`);
     this.i18n = new I18nSupport(translationsPath, this.languages);
     this.log.info('I18n support initialized');
+
+    // Initialize metadata handler with config
+    this.metadataHandler = new MetadataHandler({
+      baseUrl: config.baseUrl,
+      serverVersion: config.serverVersion || '1.0.0',
+      softwareName: config.softwareName || 'FHIR Terminology Server',
+      name: config.name || 'FHIRTerminologyServer',
+      title: config.title || 'FHIR Terminology Server',
+      description: config.description || 'FHIR Terminology Server',
+      contactUrl: config.contactUrl,
+      contact: config.contact,
+      releaseDate: config.releaseDate
+    });
 
     // Load the library from YAML
     this.log.info(`Loading library from: ${config.librarySource}`);
@@ -125,7 +140,9 @@ class TXModule {
     const endpointInfo = {
       path: endpointPath,
       fhirVersion,
-      context: context || null
+      context: context || null,
+      resourceCache: new ResourceCache(),
+      expansionCache: new ExpansionCache()
     };
 
     // Middleware to attach provider, context, and timing to request, and wrap res.json for HTML
@@ -136,8 +153,11 @@ class TXModule {
       // Get Accept-Language header for language preferences
       const acceptLanguage = req.get('Accept-Language') || 'en';
 
-      // Create operation context with language, ID, and default time limit (30s)
-      const opContext = new OperationContext(acceptLanguage, requestId, 30);
+      // Create operation context with language, ID, time limit, and caches
+      const opContext = new OperationContext(
+        acceptLanguage, requestId, 30,
+        endpointInfo.resourceCache, endpointInfo.expansionCache
+      );
 
       // Attach everything to request
       req.txProvider = provider;
@@ -198,6 +218,41 @@ class TXModule {
       next();
     });
 
+    // JSON body parsing - accept both application/json and application/fhir+json
+    // Handle body that may already be read as a Buffer by app-level middleware
+    router.use((req, res, next) => {
+      const contentType = req.get('Content-Type') || '';
+
+      // Only process POST/PUT with JSON-like content types
+      if ((req.method === 'POST' || req.method === 'PUT') &&
+        (contentType.includes('application/json') ||
+          contentType.includes('application/fhir+json') ||
+          contentType.includes('application/json+fhir'))) {
+
+        // If body is a Buffer, parse it
+        if (Buffer.isBuffer(req.body)) {
+          try {
+            const bodyStr = req.body.toString('utf8');
+            if (bodyStr) {
+              req.body = JSON.parse(bodyStr);
+            }
+          } catch (e) {
+            this.log.error(`JSON parse error: ${e.message}`);
+            return res.status(400).json({
+              resourceType: 'OperationOutcome',
+              issue: [{
+                severity: 'error',
+                code: 'invalid',
+                diagnostics: `Invalid JSON: ${e.message}`
+              }]
+            });
+          }
+        }
+      }
+      next();
+    });
+
+
     // Set up routes
     this.setupRoutes(router);
 
@@ -230,34 +285,42 @@ class TXModule {
 
     // CodeSystem/$subsumes (GET and POST)
     router.get('/CodeSystem/\\$subsumes', (req, res) => {
-      SubsumesWorker.handle(req, res);
+      let worker = new SubsumesWorker(req.txOpContext, this.log, req.txProvider, this.languages, this.i18n);
+      worker.handle(req, res);
     });
     router.post('/CodeSystem/\\$subsumes', (req, res) => {
-      SubsumesWorker.handle(req, res);
+      let worker = new SubsumesWorker(req.txOpContext, this.log, req.txProvider, this.languages, this.i18n);
+      worker.handle(req, res);
     });
 
     // CodeSystem/$validate-code (GET and POST)
     router.get('/CodeSystem/\\$validate-code', (req, res) => {
-      ValidateWorker.handleCodeSystem(req, res);
+      let worker = new ValidateWorker(req.txOpContext, this.log, req.txProvider, this.languages, this.i18n);
+      worker.handleCodeSystem(req, res);
     });
     router.post('/CodeSystem/\\$validate-code', (req, res) => {
-      ValidateWorker.handleCodeSystem(req, res);
+      let worker = new ValidateWorker(req.txOpContext, this.log, req.txProvider, this.languages, this.i18n);
+      worker.handleCodeSystem(req, res);
     });
 
     // ValueSet/$validate-code (GET and POST)
     router.get('/ValueSet/\\$validate-code', (req, res) => {
-      ValidateWorker.handleValueSet(req, res);
+      let worker = new ValidateWorker(req.txOpContext, this.log, req.txProvider, this.languages, this.i18n);
+      worker.handleValueSet(req, res);
     });
     router.post('/ValueSet/\\$validate-code', (req, res) => {
-      ValidateWorker.handleValueSet(req, res);
+      let worker = new ValidateWorker(req.txOpContext, this.log, req.txProvider, this.languages, this.i18n);
+      worker.handleValueSet(req, res);
     });
 
     // ValueSet/$expand (GET and POST)
     router.get('/ValueSet/\\$expand', (req, res) => {
-      ExpandWorker.handle(req, res, this.log);
+      let worker = new ExpandWorker(req.txOpContext, this.log, req.txProvider, this.languages, this.i18n);
+      worker.handle(req, res, this.log);
     });
     router.post('/ValueSet/\\$expand', (req, res) => {
-      ExpandWorker.handle(req, res, this.log);
+      let worker = new ExpandWorker(req.txOpContext, this.log, req.txProvider, this.languages, this.i18n);
+      worker.handle(req, res, this.log);
     });
 
     // ConceptMap/$translate (GET and POST)
@@ -290,34 +353,42 @@ class TXModule {
 
     // CodeSystem/[id]/$subsumes
     router.get('/CodeSystem/:id/\\$subsumes', (req, res) => {
-      SubsumesWorker.handleInstance(req, res, this.log);
+      let worker = new SubsumesWorker(req.txOpContext, this.log, req.txProvider, this.languages, this.i18n);
+      worker.handleInstance(req, res);
     });
     router.post('/CodeSystem/:id/\\$subsumes', (req, res) => {
-      SubsumesWorker.handleInstance(req, res, this.log);
+      let worker = new SubsumesWorker(req.txOpContext, this.log, req.txProvider, this.languages, this.i18n);
+      worker.handleInstance(req, res);
     });
 
     // CodeSystem/[id]/$validate-code
     router.get('/CodeSystem/:id/\\$validate-code', (req, res) => {
-      ValidateWorker.handleCodeSystemInstance(req, res, this.log);
+      let worker = new ValidateWorker(req.txOpContext, this.log, req.txProvider, this.languages, this.i18n);
+      worker.handleCodeSystemInstance(req, res, this.log);
     });
     router.post('/CodeSystem/:id/\\$validate-code', (req, res) => {
-      ValidateWorker.handleCodeSystemInstance(req, res, this.log);
+      let worker = new ValidateWorker(req.txOpContext, this.log, req.txProvider, this.languages, this.i18n);
+      worker.handleCodeSystemInstance(req, res, this.log);
     });
 
     // ValueSet/[id]/$validate-code
     router.get('/ValueSet/:id/\\$validate-code', (req, res) => {
-      ValidateWorker.handleValueSetInstance(req, res, this.log);
+      let worker = new ValidateWorker(req.txOpContext, this.log, req.txProvider, this.languages, this.i18n);
+      worker.handleValueSetInstance(req, res, this.log);
     });
     router.post('/ValueSet/:id/\\$validate-code', (req, res) => {
-      ValidateWorker.handleValueSetInstance(req, res, this.log);
+      let worker = new ValidateWorker(req.txOpContext, this.log, req.txProvider, this.languages, this.i18n);
+      worker.handleValueSetInstance(req, res, this.log);
     });
 
     // ValueSet/[id]/$expand
     router.get('/ValueSet/:id/\\$expand', (req, res) => {
-      ExpandWorker.handleInstance(req, res, this.log);
+      let worker = new ExpandWorker(req.txOpContext, this.log, req.txProvider, this.languages, this.i18n);
+      worker.handleInstance(req, res, this.log);
     });
     router.post('/ValueSet/:id/\\$expand', (req, res) => {
-      ExpandWorker.handleInstance(req, res, this.log);
+      let worker = new ExpandWorker(req.txOpContext, this.log, req.txProvider, this.languages, this.i18n);
+      worker.handleInstance(req, res, this.log);
     });
 
     // ConceptMap/[id]/$translate
@@ -372,8 +443,23 @@ class TXModule {
     }
 
     // Metadata / CapabilityStatement
-    router.get('/metadata', (req, res) => {
-      res.json(this.buildCapabilityStatement(req.txEndpoint));
+    router.get('/metadata', async (req, res) => {
+      try {
+        await this.metadataHandler.handle(req, res);
+      } catch (error) {
+        this.log.error(`Error in /metadata: ${error.message}`);
+        res.status(500).json(this.operationOutcome('error', 'exception', error.message));
+      }
+    });
+
+    // $versions operation
+    router.get('/\\$versions', (req, res) => {
+      try {
+        this.metadataHandler.handleVersions(req, res);
+      } catch (error) {
+        this.log.error(`Error in $versions: ${error.message}`);
+        res.status(500).json(this.operationOutcome('error', 'exception', error.message));
+      }
     });
 
     // Root endpoint info
@@ -387,91 +473,6 @@ class TXModule {
         }]
       });
     });
-  }
-
-  /**
-   * Build a CapabilityStatement for an endpoint
-   */
-  buildCapabilityStatement(endpoint) {
-    const fhirVersionMap = {
-      '3.0': '3.0.2',
-      '4.0': '4.0.1',
-      '5.0': '5.0.0',
-      '6.0': '6.0.0'
-    };
-
-    return {
-      resourceType: 'CapabilityStatement',
-      status: 'active',
-      date: new Date().toISOString(),
-      kind: 'instance',
-      software: {
-        name: 'TX FHIR Terminology Server',
-        version: '1.0.0'
-      },
-      fhirVersion: fhirVersionMap[endpoint.fhirVersion] || '4.0.1',
-      format: ['json'],
-      rest: [{
-        mode: 'server',
-        resource: [
-          {
-            type: 'CodeSystem',
-            interaction: [
-              { code: 'read' },
-              { code: 'search-type' }
-            ],
-            searchParam: [
-              { name: 'url', type: 'uri' },
-              { name: 'version', type: 'token' },
-              { name: 'name', type: 'string' },
-              { name: 'title', type: 'string' },
-              { name: 'status', type: 'token' }
-            ],
-            operation: [
-              { name: 'lookup', definition: 'http://hl7.org/fhir/OperationDefinition/CodeSystem-lookup' },
-              { name: 'validate-code', definition: 'http://hl7.org/fhir/OperationDefinition/CodeSystem-validate-code' },
-              { name: 'subsumes', definition: 'http://hl7.org/fhir/OperationDefinition/CodeSystem-subsumes' }
-            ]
-          },
-          {
-            type: 'ValueSet',
-            interaction: [
-              { code: 'read' },
-              { code: 'search-type' }
-            ],
-            searchParam: [
-              { name: 'url', type: 'uri' },
-              { name: 'version', type: 'token' },
-              { name: 'name', type: 'string' },
-              { name: 'title', type: 'string' },
-              { name: 'status', type: 'token' }
-            ],
-            operation: [
-              { name: 'expand', definition: 'http://hl7.org/fhir/OperationDefinition/ValueSet-expand' },
-              { name: 'validate-code', definition: 'http://hl7.org/fhir/OperationDefinition/ValueSet-validate-code' }
-            ]
-          },
-          {
-            type: 'ConceptMap',
-            interaction: [
-              { code: 'read' },
-              { code: 'search-type' }
-            ],
-            searchParam: [
-              { name: 'url', type: 'uri' },
-              { name: 'version', type: 'token' },
-              { name: 'name', type: 'string' },
-              { name: 'title', type: 'string' },
-              { name: 'status', type: 'token' }
-            ],
-            operation: [
-              { name: 'translate', definition: 'http://hl7.org/fhir/OperationDefinition/ConceptMap-translate' },
-              { name: 'closure', definition: 'http://hl7.org/fhir/OperationDefinition/ConceptMap-closure' }
-            ]
-          }
-        ]
-      }]
-    };
   }
 
   /**

@@ -428,7 +428,7 @@ describe('FHIR CodeSystem Provider', () => {
     });
 
     test('should correctly parse German language', () => {
-      const lang = deCS.language();
+      const lang = deCS.langCode();
       expect(lang).toBeInstanceOf(Language);
       expect(lang.language).toBe('de');
     });
@@ -515,14 +515,14 @@ describe('FHIR CodeSystem Provider', () => {
 
   describe('CodeSystem Class Extensions', () => {
     test('should correctly implement language() method', () => {
-      const lang = simpleCS.language();
+      const lang = simpleCS.langCode();
       expect(lang).toBeInstanceOf(Language);
       expect(lang.language).toBe('en');
     });
 
-    test('should correctly implement contentMode() method', () => {
-      expect(simpleCS.contentMode()).toBe('complete');
-      expect(supplementCS.contentMode()).toBe('supplement');
+    test('should correctly implement content method', () => {
+      expect(simpleCS.content).toBe('complete');
+      expect(supplementCS.content).toBe('supplement');
     });
 
     test('should correctly implement hasHierarchy() method', () => {
@@ -534,7 +534,7 @@ describe('FHIR CodeSystem Provider', () => {
       const noLangData = {...simpleCS.jsonObj};
       delete noLangData.language;
       const noLangCS = new CodeSystem(noLangData);
-      expect(noLangCS.language()).toBeNull();
+      expect(noLangCS.langCode()).toBeNull();
     });
   });
 

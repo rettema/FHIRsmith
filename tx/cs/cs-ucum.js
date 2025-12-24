@@ -418,7 +418,7 @@ class UcumCodeSystemProvider extends CodeSystemProvider {
 
     await this.#ensureContext(codeA);
     await this.#ensureContext(codeB);
-    return false; // No subsumption in UCUM
+    return 'not-subsumed'; // No subsumption in UCUM
   }
 
   async extendLookup(ctxt, props, params) {

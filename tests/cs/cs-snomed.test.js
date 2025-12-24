@@ -221,7 +221,7 @@ describe('SNOMED CT Expression Processing (File-based Tests)', () => {
     // Initialize expression services
     const isAIndex = snomedData.isAIndex || 0; // Use stored is-a index
     expressionServices = new SnomedExpressionServices(structures, isAIndex);
-    parser = new SnomedExpressionParser();
+    parser = new SnomedExpressionParser(structures.concepts);
   });
 
   test('should load basic file metadata', () => {
@@ -385,8 +385,8 @@ describe('SNOMED CT Expression Processing (File-based Tests)', () => {
 describe('SNOMED CT Expression Parser (Standalone Tests)', () => {
   let parser;
 
-  beforeAll(() => {
-    parser = new SnomedExpressionParser();
+  beforeAll(async() => {
+    parser = new SnomedExpressionParser(null);
   });
 
   /**

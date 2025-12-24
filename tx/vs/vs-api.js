@@ -85,8 +85,8 @@ class AbstractValueSetProvider {
     if (typeof url !== 'string' || !url.trim()) {
       throw new Error('URL must be a non-empty string');
     }
-    if (typeof version !== 'string' || !version.trim()) {
-      throw new Error('Version must be a non-empty string');
+    if (version != null && typeof version !== 'string') {
+      throw new Error('Version must be a string');
     }
   }
 }

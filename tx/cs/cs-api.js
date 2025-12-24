@@ -431,9 +431,9 @@ class CodeSystemProvider {
    
    * @param {string | CodeSystemProviderContext} codeA
    * @param {string | CodeSystemProviderContext} codeB
-   * @returns {boolean} true if codeA subsumes codeB
+   * @returns {string} one of: equivalent, subsumes, subsumed-by, and not-subsumed
    */
-  async subsumesTest(codeA, codeB) { return false; }
+  async subsumesTest(codeA, codeB) { return 'not-subsumed'; }
 
   /**
    

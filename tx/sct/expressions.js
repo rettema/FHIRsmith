@@ -431,9 +431,13 @@ class SnomedExpression extends SnomedExpressionBase {
  * Parser for SNOMED CT expression strings
  */
 class SnomedExpressionParser {
-  constructor() {
+  /**
+   * @param {SnomedConceptList} conceptList - list of all snomed concepts
+   */
+  constructor(conceptList) {
     this.source = '';
     this.cursor = 0;
+    this.conceptList = conceptList;
   }
 
   /**
@@ -490,6 +494,13 @@ class SnomedExpressionParser {
       result.literal = this.stringConstant();
     } else {
       result.code = this.conceptId();
+      if (this.conceptList) {
+        const found = this.conceptList.findConcept(result.code)
+        this.rule(found.found, 'Concept "' + result.code + '" not valid');
+        result.reference = found.index;
+      } else {
+        result.reference = 0;
+      }
     }
 
     this.ws();

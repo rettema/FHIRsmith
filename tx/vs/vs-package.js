@@ -107,7 +107,7 @@ class PackageValueSetProvider extends AbstractValueSetProvider {
       return this.valueSetMap.get(url);
     }
 
-    throw new Error(`Value set not found: ${url} version ${version}`);
+    return null;
   }
 
   /**

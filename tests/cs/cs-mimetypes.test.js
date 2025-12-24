@@ -178,8 +178,8 @@ describe('MimeTypeServices', () => {
 
   describe('Subsumption - Not Supported', () => {
     test('should not support subsumption', async () => {
-      expect(await provider.subsumesTest('text/plain', 'text/html')).toBe(false);
-      expect(await provider.subsumesTest('application/json', 'application/xml')).toBe(false);
+      expect(await provider.subsumesTest('text/plain', 'text/html')).toBe('not-subsumed');
+      expect(await provider.subsumesTest('application/json', 'application/xml')).toBe('not-subsumed');
     });
 
     test('should return error for locateIsA', async () => {

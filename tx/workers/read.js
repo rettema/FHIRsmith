@@ -67,6 +67,7 @@ class ReadWorker extends TerminologyWorker {
       }
     } catch (error) {
       this.log.error(`Error reading ${resourceType}/${id}:`, error);
+      console.error('$lookup error:', error); // Full stack trace for debugging
       return res.status(500).json({
         resourceType: 'OperationOutcome',
         issue: [{
@@ -82,11 +83,9 @@ class ReadWorker extends TerminologyWorker {
    * Handle CodeSystem read
    */
   handleCodeSystem(req, res, id) {
-    // Search through codeSystems map for matching id
-    for (const [key, cs] of this.provider.codeSystems) {
-      if (cs.jsonObj.id === id) {
-        return res.json(cs.jsonObj);
-      }
+    let cs = this.provider.getCodeSystemById(this.opContext, id);
+    if (cs != null) {
+      return res.json(cs.jsonObj);
     }
 
     return res.status(404).json({
@@ -105,6 +104,7 @@ class ReadWorker extends TerminologyWorker {
   async handleValueSet(req, res, id) {
     // Iterate through valueSetProviders in order
     for (const vsp of this.provider.valueSetProviders) {
+      this.deadCheck('handleValueSet-loop');
       const vs = await vsp.fetchValueSetById(id);
       if (vs) {
         return res.json(vs.jsonObj);

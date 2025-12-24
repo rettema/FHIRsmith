@@ -521,7 +521,7 @@ describe('OMOP Provider', () => {
 
     test('should handle subsumption test (not implemented)', async () => {
       const result = await provider.subsumesTest(testData.sampleConcepts[0], testData.sampleConcepts[1]);
-      expect(result).toBe(false);
+      expect(result).toBe('not-subsumed');
     });
   });
 

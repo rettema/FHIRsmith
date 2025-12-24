@@ -302,8 +302,8 @@ describe('VSACValueSetProvider', () => {
       ).rejects.toThrow('URL must be a non-empty string');
 
       await expect(
-        provider.fetchValueSet('http://example.com/test', '')
-      ).rejects.toThrow('Version must be a non-empty string');
+        provider.fetchValueSet('http://example.com/test', 1.1)
+      ).rejects.toThrow('Version must be a string');
 
       await expect(
         provider.searchValueSets('not an array')

@@ -123,6 +123,38 @@ class Provider {
     this.valueSetProviders.push(vs);
   }
 
+  getCodeSystemById(opContext, id) {
+    // Search through codeSystems map for matching id
+    for (const [key, cs] of this.codeSystems) {
+      if (opContext) opContext.deadCheck('getCodeSystemById');
+      if (cs.jsonObj.id === id) {
+        return cs;
+      }
+    }
+    return undefined;
+  }
+
+  async getValueSetById(opContext, id) {
+    for (const vp of this.valueSetProviders) {
+      if (opContext) opContext.deadCheck('getValueSetById');
+      let vs = await vp.fetchValueSetById(id);
+      if (vs) {
+        return vs;
+      }
+    }
+    return null;
+  }
+
+  async findValueSet(opContext, url, version) {
+    for (const vp of this.valueSetProviders) {
+      if (opContext) opContext.deadCheck('findValueSet');
+      let vs = await vp.fetchValueSet(url, version);
+      if (vs) {
+        return vs;
+      }
+    }
+    return null;
+  }
 
 }
 

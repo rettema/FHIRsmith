@@ -894,8 +894,8 @@ class SnomedProvider extends CodeSystemProvider {
     
 
     try {
-      const exprA = new SnomedExpressionParser().parse(codeA);
-      const exprB = new SnomedExpressionParser().parse(codeB);
+      const exprA = new SnomedExpressionParser(this.sct.concepts).parse(codeA);
+      const exprB = new SnomedExpressionParser(this.sct.concepts).parse(codeB);
 
       if (exprA.isSimple() && exprB.isSimple()) {
         const refA = exprA.concepts[0].reference;

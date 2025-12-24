@@ -360,7 +360,7 @@ describe('IETF Language CodeSystem Provider', () => {
     });
 
     test('should not support subsumption testing', async () => {
-      expect(await provider.subsumesTest('en', 'en-US')).toBe(false);
+      expect(await provider.subsumesTest('en', 'en-US')).toBe('not-subsumed');
     });
 
     test('should return empty definitions', async () => {

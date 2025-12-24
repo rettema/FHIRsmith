@@ -595,7 +595,7 @@ class RxNormServices extends CodeSystemProvider {
   async subsumesTest(codeA, codeB) {
     await this.#ensureContext(codeA);
     await this.#ensureContext(codeB);
-    return false; // Not implemented yet
+    return 'not-subsumed'; // Not implemented yet
   }
 
   // Extension for lookup operation

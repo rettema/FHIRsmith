@@ -30,6 +30,10 @@ class CanonicalResource {
     this.fhirVersion = fhirVersion;
   }
 
+  get resourceType() {
+    return this.jsonObj.resourceType;
+  }
+
   get url() {
     return this.jsonObj.url;
   }

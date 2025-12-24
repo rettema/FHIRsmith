@@ -270,10 +270,6 @@ class CodeSystem extends CanonicalResource {
       throw new Error('Invalid CodeSystem: url is required and must be a string');
     }
 
-    if (!this.jsonObj.name || typeof this.jsonObj.name !== 'string') {
-      throw new Error('Invalid CodeSystem: name is required and must be a string');
-    }
-
     if (this.jsonObj.status && typeof this.jsonObj.status !== 'string') {
       throw new Error('Invalid CodeSystem: status must be a string');
     }
@@ -744,11 +740,11 @@ class CodeSystem extends CanonicalResource {
    * Gets the language for this CodeSystem as a Language object
    * @returns {Language|null} Parsed language or null if not specified
    */
-  language() {
+  langCode() {
     return this.jsonObj.language ? new Language(this.jsonObj.language) : null;
   }
 
-  contentMode() {
+  get content() {
     return this.jsonObj.content;
   }
 

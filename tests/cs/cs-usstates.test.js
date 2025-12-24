@@ -175,8 +175,8 @@ describe('USStateServices', () => {
 
   describe('Subsumption', () => {
     test('should not support subsumption', async () => {
-      expect(await provider.subsumesTest('CA', 'NY')).toBe(false);
-      expect(await provider.subsumesTest('TX', 'FL')).toBe(false);
+      expect(await provider.subsumesTest('CA', 'NY')).toBe('not-subsumed');
+      expect(await provider.subsumesTest('TX', 'FL')).toBe('not-subsumed');
     });
   });
 

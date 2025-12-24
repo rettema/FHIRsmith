@@ -132,12 +132,6 @@ describe('CodeSystem', () => {
       expect(() => new CodeSystem(invalid)).toThrow('Invalid CodeSystem: url is required');
     });
 
-    test('should throw error for missing name', () => {
-      const invalid = { ...validCodeSystem };
-      delete invalid.name;
-      expect(() => new CodeSystem(invalid)).toThrow('Invalid CodeSystem: name is required');
-    });
-
     test('should throw error for invalid status', () => {
       const invalid = { ...validCodeSystem, status: "invalid" };
       expect(() => new CodeSystem(invalid)).toThrow('Invalid CodeSystem: status must be one of');

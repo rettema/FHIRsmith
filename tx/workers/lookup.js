@@ -41,6 +41,7 @@ class LookupWorker extends TerminologyWorker {
       await this.handleTypeLevelLookup(req, res);
     } catch (error) {
       this.log.error(`Error in $lookup: ${error.message}`);
+      console.error('$lookup error:', error); // Full stack trace for debugging
       const statusCode = error.statusCode || 500;
       const issueCode = error.issueCode || 'exception';
       return res.status(statusCode).json({
@@ -66,7 +67,8 @@ class LookupWorker extends TerminologyWorker {
       await this.handleInstanceLevelLookup(req, res);
     } catch (error) {
       this.log.error(`Error in $lookup: ${error.message}`);
-      const statusCode = error.statusCode || 500;
+      console.error('$lookup error:', error); // Full stack trace for debugging
+      //      const statusCode = error.statusCode || 500;
       const issueCode = error.issueCode || 'exception';
       return res.status(statusCode).json({
         resourceType: 'OperationOutcome',
@@ -85,6 +87,11 @@ class LookupWorker extends TerminologyWorker {
    */
   async handleTypeLevelLookup(req, res) {
     this.deadCheck('lookup-type-level');
+
+    // Handle tx-resource and cache-id parameters from Parameters resource
+    if (req.body && req.body.resourceType === 'Parameters') {
+      this.setupAdditionalResources(req.body);
+    }
 
     // Parse parameters from request
     const params = this.parseParameters(req);
@@ -143,17 +150,16 @@ class LookupWorker extends TerminologyWorker {
     const { id } = req.params;
 
     // Find the CodeSystem by ID
-    let codeSystem = null;
-    for (const [key, cs] of this.provider.codeSystems) {
-      if (cs.jsonObj.id === id) {
-        codeSystem = cs;
-        break;
-      }
-    }
+    let codeSystem = this.provider.getCodeSystemById(this.opContext, id);
 
     if (!codeSystem) {
       return res.status(404).json(this.operationOutcome('error', 'not-found',
         `CodeSystem/${id} not found`));
+    }
+
+    // Handle tx-resource and cache-id parameters from Parameters resource
+    if (req.body && req.body.resourceType === 'Parameters') {
+      this.setupAdditionalResources(req.body);
     }
 
     // Parse parameters from request
@@ -437,6 +443,7 @@ class LookupWorker extends TerminologyWorker {
       const designations = await csProvider.designations(ctxt);
       if (designations && Array.isArray(designations)) {
         for (const designation of designations) {
+          this.deadCheck('doLookup-designations');
           const designationParts = [];
 
           if (designation.language) {

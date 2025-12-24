@@ -159,7 +159,7 @@ class USStateServices extends CodeSystemProvider {
   async subsumesTest(codeA, codeB) {
     await this.#ensureContext(codeA);
     await this.#ensureContext(codeB);
-    return false; // No subsumption relationships
+    return 'not-subsumed'; // No subsumption relationships
   }
 }
 

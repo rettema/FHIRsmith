@@ -808,7 +808,7 @@ class LoincServices extends CodeSystemProvider {
     await this.#ensureContext(codeA);
     await this.#ensureContext(codeB);
 
-    return false; // Not implemented yet
+    return 'not-subsumed'; // Not implemented yet
   }
 }
 

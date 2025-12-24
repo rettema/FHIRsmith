@@ -618,7 +618,7 @@ describe('CPT Provider', () => {
 
     test('should handle subsumption test (not implemented)', async () => {
       const result = await provider.subsumesTest('99202', '99203');
-      expect(result).toBe(false);
+      expect(result).toBe('not-subsumed');
     });
 
     test('should reject search filter (not implemented)', async () => {

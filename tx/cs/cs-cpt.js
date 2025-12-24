@@ -573,7 +573,7 @@ class CPTServices extends CodeSystemProvider {
   async subsumesTest(codeA, codeB) {
     await this.#ensureContext(codeA);
     await this.#ensureContext(codeB);
-    return false;
+    return 'not-subsumed';
   }
 }
 
