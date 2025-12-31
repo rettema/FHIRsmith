@@ -5,18 +5,6 @@ const {CodeSystem, CodeSystemContentMode} = require("../library/codesystem");
 const {Languages, Language} = require("../../library/languages");
 const { OperationContext } = require("../operation-context");
 
-class Designation {
-  language;
-  use;
-  value;
-
-  constructor(language, use, value) {
-    this.language = language;
-    this.use = use;
-    this.value = value;
-  }
-}
-
 class FilterExecutionContext {
   filters = [];
 }
@@ -191,7 +179,7 @@ class CodeSystemProvider {
    */
   hasSupplement(url) {
     if (!this.supplements) return false;
-    return this.supplements.some(supp => supp.jsonObj.url === url || supp.jsonObj.versionedUrl === url);
+    return this.supplements.some(supp => supp.url === url || supp.vurl === url);
   }
 
   /**
@@ -216,7 +204,7 @@ class CodeSystemProvider {
   /**
    * @returns { {status, standardsStatus : String, experimental : boolean} } applicable Features
    */
-  status() { return null; }
+  status() { return {}; }
 
   /**
    * @section Getting Information about the concepts in the CodeSystem
@@ -336,30 +324,29 @@ class CodeSystemProvider {
   /**
    
    * @param {string | CodeSystemProviderContext} code
+   * @param {ConceptDesignations} designation list
    * @returns {Designation[]} whatever designations exist (in all languages)
    */
-  async designations(code) { return null; }
+  async designations(code, displays) { return null; }
 
-  _listSupplementDesignations(code) {
+  _listSupplementDesignations(code, displays) {
     assert(typeof code === 'string', 'code must be string');
-    let designations = [];
 
     if (this.supplements) {
       for (const supplement of this.supplements) {
         const concept= supplement.getConceptByCode(code);
         if (concept) {
           if (concept.display) {
-            designations.push(new Designation(supplement.jsonObj.language, CodeSystem.makeUseForDisplay(), concept.display));
+            displays.addDesignation(true, true, supplement.jsonObj.language, CodeSystem.makeUseForDisplay(), concept.display);
           }
           if (concept.designation) {
             for (const d of concept.designation) {
-              designations.push(new Designation(d.language, d.use, d.value));
+              displays.addDesignation(false, true, d.language, d.use, d.value, d.extension?.length > 0 ? d.extension : []);
             }
           }
         }
       }
     }
-    return designations;
   }
 
   /**
@@ -372,9 +359,9 @@ class CodeSystemProvider {
   /**
    
    * @param {string | CodeSystemProviderContext} code
-   * @returns {CodeSystem.concept.property[]} parent, if there is one
+   * @returns {CodeSystem.concept.property[]} list of properties (may be empty)
    */
-  async properties(code) { return null; }
+  async properties(code) { return []; }
 
   /**
    
@@ -414,11 +401,20 @@ class CodeSystemProvider {
   }
 
   /**
-   
+   iterate all the root concepts
    * @param {string | CodeSystemProviderContext} code
    * @returns {CodeSystemIterator} a handle that can be passed to nextConcept (or null, if it can't be iterated)
    */
   async iterator(code) { return null }
+
+  /**
+   iterate all the concepts
+   * @param {string | CodeSystemProviderContext} code
+   * @returns {CodeSystemIterator} a handle that can be passed to nextConcept (or null, if it can't be iterated)
+   */
+  async iteratorAll() {
+    if (this.hasParents()) throw new Error("Must override"); else return await this.iterator(null);
+  }
 
   /**
    
@@ -663,10 +659,20 @@ class CodeSystemFactoryProvider {
   recordUse() {
     this.uses++;
   }
+
+  /**
+   * build and return a known value set from the URL, if there is one.
+   *
+   * @param url
+   * @param version
+   * @returns {ValueSet}
+   */
+  async buildKnownValueSet(url, version) {
+    return null;
+  }
 }
 
 module.exports = {
-  Designation,
   FilterExecutionContext,
   CodeSystemProvider,
   CodeSystemContentMode,

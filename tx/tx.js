@@ -18,7 +18,7 @@ const txHtml = require('./tx-html');
 const ReadWorker = require('./workers/read');
 const SearchWorker = require('./workers/search');
 const { ExpandWorker } = require('./workers/expand');
-const ValidateWorker = require('./workers/validate');
+const { ValidateWorker } = require('./workers/validate');
 const TranslateWorker = require('./workers/translate');
 const LookupWorker = require('./workers/lookup');
 const SubsumesWorker = require('./workers/subsumes');
@@ -78,6 +78,7 @@ class TXModule {
     const translationsPath = path.join(__dirname, '..', 'translations');
     this.log.info(`Loading translations from: ${translationsPath}`);
     this.i18n = new I18nSupport(translationsPath, this.languages);
+    await this.i18n.load();
     this.log.info('I18n support initialized');
 
     // Initialize metadata handler with config
@@ -155,7 +156,7 @@ class TXModule {
 
       // Create operation context with language, ID, time limit, and caches
       const opContext = new OperationContext(
-        acceptLanguage, requestId, 30,
+        acceptLanguage, this.i18n, requestId, 30,
         endpointInfo.resourceCache, endpointInfo.expansionCache
       );
 
@@ -198,7 +199,7 @@ class TXModule {
         }
 
         // Log the request with request ID
-        const paramStr = Object.keys(params).length > 0 ? ` params=${JSON.stringify(params)}` : '';
+        const paramStr = Object.keys(params).length > 0 ? ` params=${JSON.stringify(this.trimParameters(params))}` : '';
         log.info(`[${requestId}] ${operation}${paramStr} - ${res.statusCode} - ${isHtml ? 'html' : 'json'} - ${responseSize} bytes - ${duration}ms`);
 
         return result;
@@ -511,6 +512,16 @@ class TXModule {
     this.log.info('Shutting down TX module');
     // Clean up any resources if needed
     this.log.info('TX module shut down');
+  }
+
+  trimParameters(params) {
+    if (!params || !params.parameter) {
+      return params;
+    }
+
+    params.parameter = params.parameter.filter(p => p.name !== 'tx-resource');
+
+    return params;
   }
 }
 

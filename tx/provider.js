@@ -7,6 +7,7 @@ const path = require("path");
 const {PackageContentLoader} = require("../library/package-manager");
 const {ListCodeSystemProvider} = require("./cs/cs-provider-list");
 const {PackageValueSetProvider} = require("./vs/vs-package");
+const ValueSet = require("./library/valueset");
 
 /**
  * This class holds what information is in context
@@ -153,9 +154,34 @@ class Provider {
         return vs;
       }
     }
-    return null;
+    let vs = await this.findKnownValueSet(url, version);
+    return vs;
   }
 
+  async listCodeSystemVersions(url) {
+    let result = new Set();
+    for (let cs of this.codeSystems) {
+      if (cs.url == url) {
+        result.add(cs.version);
+      }
+    }
+    for (let cp of this.codeSystemFactories.values()) {
+      if (cp.system() == url) {
+        result.add(cp.version());
+      }
+    }
+    return result;
+  }
+
+  async findKnownValueSet(url, version) {
+    for (let csp of this.codeSystemFactories.values()) {
+      let vs = await csp.buildKnownValueSet(url, version);
+      if (vs != null) {
+        return new ValueSet(vs);
+      }
+    }
+    return null;
+  }
 }
 
 module.exports = { Provider };

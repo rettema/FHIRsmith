@@ -1,7 +1,7 @@
 const sqlite3 = require('sqlite3').verbose();
 const assert = require('assert');
 const { CodeSystem } = require('../library/codesystem');
-const { CodeSystemProvider, Designation, CodeSystemFactoryProvider} = require('./cs-api');
+const { CodeSystemProvider, CodeSystemFactoryProvider} = require('./cs-api');
 
 class NdcConcept {
   constructor(code, display, isPackage = false, key = null) {
@@ -109,22 +109,18 @@ class NdcServices extends CodeSystemProvider {
     return false; // NDC doesn't track deprecated status separately
   }
 
-  async designations(code) {
-    
+  async designations(code, displays) {
     const ctxt = await this.#ensureContext(code);
-    let designations = [];
 
     if (ctxt) {
       // Add main display
       if (ctxt.display) {
-        designations.push(new Designation('en', CodeSystem.makeUseForDisplay(), ctxt.display.trim()));
+        displays.addDesignation(true, true, 'en', CodeSystem.makeUseForDisplay(), ctxt.display.trim());
       }
 
       // Add supplement designations
-      designations.push(...this._listSupplementDesignations(ctxt.code));
+      this._listSupplementDesignations(ctxt.code, displays);
     }
-
-    return designations;
   }
 
   async extendLookup(ctxt, props, params) {
@@ -395,14 +391,14 @@ class NdcServices extends CodeSystemProvider {
   async doesFilter(prop, op, value) {
     
     return prop === 'code-type' &&
-      op === 'equal' &&
+      op === '=' &&
       ['10-digit', '11-digit', 'product'].includes(value);
   }
 
   async filter(filterContext, prop, op, value) {
     
 
-    if (prop === 'code-type' && op === 'equal') {
+    if (prop === 'code-type' && op === '=') {
       const filter = { type: 'code-type', value: value };
       filterContext.filters.push(filter);
       return filter;
@@ -579,6 +575,10 @@ class NdcServicesFactory extends CodeSystemFactoryProvider {
 
   version() {
     return this._version;
+  }
+
+  async buildKnownValueSet(url, version) {
+    return null;
   }
 
   async #ensureLoaded() {

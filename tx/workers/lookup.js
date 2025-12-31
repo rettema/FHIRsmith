@@ -9,6 +9,7 @@
 
 const { TerminologyWorker } = require('./worker');
 const { FhirCodeSystemProvider } = require('../cs/cs-cs');
+const {Designation, Designations} = require("../library/designations");
 
 class LookupWorker extends TerminologyWorker {
   /**
@@ -440,7 +441,8 @@ class LookupWorker extends TerminologyWorker {
 
     // designations (optional)
     if (hasProp('designation', false)) {
-      const designations = await csProvider.designations(ctxt);
+      let designations = new Designations(this.languages);
+      await csProvider.designations(ctxt, designations);
       if (designations && Array.isArray(designations)) {
         for (const designation of designations) {
           this.deadCheck('doLookup-designations');

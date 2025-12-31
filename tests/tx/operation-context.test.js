@@ -1,5 +1,7 @@
 const { OperationContext, OperationParameters, ExpansionParamsVersionRuleMode, TerminologyError, TooCostlyError, TimeTracker } = require('../../tx/operation-context');
 const { Languages, LanguageDefinitions } = require('../../library/languages');
+const path = require("path");
+const {I18nSupport} = require("../../library/i18nsupport");
 
 describe('TimeTracker', () => {
   let timeTracker;
@@ -575,7 +577,7 @@ describe('OperationParameters', () => {
       });
 
       test('should accept custom id and timeLimit', () => {
-        const context = new OperationContext('en-US', 'custom-id', 60);
+        const context = new OperationContext('en-US', null,'custom-id', 60);
 
         expect(context.id).toBe('custom-id');
         expect(context.timeLimit).toBe(60000); // 60 seconds in ms
@@ -606,11 +608,17 @@ describe('OperationParameters', () => {
       });
     });
 
-    describe('Context Tracking', () => {
+    describe('Context Tracking',  () => {
       let context;
 
-      beforeEach(() => {
-        context = new OperationContext('en-US');
+      beforeEach(async () => {
+
+        const dataPath = path.join(__dirname, '../../tx/data/lang.dat');
+        let languageDefinitions = await LanguageDefinitions.fromFile(dataPath);
+        let i18n = new I18nSupport(path.join(__dirname, '../../translations'), languageDefinitions);
+        await i18n.load();
+
+        context = new OperationContext('en-US', i18n);
       });
 
       test('should track context URLs', () => {
@@ -634,7 +642,7 @@ describe('OperationParameters', () => {
         try {
           context.seeContext('http://example.com/vs1');
         } catch (error) {
-          expect(error.message).toContain('Circular reference detected');
+          expect(error.message).toContain('Found a circularity');
           expect(error.message).toContain('http://example.com/vs1');
           expect(error.message).toContain('[http://example.com/vs1, http://example.com/vs2]');
         }
@@ -719,7 +727,7 @@ describe('OperationParameters', () => {
       });
 
       test('should throw TooCostlyError when time limit exceeded', (done) => {
-        const context = new OperationContext('en-US', 'test-id', 0.01); // 10ms limit
+        const context = new OperationContext('en-US', null, 'test-id', 0.01); // 10ms limit
 
         setTimeout(() => {
           expect(() => {
@@ -835,7 +843,7 @@ describe('OperationParameters', () => {
 
     describe('Edge Cases', () => {
       test('should handle very short time limits', () => {
-        const context = new OperationContext('en-US', 'test-id', 0.001); // 1ms limit
+        const context = new OperationContext('en-US', null, 'test-id', 0.001); // 1ms limit
 
         // Should still construct successfully
         expect(context.timeLimit).toBe(1);

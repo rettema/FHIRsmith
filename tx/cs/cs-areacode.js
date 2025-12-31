@@ -1,4 +1,4 @@
-const { CodeSystemProvider, Designation, FilterExecutionContext } = require('./cs-api');
+const { CodeSystemProvider, FilterExecutionContext } = require('./cs-api');
 const assert = require('assert');
 const { CodeSystem } = require("../library/codesystem");
 
@@ -95,14 +95,12 @@ class AreaCodeServices extends CodeSystemProvider {
   }
 
 
-  async designations(code) {
+  async designations(code, displays) {
     const ctxt = await this.#ensureContext(code);
-    let designations = [];
     if (ctxt != null) {
-      designations.push(new Designation('en', CodeSystem.makeUseForDisplay(), ctxt.display));
-      designations.push(...this._listSupplementDesignations(ctxt));
+      displays.addDesignation(true, true, 'en', CodeSystem.makeUseForDisplay(), ctxt.display);
+      this._listSupplementDesignations(ctxt, displays);
     }
-    return designations;
   }
 
   async #ensureContext(code) {
@@ -295,6 +293,10 @@ class AreaCodeFactoryProvider {
 
   recordUse() {
     this.uses++;
+  }
+
+  async buildKnownValueSet(url, version) {
+    return null;
   }
 
   async load() {

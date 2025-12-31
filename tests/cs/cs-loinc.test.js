@@ -5,6 +5,8 @@ const { LoincDataMigrator } = require('../../tx/importers/import-loinc.module');
 const { LoincServices, LoincServicesFactory, LoincProviderContext } = require('../../tx/cs/cs-loinc');
 const { OperationContext } = require('../../tx/operation-context');
 const {validateParameter} = require("../../library/utilities");
+const {Designations} = require("../../tx/library/designations");
+const {TestUtilities} = require("../test-utilities");
 
 describe('LOINC Module Import', () => {
   const testSourceDir = path.resolve(__dirname, '../../tx/data/loinc');
@@ -555,12 +557,12 @@ describe('LOINC Provider', () => {
   describe('Designations', () => {
     test('should return designations for codes', async () => {
       const testCode = expectedResults.basic.knownCodes[0];
-      const designations = await provider.designations(testCode);
+      const designations = new Designations(await TestUtilities.loadLanguageDefinitions());
+      await provider.designations(testCode, designations);
 
-      expect(Array.isArray(designations)).toBe(true);
-      expect(designations.length).toBeGreaterThan(0);
+      expect(designations.count).toBeGreaterThan(0);
 
-      const firstDesignation = designations[0];
+      const firstDesignation = designations.designations[0];
       expect(firstDesignation.language).toBeDefined();
       expect(firstDesignation.value).toBeDefined();
 

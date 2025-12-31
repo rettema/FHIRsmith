@@ -71,7 +71,15 @@ class I18nSupport {
     }
 
     // Substitute parameters {0}, {1}, etc.
-    return this._substituteParameters(message, parameters);
+    return this._substituteParameters(message.trim(), parameters).replaceAll("''", "'");
+  }
+
+  translate(messageId, languages, parameters = []) {
+    return this.formatMessage(languages, messageId, parameters);
+  }
+
+  translatePlural(count, messageId, languages, parameters = []) {
+    return this.formatMessagePlural(languages, messageId, count, parameters);
   }
 
   /**
@@ -111,17 +119,19 @@ class I18nSupport {
    */
   _findMessage(languages, messageId) {
     // Try each language in preference order
-    for (const language of languages) {
-      const message = this._getMessageForLanguage(language.code, messageId);
-      if (message) {
-        return message;
-      }
-
-      // Try language without region (e.g., 'fr' for 'fr-FR')
-      if (language.language && language.language !== language.code) {
-        const message = this._getMessageForLanguage(language.language, messageId);
+    if (languages) {
+      for (const language of languages) {
+        const message = this._getMessageForLanguage(language.code, messageId);
         if (message) {
           return message;
+        }
+
+        // Try language without region (e.g., 'fr' for 'fr-FR')
+        if (language.language && language.language !== language.code) {
+          const message = this._getMessageForLanguage(language.language, messageId);
+          if (message) {
+            return message;
+          }
         }
       }
     }

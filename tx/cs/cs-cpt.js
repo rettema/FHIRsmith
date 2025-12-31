@@ -1,7 +1,7 @@
 const sqlite3 = require('sqlite3').verbose();
 const assert = require('assert');
 const { CodeSystem } = require('../library/codesystem');
-const { CodeSystemProvider, Designation, FilterExecutionContext, CodeSystemFactoryProvider } = require('./cs-api');
+const { CodeSystemProvider, FilterExecutionContext, CodeSystemFactoryProvider } = require('./cs-api');
 
 class CPTConceptDesignation {
   constructor(kind, value) {
@@ -201,24 +201,22 @@ class CPTServices extends CodeSystemProvider {
     return false;
   }
 
-  async designations(context) {
+  async designations(context, displays) {
     
     const ctxt = await this.#ensureContext(context);
-    let designations = [];
 
     if (ctxt instanceof CPTExpression) {
       // No text for expressions
     } else if (ctxt instanceof CPTConcept) {
       for (const d of ctxt.designations) {
         const isDisplay = d.kind === 'display';
-        designations.push(new Designation('en', isDisplay ? CodeSystem.makeUseForDisplay() : null, d.value));
+        displays.addDesignation(isDisplay, true,'en', isDisplay ? CodeSystem.makeUseForDisplay() : null, d.value);
       }
 
       // Add supplement designations
-      designations.push(...this._listSupplementDesignations(ctxt.code));
+      this._listSupplementDesignations(ctxt.code, displays);
     }
 
-    return designations;
   }
 
   async extendLookup(ctxt, props, params) {
@@ -463,15 +461,15 @@ class CPTServices extends CodeSystemProvider {
   async doesFilter(prop, op, value) {
     
 
-    if (prop === 'modifier' && op === 'equal' && ['true', 'false'].includes(value)) {
+    if (prop === 'modifier' && op === '=' && ['true', 'false'].includes(value)) {
       return true;
     }
 
-    if (prop === 'modified' && op === 'equal' && ['true', 'false'].includes(value)) {
+    if (prop === 'modified' && op === '=' && ['true', 'false'].includes(value)) {
       return true;
     }
 
-    if (prop === 'kind' && op === 'equal') {
+    if (prop === 'kind' && op === '=') {
       return true;
     }
 
@@ -489,14 +487,14 @@ class CPTServices extends CodeSystemProvider {
     let list;
     let closed = true;
 
-    if (prop === 'modifier' && op === 'equal') {
+    if (prop === 'modifier' && op === '=') {
       const isModifier = value === 'true';
       if (isModifier) {
         list = [...this.modifierList];
       } else {
         list = [...this.baseList];
       }
-    } else if (prop === 'modified' && op === 'equal') {
+    } else if (prop === 'modified' && op === '=') {
       const isModified = value === 'true';
       if (isModified) {
         list = []; // No modified codes
@@ -504,7 +502,7 @@ class CPTServices extends CodeSystemProvider {
       } else {
         list = [...this.conceptList];
       }
-    } else if (prop === 'kind' && op === 'equal') {
+    } else if (prop === 'kind' && op === '=') {
       list = this.conceptList.filter(concept => concept.hasProperty('kind', value));
     } else {
       throw new Error(`The filter "${prop} ${op} ${value}" is not supported for CPT`);
@@ -593,6 +591,10 @@ class CPTServicesFactory extends CodeSystemFactoryProvider {
 
   version() {
     return this._sharedData._version;
+  }
+
+  async buildKnownValueSet(url, version) {
+    return null;
   }
 
   async #ensureLoaded() {

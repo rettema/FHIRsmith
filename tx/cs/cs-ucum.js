@@ -3,7 +3,7 @@
  * Implementation of CodeSystemProvider for UCUM (Unified Code for Units of Measure)
  */
 
-const { CodeSystemProvider, Designation, FilterExecutionContext, CodeSystemFactoryProvider} = require('./cs-api');
+const { CodeSystemProvider, FilterExecutionContext, CodeSystemFactoryProvider} = require('./cs-api');
 const { CodeSystem } = require("../library/codesystem");
 const ValueSet = require("../library/valueset");
 const assert = require('assert');
@@ -176,15 +176,13 @@ class UcumCodeSystemProvider extends CodeSystemProvider {
     return false; // We don't track deprecated UCUM codes
   }
 
-  async designations(code) {
+  async designations(code, displays) {
     
     const ctxt = await this.#ensureContext(code);
 
-    const designations = [];
-
     // Primary display (analysis)
     const analysis = this.ucumService.analyse(ctxt.code);
-    designations.push(new Designation('en', CodeSystem.makeUseForDisplay(), analysis));
+    displays.addDesignation(true, true, 'en', CodeSystem.makeUseForDisplay(), analysis);
 
     // Common unit display if available
     if (this.commonUnitList) {
@@ -192,16 +190,14 @@ class UcumCodeSystemProvider extends CodeSystemProvider {
         if (concept.code === ctxt.code && concept.display) {
           const display = concept.display.trim();
           if (display !== analysis) {
-            designations.push(new Designation('en', CodeSystem.makeUseForDisplay(), display));
+            displays.addDesignation(false, true, 'en', CodeSystem.makeUseForDisplay(), display);
           }
         }
       }
     }
 
     // Add supplement designations
-    designations.push(...this._listSupplementDesignations(ctxt.code));
-
-    return designations;
+    this._listSupplementDesignations(ctxt.code, displays);
   }
 
   async #ensureContext(code) {
@@ -458,6 +454,10 @@ class UcumCodeSystemFactory extends CodeSystemFactoryProvider {
 
   version() {
     return this.ucumService.ucumIdentification().getVersion();
+  }
+
+  async buildKnownValueSet(url, version) {
+    return null;
   }
 
   defaultVersion() {

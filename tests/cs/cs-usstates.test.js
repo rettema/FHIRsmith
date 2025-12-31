@@ -1,6 +1,8 @@
 const { OperationContext } = require('../../tx/operation-context');
 const { USStateFactoryProvider } = require('../../tx/cs/cs-usstates');
 const { Languages } = require('../../library/languages');
+const {Designations} = require("../../tx/library/designations");
+const {TestUtilities} = require("../test-utilities");
 
 describe('USStateServices', () => {
   let factory;
@@ -104,14 +106,15 @@ describe('USStateServices', () => {
 
     test('should return designations with display', async () => {
       const result = await provider.locate('CA');
-      const designations = await provider.designations(result.context);
-      expect(designations).toBeTruthy();
-      expect(Array.isArray(designations)).toBe(true);
-      expect(designations.length).toBeGreaterThan(0);
+      const designations = new Designations(await TestUtilities.loadLanguageDefinitions());
+      await provider.designations(result.context, designations);
 
-      const displayDesignation = designations.find(d => d.value === 'California');
+      expect(designations).toBeTruthy();
+      expect(designations.count).toBeGreaterThan(0);
+
+      const displayDesignation = designations.designations.find(d => d.value === 'California');
       expect(displayDesignation).toBeTruthy();
-      expect(displayDesignation.language).toBe('en');
+      expect(displayDesignation.language.code).toBe('en');
     });
   });
 

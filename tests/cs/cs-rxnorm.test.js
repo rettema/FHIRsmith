@@ -4,6 +4,10 @@ const sqlite3 = require('sqlite3').verbose();
 const { RxNormImporter } = require('../../tx/importers/import-rxnorm.module');
 const { RxNormServices, RxNormServicesFactory, RxNormConcept } = require('../../tx/cs/cs-rxnorm');
 const { OperationContext } = require('../../tx/operation-context');
+const {Designations} = require("../../tx/library/designations");
+const {Languages, LanguageDefinitions} = require("../../library/languages");
+const {I18nSupport} = require("../../library/i18nsupport");
+const {TestUtilities} = require("../test-utilities");
 
 describe('RxNorm Import', () => {
   const sourceDir = path.resolve(__dirname, '../../tx/data/rxnorm');
@@ -175,14 +179,17 @@ describe('RxNorm Provider', () => {
   const testDbPath = path.resolve(__dirname, '../../data/rxnorm-testing.db');
   let factory;
   let provider;
+  let languageDefinitions;
 
   beforeAll(async () => {
     // Verify test database exists (should be created by import tests)
     expect(fs.existsSync(testDbPath)).toBe(true);
 
+    languageDefinitions = await TestUtilities.loadLanguageDefinitions();
+    let i18n = await TestUtilities.loadTranslations(languageDefinitions);
     // Create factory and provider
     factory = new RxNormServicesFactory(testDbPath);
-    provider = await factory.build(new OperationContext('en'), []);
+    provider = await factory.build(new OperationContext('en', i18n), []);
   });
 
   afterAll(() => {
@@ -346,16 +353,16 @@ describe('RxNorm Provider', () => {
     test('should return designations for codes', async () => {
       const sampleCode = await getFirstAvailableCode(testDbPath);
       if (sampleCode) {
-        const designations = await provider.designations(sampleCode);
+        let displays = new Designations(languageDefinitions);
+        await provider.designations(sampleCode, displays);
 
-        expect(Array.isArray(designations)).toBe(true);
-        expect(designations.length).toBeGreaterThan(0);
+        expect(displays.count).toBeGreaterThan(0);
 
-        const firstDesignation = designations[0];
+        const firstDesignation = displays.designations[0];
         expect(firstDesignation.language).toBeDefined();
         expect(firstDesignation.value).toBeDefined();
 
-        console.log(`✓ Code ${sampleCode} designations: ${designations.length} found`);
+        console.log(`✓ Code ${sampleCode} designations: ${displays.length} found`);
       }
     });
   });

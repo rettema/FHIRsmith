@@ -1,4 +1,4 @@
-const { CodeSystemProvider, Designation, FilterExecutionContext } = require('./cs-api');
+const { CodeSystemProvider, FilterExecutionContext } = require('./cs-api');
 const assert = require('assert');
 const { CodeSystem } = require("../library/codesystem");
 
@@ -101,15 +101,13 @@ class Iso4217Services extends CodeSystemProvider {
     return false; // No deprecated concepts
   }
 
-  async designations(code) {
+  async designations(code, displays) {
     
     const ctxt = await this.#ensureContext(code);
-    let designations = [];
     if (ctxt != null) {
-      designations.push(new Designation('en', CodeSystem.makeUseForDisplay(), ctxt.display));
-      designations.push(...this._listSupplementDesignations(ctxt.code));
+      displays.addDesignation(true, true, 'en', CodeSystem.makeUseForDisplay(), ctxt.display);
+      this._listSupplementDesignations(ctxt.code, displays);
     }
-    return designations;
   }
 
   async #ensureContext(code) {
@@ -305,6 +303,10 @@ class Iso4217FactoryProvider {
 
   useCount() {
     return this.uses;
+  }
+
+  async buildKnownValueSet(url, version) {
+    return null;
   }
 
   recordUse() {

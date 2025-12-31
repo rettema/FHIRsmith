@@ -311,6 +311,14 @@ class Language {
 
     return parts.join('-');
   }
+
+  asString() {
+    if (this.quality && this.quality != 1) {
+      return this.code+"; q="+this.quality;
+    } else {
+      return this.code;
+    }
+  }
 }
 
 /**
@@ -319,6 +327,7 @@ class Language {
 class Languages {
   constructor() {
     this.languages = [];
+
   }
 
   /**
@@ -433,6 +442,16 @@ class Languages {
         return `${lang.code};q=${lang.quality}`;
       }
     }).join(',');
+  }
+
+  asString(incWildcard) {
+    const parts = [];
+    for (const lang of this.languages) {
+      if (incWildcard || lang.code !== '*') {
+        parts.push(lang.asString());
+      }
+    }
+    return parts.join(', ');
   }
 }
 

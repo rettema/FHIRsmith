@@ -1,8 +1,10 @@
 const { CodeSystem}  = require("../library/codesystem");
-const { CodeSystemFactoryProvider, CodeSystemProvider, Designation, FilterExecutionContext }  = require( "./cs-api");
+const { CodeSystemFactoryProvider, CodeSystemProvider, FilterExecutionContext }  = require( "./cs-api");
 const { VersionUtilities }  = require("../../library/version-utilities");
 const { Language }  = require ("../../library/languages");
-const {validateParameter} = require("../../library/utilities");
+const {validateParameter, validateOptionalParameter, getValuePrimitive} = require("../../library/utilities");
+const {Issue} = require("../library/operation-outcome");
+const {Designations} = require("../library/designations");
 
 /**
  * Context class for FHIR CodeSystem provider concepts
@@ -107,6 +109,9 @@ class FhirCodeSystemProvider extends CodeSystemProvider {
   constructor(opContext, codeSystem, supplements) {
     super(opContext, supplements);
 
+    if (codeSystem.content == 'supplements') {
+      throw new Issue('error', 'invalid', null, 'CODESYSTEM_CS_NO_SUPPLEMENT', opContext.i18n.translate('CODESYSTEM_CS_NO_SUPPLEMENT', opContext.langs, codeSystem.vurl));
+    }
     this.codeSystem = codeSystem;
     this.hasHierarchyFlag = codeSystem.hasHierarchy();
 
@@ -237,6 +242,9 @@ class FhirCodeSystemProvider extends CodeSystemProvider {
    * @returns {boolean} True if v1 is more detailed than v2
    */
   versionIsMoreDetailed(v1, v2) {
+    validateOptionalParameter(v1, "v1", String);
+    validateOptionalParameter(v2, "v2", String);
+
     // Simple implementation - could be enhanced with semantic version comparison
     if (!v1 || !v2) return false;
     return VersionUtilities.versionMatches(v1+"?", v2);
@@ -247,7 +255,7 @@ class FhirCodeSystemProvider extends CodeSystemProvider {
    */
   status() {
     const cs = this.codeSystem.jsonObj;
-    if (!cs.status) return null;
+    if (!cs.status) return {};
 
     return {
       status: cs.status,
@@ -282,7 +290,7 @@ class FhirCodeSystemProvider extends CodeSystemProvider {
     const concept = this.codeSystem.getConceptByCode(code);
     if (concept) {
       return {
-        context: new FhirCodeSystemProviderContext(code, concept),
+        context: new FhirCodeSystemProviderContext(concept.code, concept),
         message: null
       };
     }
@@ -486,21 +494,41 @@ class FhirCodeSystemProvider extends CodeSystemProvider {
    * @returns {Promise<string|null>} Status
    */
   async getStatus(context) {
-    
+
     const ctxt = await this.#ensureContext(context);
     if (!ctxt) {
       return null;
     }
 
-    // Check for status property
-    if (ctxt.concept.property && Array.isArray(ctxt.concept.property)) {
-      const statusProp = ctxt.concept.property.find(p =>
-        p.code === 'status' ||
-        p.uri === 'http://hl7.org/fhir/concept-properties#status'
-      );
-      if (statusProp && statusProp.valueCode) {
-        return statusProp.valueCode;
+    for (let cp of ctxt.concept.property || []) {
+      if (cp.code === 'status' || cp.uri === 'http://hl7.org/fhir/concept-properties#status') {
+        return getValuePrimitive(cp);
       }
+    }
+
+    // Second pass: check various deprecation/inactive/retired patterns
+    for (let cp of ctxt.concept.property || []) {
+      if (cp.code === 'deprecated') {
+        if (cp.valueBoolean === true) return 'deprecated';
+        if (getValuePrimitive(cp) === 'true') return 'deprecated';
+      }
+      if (cp.code === 'deprecationDate' && cp.valueDateTime) {
+        if (new Date(cp.valueDateTime) < new Date()) return 'deprecated';
+      }
+      if (cp.code === 'inactive') {
+        if (cp.valueBoolean === true) return 'inactive';
+        if (getValuePrimitive(cp) === 'true') return 'inactive';
+      }
+      if (cp.code === 'retired') {
+        if (cp.valueBoolean === true) return 'retired';
+        if (getValuePrimitive(cp) === 'true') return 'retired';
+      }
+    }
+    const ext = (ctxt.concept.extension || []).find(
+      e => e.url === 'http://hl7.org/fhir/StructureDefinition/structuredefinition-standards-status'
+    );
+    if (ext) {
+      return ext.valueCode || ext.valueString || '';
     }
 
     return null;
@@ -547,39 +575,36 @@ class FhirCodeSystemProvider extends CodeSystemProvider {
 
   /**
    * @param {string|FhirCodeSystemProviderContext} context - Code or context
+   * @param {ConceptDesignations} designation list
    * @returns {Promise<Designation[]|null>} Whatever designations exist (in all languages)
    */
-  async designations(context) {
+  async designations(context, displays) {
     
     const ctxt = await this.#ensureContext(context);
     if (!ctxt) {
       return null;
     }
 
-    const designations = [];
-
     // Add main display as a designation
     if (ctxt.concept.display) {
       const displayLang = this.defaultLanguage ? this.defaultLanguage.toString() : 'en';
-      designations.push(new Designation(displayLang, CodeSystem.makeUseForDisplay(), ctxt.concept.display));
+      displays.addDesignation(true, true, displayLang, CodeSystem.makeUseForDisplay(), ctxt.concept.display);
     }
 
     // Add concept designations
     if (ctxt.concept.designation && Array.isArray(ctxt.concept.designation)) {
       for (const designation of ctxt.concept.designation) {
-        designations.push(new Designation(
+        displays.addDesignation(false, true,
           designation.language || '',
           designation.use || null,
-          designation.value
-        ));
+          designation.value,
+          designation.extension?.length > 0 ? designation.extension : []
+        );
       }
     }
 
     // Add supplement designations
-    const supplementDesignations = this._listSupplementDesignations(ctxt.code);
-    designations.push(...supplementDesignations);
-
-    return designations.length > 0 ? designations : null;
+    this._listSupplementDesignations(ctxt.code, displays);
   }
 
   /**
@@ -621,7 +646,7 @@ class FhirCodeSystemProvider extends CodeSystemProvider {
     
     const ctxt = await this.#ensureContext(context);
     if (!ctxt) {
-      return null;
+      return [];
     }
 
     const properties = [];
@@ -641,7 +666,7 @@ class FhirCodeSystemProvider extends CodeSystemProvider {
       }
     }
 
-    return properties.length > 0 ? properties : null;
+    return properties;
   }
 
   /**
@@ -779,11 +804,10 @@ class FhirCodeSystemProvider extends CodeSystemProvider {
    * @returns {Promise<Object|null>} A handle that can be passed to nextContext (or null if can't be iterated)
    */
   async iterator(context) {
-    
+
 
     if (context === null || context === undefined) {
-      // Iterate all concepts starting from root concepts
-      const allCodes = this.codeSystem.getAllCodes();
+      const allCodes = this.codeSystem.getRootConcepts();
       return {
         type: 'all',
         codes: allCodes,
@@ -806,6 +830,19 @@ class FhirCodeSystemProvider extends CodeSystemProvider {
         total: children.length
       };
     }
+  }
+
+  /**
+   * @returns {Promise<Object|null>} A handle that can be passed to nextContext (or null if can't be iterated)
+   */
+  async iteratorAll() {
+    const allCodes = this.codeSystem.getAllCodes();
+    return {
+      type: 'all',
+      codes: allCodes,
+      current: 0,
+      total: allCodes.length
+    };
   }
 
   /**
@@ -848,7 +885,8 @@ class FhirCodeSystemProvider extends CodeSystemProvider {
 
     // Add designations if requested (or by default)
     if (!props || props.length === 0 || props.includes('*') || props.includes('designation')) {
-      const designations = await this.designations(ctxt);
+      let designations = new Designations(this.opContext.i18n.languageDefinitions);
+      await this.designations(ctxt, designations);
       if (designations) {
         if (!params.designation) {
           params.designation = [];
@@ -860,6 +898,9 @@ class FhirCodeSystemProvider extends CodeSystemProvider {
           };
           if (designation.use) {
             paramDesignation.use = designation.use;
+          }
+          if (designation.extension) {
+            paramDesignation.extension = designation.extension;
           }
           params.designation.push(paramDesignation);
         }
@@ -966,7 +1007,10 @@ class FhirCodeSystemProvider extends CodeSystemProvider {
    * @returns {Promise<boolean>} True if filter is supported
    */
   async doesFilter(prop, op, value) {
-    validateParameter(value, "value", String);
+    validateOptionalParameter(value, "value", String);
+    if (!value) {
+      return false;
+    }
     // Supported hierarchy filters
     if ((prop === 'concept' || prop === 'code') &&
       ['is-a', 'descendent-of', 'is-not-a', 'in', '=', 'regex'].includes(op)) {
@@ -1312,18 +1356,13 @@ class FhirCodeSystemProvider extends CodeSystemProvider {
    * @private
    */
   async _addDescendants(results, ancestorCode, includeRoot) {
-    if (includeRoot) {
-      const rootConcept = this.codeSystem.getConceptByCode(ancestorCode);
-      if (rootConcept) {
-        results.add(rootConcept, 0);
-      }
-    }
-
     const descendants = this.codeSystem.getDescendants(ancestorCode);
     for (const code of descendants) {
-      const concept = this.codeSystem.getConceptByCode(code);
-      if (concept) {
-        results.add(concept, 0);
+      if (includeRoot || code !== ancestorCode) {
+        const concept = this.codeSystem.getConceptByCode(code);
+        if (concept) {
+          results.add(concept, 0);
+        }
       }
     }
   }
@@ -1449,9 +1488,17 @@ class FhirCodeSystemProvider extends CodeSystemProvider {
       let matches = false;
 
       if (prop === 'notSelectable') {
-        const isAbstract = await this.isAbstract(new FhirCodeSystemProviderContext(concept.code, concept));
-        const expectedValue = (value === 'true');
-        matches = (isAbstract === expectedValue);
+        const abstractProp = (concept.property || []).find(p => p.code === 'abstract' || p.code === 'notSelectable' || p.uri === 'http://hl7.org/fhir/concept-properties#notSelectable');
+        let vv = abstractProp ? String(getValuePrimitive(abstractProp)) : null;
+        if (op === '=') {
+          matches = (vv === value);
+        } else if (op === 'in') {
+          const values = value.split(',').map(v => v.trim());
+          matches = values.includes(vv);
+        } else if (op === 'not-in') {
+          const values = value.split(',').map(v => v.trim());
+          matches = !values.includes(vv);
+        }
       }
       else if (prop === 'status') {
         const status = await this.getStatus(new FhirCodeSystemProviderContext(concept.code, concept));
@@ -1527,6 +1574,10 @@ class FhirCodeSystemFactory extends CodeSystemFactoryProvider {
     }
 
     return new FhirCodeSystemProvider(opContext, codeSystem, supplements);
+  }
+
+  async buildKnownValueSet(url, version) {
+    return null;
   }
 }
 

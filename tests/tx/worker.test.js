@@ -70,7 +70,7 @@ describe('TerminologyWorker', () => {
   let mockLogger;
 
   beforeEach(() => {
-    mockOpContext = new OperationContext('en-US', 'test-123');
+    mockOpContext = new OperationContext('en-US', null,'test-123');
     mockProvider = new MockProvider();
     mockLanguages = new MockLanguageDefinitions();
     mockI18n = new MockI18nSupport();

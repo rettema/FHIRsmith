@@ -1,7 +1,7 @@
 const sqlite3 = require('sqlite3').verbose();
 const assert = require('assert');
 const { CodeSystem } = require('../library/codesystem');
-const { CodeSystemProvider, Designation, CodeSystemFactoryProvider} = require('./cs-api');
+const { CodeSystemProvider, CodeSystemFactoryProvider} = require('./cs-api');
 
 class UniiConcept {
   constructor(code, display) {
@@ -99,24 +99,22 @@ class UniiServices extends CodeSystemProvider {
     return false; // No deprecated concepts
   }
 
-  async designations(code) {
+  async designations(code, displays) {
     
     const ctxt = await this.#ensureContext(code);
-    let designations = [];
     if (ctxt != null) {
       // Add main display
       if (ctxt.display) {
-        designations.push(new Designation('en', CodeSystem.makeUseForDisplay(), ctxt.display.trim()));
+        displays.addDesignation(true, true, 'en', CodeSystem.makeUseForDisplay(), ctxt.display.trim());
       }
       // Add other descriptions
       ctxt.others.forEach(other => {
         if (other && other.trim()) {
-          designations.push(new Designation('en', CodeSystem.makeUseForDisplay(), other.trim()));
+          displays.addDesignation(false, true, 'en', CodeSystem.makeUseForDisplay(), other.trim());
         }
       });
-      designations.push(...this._listSupplementDesignations(ctxt.code));
+      this._listSupplementDesignations(ctxt.code, displays);
     }
-    return designations;
   }
 
   async #ensureContext(code) {
@@ -235,6 +233,10 @@ class UniiServicesFactory extends CodeSystemFactoryProvider {
     this.uses++;
 
     return new UniiServices(opContext, supplements, new sqlite3.Database(this.dbPath), this._version);
+  }
+
+  async buildKnownValueSet(url, version) {
+    return null;
   }
 
   useCount() {

@@ -5,6 +5,8 @@ const { Languages } = require('../../library/languages');
 const { UniiServicesFactory, UniiConcept } = require('../../tx/cs/cs-unii');
 const { UniiDataMigrator } = require('../../tx/importers/import-unii.module');
 const {OperationContext} = require("../../tx/operation-context");
+const {Designations} = require("../../tx/library/designations");
+const {TestUtilities} = require("../test-utilities");
 
 describe('UniiDataMigrator', () => {
   const repoRoot = path.join(__dirname, '..', '..');
@@ -165,19 +167,19 @@ describe('UniiServices', () => {
   describe('Designations and Additional Descriptions', () => {
     test('should return designations with main display and others', async () => {
       const result = await provider.locate('2T8Q726O95'); // LAMIVUDINE
-      const designations = await provider.designations(result.context);
+      const designations = new Designations(await TestUtilities.loadLanguageDefinitions());
+      await provider.designations(result.context, designations);
 
       expect(designations).toBeTruthy();
-      expect(Array.isArray(designations)).toBe(true);
-      expect(designations.length).toBeGreaterThan(1); // Should have main display + others
+      expect(designations.count).toBeGreaterThan(1); // Should have main display + others
 
       // Should have main display designation
-      const mainDesignation = designations.find(d => d.value === 'LAMIVUDINE');
+      const mainDesignation = designations.designations.find(d => d.value === 'LAMIVUDINE');
       expect(mainDesignation).toBeTruthy();
-      expect(mainDesignation.language).toBe('en');
+      expect(mainDesignation.language.code).toBe('en');
 
       // Should have other descriptions from UniiDesc table
-      const hasOtherDesignations = designations.some(d =>
+      const hasOtherDesignations = designations.designations.some(d =>
         d.value.includes('3TC') ||
         d.value.includes('EPIVIR') ||
         d.value.includes('COMBIVIR')
@@ -347,8 +349,9 @@ describe('UniiServices', () => {
       const display = await provider.display(result.context);
       expect(display).toBe('SALICYLIC ACID');
 
-      const designations = await provider.designations(result.context);
-      const designationValues = designations.map(d => d.value);
+      const designations = new Designations(await TestUtilities.loadLanguageDefinitions());
+      await provider.designations(result.context, designations);
+      const designationValues = designations.designations.map(d => d.value);
       expect(designationValues).toContain('2-HYDROXYBENZOIC ACID [FHFI]');
     });
 
@@ -359,8 +362,10 @@ describe('UniiServices', () => {
       const display = await provider.display(result.context);
       expect(display).toBe('AMLENETUG');
 
-      const designations = await provider.designations(result.context);
-      const designationValues = designations.map(d => d.value);
+      const designations = new Designations(await TestUtilities.loadLanguageDefinitions());
+      await provider.designations(result.context, designations);
+
+      const designationValues = designations.designations.map(d => d.value);
       const hasMonoclonalAntibody = designationValues.some(v =>
         v.includes('MONOCLONAL ANTIBODY') || v.includes('IMMUNOGLOBULIN')
       );
@@ -451,10 +456,11 @@ describe('UniiServices', () => {
 
     test('should return English designations', async () => {
       const result = await provider.locate('2T8Q726O95');
-      const designations = await provider.designations(result.context);
+      const designations = new Designations(await TestUtilities.loadLanguageDefinitions());
+      await provider.designations(result.context, designations);
 
-      designations.forEach(designation => {
-        expect(designation.language).toBe('en');
+      designations.designations.forEach(designation => {
+        expect(designation.language.code).toBe('en');
       });
     });
   });
@@ -462,12 +468,13 @@ describe('UniiServices', () => {
   describe('Database Schema Validation', () => {
     test('should handle all expected UNII types from sample data', async () => {
       const result = await provider.locate('O414PZ4LPZ'); // SALICYLIC ACID
-      const designations = await provider.designations(result.context);
+      const designations = new Designations(await TestUtilities.loadLanguageDefinitions());
+      await provider.designations(result.context, designations);
 
       // Should have different types of descriptions (cn, cd, bn, of)
-      expect(designations.length).toBeGreaterThan(5);
+      expect(designations.count).toBeGreaterThan(5);
 
-      const values = designations.map(d => d.value);
+      const values = designations.designations.map(d => d.value);
       expect(values).toContain('SALICYLIC ACID');
       expect(values.some(v => v.includes('EP IMPURITY'))).toBe(true);
       expect(values.some(v => v.includes('VANDF'))).toBe(true);

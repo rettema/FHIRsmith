@@ -2,6 +2,8 @@ const { UriServices } = require('../../tx/cs/cs-uri');
 const { Languages } = require('../../library/languages');
 const { CodeSystem } = require('../../tx/library/codesystem');
 const {OperationContext} = require("../../tx/operation-context");
+const {Designations} = require("../../tx/library/designations");
+const {TestUtilities} = require("../test-utilities");
 
 describe('Enhanced UriServices with Language Support', () => {
   let uriServicesEn;
@@ -119,24 +121,26 @@ describe('Enhanced UriServices with Language Support', () => {
   describe('Enhanced Designations Method', () => {
     test('should return all designations from all supplements', async () => {
       const testUri = 'https://example.com/different';
-      const designations = await uriServicesEn.designations(testUri);
+      const designations = new Designations(await TestUtilities.loadLanguageDefinitions());
+      await uriServicesEn.designations(testUri, designations);
 
-      expect(designations).toHaveLength(4);
+      expect(designations.designations).toHaveLength(4);
 
-      const languages = designations.map(d => d.language);
+      const languages = designations.designations.map(d => d.language.code);
       expect(languages).toContain('fr');
       expect(languages).toContain('es');
       expect(languages).toContain('fr-CA');
       expect(languages).toContain('en');
 
-      const spanishDesignation = designations.find(d => d.language === 'es');
+      const spanishDesignation = designations.designations.find(d => d.language.code === 'es');
       expect(spanishDesignation.value).toBe('spanish display');
     });
 
     test('should return null for URI with no designations', async () => {
       const testUri = 'https://example.com/another2';
-      const designations = await uriServicesEn.designations(testUri);
-      expect(designations).toHaveLength(0);
+      const designations = new Designations(await TestUtilities.loadLanguageDefinitions());
+      await uriServicesEn.designations(testUri, designations);
+      expect(designations.designations).toHaveLength(0);
     });
   });
 

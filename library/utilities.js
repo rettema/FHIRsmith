@@ -13,7 +13,7 @@
 //     if (designationLang.matchesForDisplay(requestedLang)) {
 
 const Utilities = {
-  noString: (str) => str == null || str.trim() === '',
+  noString: (str) => !str || String(str).trim() === '',
   existsInList: (item, ...list) => list.includes(item),
   isInteger: (str) => {
     if (typeof str !== 'string' || str === '') return false;
@@ -25,30 +25,45 @@ const Utilities = {
 
 function validateParameter(param, name, type) {
   if (param == null) {
-    throw new Error(`${name} must be a provided`);
+    throw new Error(`${name} must be provided`);
   }
+
+  const actualType = param.constructor?.name || typeof param;
+
   if (type === String) {
     if (typeof param !== 'string') {
-      throw new Error(`${name} must be a string`);
+      throw new Error(`${name} must be a string, but got ${actualType}`);
     }
   } else if (type === Number) {
     if (typeof param !== 'number' || isNaN(param)) {
-      throw new Error(`${name} must be a number`);
+      throw new Error(`${name} must be a number, but got ${actualType}`);
     }
   } else if (type === Boolean) {
     if (typeof param !== 'boolean') {
-      throw new Error(`${name} must be a boolean`);
+      throw new Error(`${name} must be a boolean, but got ${actualType}`);
     }
   } else {
     // Handle object types with instanceof
     if (!(param instanceof type)) {
-      throw new Error(`${name} must be a valid ${type.name}`);
+      throw new Error(`${name} must be a valid ${type.name}, but got ${actualType}`);
     }
   }
 }
 
+function validateResource(param, name, type) {
+  if (param == null) {
+    throw new Error(`${name} must be provided`);
+  }
+  if (!(param instanceof Object)) {
+    throw new Error(`${name} must be a Resource not a `);
+  }
+  if (param.resourceType != type) {
+    throw new Error(`${name} must be a Resource of type ${type} not ${param.resourceType}`);
+  }
+}
+
 function validateOptionalParameter(param, name, type) {
-  if (param != null) {
+  if (param) {
     validateParameter(param, name, type);
   }
 }
@@ -58,7 +73,7 @@ function validateArrayParameter(param, name, type, optional) {
     if (optional) {
       return;
     } else {
-      throw new Error(`${name} must be a provided`);
+      throw new Error(`${name} must be provided`);
     }
   }
   if (!Array.isArray(param)) {
@@ -69,4 +84,33 @@ function validateArrayParameter(param, name, type, optional) {
   }
 }
 
-module.exports = { Utilities, validateParameter, validateOptionalParameter, validateArrayParameter };
+function strToBool(value, defaultValue = false) {
+  if (value === undefined || value === null || value === '') {
+    return defaultValue;
+  }
+  return value === 'true' || value === true;
+}
+
+function getValuePrimitive(obj) {
+  if (!obj) return null;
+
+  const primitiveTypes = [
+    'valueString', 'valueCode', 'valueUri', 'valueUrl', 'valueCanonical',
+    'valueBoolean', 'valueInteger', 'valueDecimal', 'valueDate', 'valueDateTime',
+    'valueTime', 'valueInstant', 'valueId', 'valueOid', 'valueUuid',
+    'valueMarkdown', 'valueBase64Binary', 'valuePositiveInt', 'valueUnsignedInt', 'valueInteger64'
+  ];
+
+  for (const type of primitiveTypes) {
+    if (obj[type] !== undefined) {
+      return obj[type];
+    }
+  }
+  return null;
+}
+
+function isAbsoluteUrl(s) {
+  return s && (s.startsWith('urn:') || s.startsWith('http:') || s.startsWith('https:') || s.startsWith('ftp:'));
+}
+
+module.exports = { Utilities, validateParameter, validateOptionalParameter, validateArrayParameter, validateResource, strToBool, getValuePrimitive, isAbsoluteUrl };

@@ -4,6 +4,8 @@ const path = require('path');
 const { NdcDataMigrator } = require('../../tx/importers/import-ndc.module');
 const { NdcServices, NdcServicesFactory, NdcConcept } = require('../../tx/cs/cs-ndc');
 const { OperationContext } = require('../../tx/operation-context');
+const {Designations} = require("../../tx/library/designations");
+const {TestUtilities} = require("../test-utilities");
 
 describe('NDC Module Import', () => {
   const testSourceDir = path.resolve(__dirname, '../../tx/data/ndc');
@@ -466,26 +468,26 @@ describe('NDC Provider', () => {
 
   describe('Designations', () => {
     test('should return designations for product', async () => {
-      const designations = await provider.designations('0002-0152');
+      const designations = new Designations(await TestUtilities.loadLanguageDefinitions());
+      await provider.designations('0002-0152', designations);
 
-      expect(Array.isArray(designations)).toBe(true);
-      expect(designations.length).toBeGreaterThan(0);
+      expect(designations.count).toBeGreaterThan(0);
 
-      const firstDesignation = designations[0];
-      expect(firstDesignation.language).toBe('en');
+      const firstDesignation = designations.designations[0];
+      expect(firstDesignation.language.code).toBe('en');
       expect(firstDesignation.value).toContain('Zepbound');
 
       // (`✓ Product designations: ${designations.length} found`);
     });
 
     test('should return designations for package', async () => {
-      const designations = await provider.designations('0002-0152-01');
+      const designations = new Designations(await TestUtilities.loadLanguageDefinitions());
+      await provider.designations('0002-0152-01', designations);
 
-      expect(Array.isArray(designations)).toBe(true);
-      expect(designations.length).toBeGreaterThan(0);
+      expect(designations.count).toBeGreaterThan(0);
 
-      const firstDesignation = designations[0];
-      expect(firstDesignation.language).toBe('en');
+      const firstDesignation = designations.designations[0];
+      expect(firstDesignation.language.code).toBe('en');
       expect(firstDesignation.value).toContain('(package)');
 
       // (`✓ Package designations: ${designations.length} found`);

@@ -2,6 +2,8 @@ const { TerminologyError } = require('../operation-context');
 const { CodeSystem } = require('../library/codesystem');
 const ValueSet = require('../library/valueset');
 const {VersionUtilities} = require("../../library/version-utilities");
+const {Utilities} = require("../library/ucum-types");
+const {getValuePrimitive} = require("../../library/utilities");
 
 /**
  * Custom error for terminology setup issues
@@ -199,6 +201,31 @@ class TerminologyWorker {
     return Array.from(versions).sort();
   }
 
+  async listDisplaysFromCodeSystem(displays, cs, c) {
+    // list all known language displays
+    await cs.designations(c, displays);
+    displays.source = cs;
+  }
+
+  listDisplaysFromConcept(displays, c) {
+    // list all known provided displays
+    // todo: supplements
+    for (let ccd of c.designations || []) {
+      displays.addDesignation(ccd);
+    }
+  }
+
+  listDisplaysFromIncludeConcept(displays, c, vs) {
+    if (c.display && c.display !== '') {
+      displays.baseLang = this.FLanguages.parse(vs.language);
+      displays.addDesignation(true, true, '', '', c.displayElement);
+    }
+    for (let cd of c.designations || []) {
+      // see https://chat.fhir.org/#narrow/stream/179202-terminology/topic/ValueSet.20designations.20and.20languages
+      displays.addDesignation(cd);
+    }
+  }
+
   /**
    * Load supplements for a code system
    * @param {string} url - Code system URL
@@ -270,7 +297,7 @@ class TerminologyWorker {
 
     // Remove required supplements that are satisfied
     for (let i = this.requiredSupplements.length - 1; i >= 0; i--) {
-      if (cs.hasSupplement(this.opContext, this.requiredSupplements[i])) {
+      if (cs.hasSupplement(this.requiredSupplements[i])) {
         this.requiredSupplements.splice(i, 1);
       }
     }
@@ -375,6 +402,71 @@ class TerminologyWorker {
       version: canonical.substring(pipeIndex + 1)
     };
   }
+
+  /**
+   * Process a ValueSet, recording context and extracting embedded expansion parameters
+   * @param {Object} vs - ValueSet resource (raw JSON)
+   * @param {Object} params - Parameters resource to add extracted params to
+   */
+  seeValueSet(vs, params) {
+    // Build canonical URL from url and version
+    const vurl = vs.url ? (vs.url + (vs.version ? '|' + vs.version : '')) : null;
+    if (vurl) {
+      this.opContext.seeContext(vurl);
+    }
+
+    // Check for expansion parameter extensions on compose
+    if (vs.compose && vs.compose.extension) {
+      for (const ext of vs.compose.extension) {
+        if (ext.url === 'http://hl7.org/fhir/StructureDefinition/valueset-expansion-parameter' ||
+          ext.url === 'http://hl7.org/fhir/tools/StructureDefinition/valueset-expansion-parameter') {
+          // Get name and value from nested extensions
+          const nameExt = ext.extension?.find(e => e.url === 'name');
+          const valueExt = ext.extension?.find(e => e.url === 'value');
+
+          if (nameExt && valueExt) {
+            const name = nameExt.valueString || nameExt.valueCode;
+
+            if (name) {
+              this._addExtensionParameter(params, name, valueExt);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * Add a parameter from an extension value if not already present
+   * @private
+   */
+  _addExtensionParameter(params, name, valueExt) {
+    if (!params) return;
+    if (!params.parameter) {
+      params.parameter = [];
+    }
+
+    // Don't override existing parameters
+    if (params.parameter.find(p => p.name === name)) {
+      return;
+    }
+
+    // Find and copy the value[x] property
+    const valueTypes = [
+      'valueString', 'valueCode', 'valueUri', 'valueCanonical', 'valueUrl',
+      'valueBoolean', 'valueInteger', 'valueDecimal',
+      'valueDateTime', 'valueDate', 'valueTime',
+      'valueCoding', 'valueCodeableConcept'
+    ];
+
+    for (const vt of valueTypes) {
+      if (valueExt[vt] !== undefined) {
+        params.parameter.push({ name, [vt]: valueExt[vt] });
+        return;
+      }
+    }
+  }
+
 
   // ========== Additional Resources Handling ==========
 
@@ -549,7 +641,7 @@ class TerminologyWorker {
   getStringParam(params, name) {
     const p = this.findParameter(params, name);
     if (!p) return null;
-    return p.valueString || p.valueCode || p.valueUri || null;
+    return getValuePrimitive(p);
   }
 
   /**
@@ -619,6 +711,60 @@ class TerminologyWorker {
 
     return result;
   }
+  determineVersionBase(url, version, params, va) {
+    if (params === null) {
+      return version;
+    }
+    let result = version;
+    let list = params.rulesForSystem(url);
+    let b = false;
+    for (let t of list) {
+      if (t.FMode === 'override') {
+        if (!b) {
+          result = t.version;
+          this.FFoundParameters.push(t.asParam);
+          b = true;
+        } else if (result !== t.version) {
+          throw new ETerminologyError(
+            this.FI18n.translate('SYSTEM_VERSION_MULTIPLE_OVERRIDE', params.FHTTPLanguages, [url, result, t.version]),
+            itException, oicVersionError, 'SYSTEM_VERSION_MULTIPLE_OVERRIDE'
+          );
+        }
+      }
+    }
+    if (result === '') {
+      b = false;
+      for (let t of list) {
+        if (t.FMode === 'default') {
+          if (!b) {
+            result = t.version;
+            this.FFoundParameters.push(t.asParam);
+            b = true;
+          } else if (version !== t.version) {
+            throw new ETerminologyError(
+              this.FI18n.translate('SYSTEM_VERSION_MULTIPLE_DEFAULT', params.FHTTPLanguages, [url, result, t.version]),
+              itException, oicVersionError, 'SYSTEM_VERSION_MULTIPLE_DEFAULT'
+            );
+          }
+        }
+      }
+    }
+    for (let t of list) {
+      if (t.FMode === 'check') {
+        if (result === '') {
+          result = t.version;
+          this.FFoundParameters.push(t.asParam);
+        }
+        // if we decide to allow check to guide the selection.
+        // waiting for discussion
+        //else if (TFHIRVersions.isSubset(result, t.version)) {
+        //  result = t.version;
+        //}
+      }
+    }
+    return result;
+  }
+
 }
 
 /**
@@ -657,7 +803,7 @@ class CodeSystemInformationProvider extends TerminologyWorker {
         resp.version = version;
       }
 
-      const ctxt = provider.locate(this.opContext, coding.code);
+      const ctxt = await provider.locate(this.opContext, coding.code);
 
       if (!ctxt) {
         throw new TerminologyError(
@@ -675,7 +821,7 @@ class CodeSystemInformationProvider extends TerminologyWorker {
         };
 
         // Add abstract property
-        if (hasProp('abstract', true) && provider.isAbstract(this.opContext, ctxt)) {
+        if (hasProp('abstract', true) && await provider.isAbstract(this.opContext, ctxt)) {
           const p = resp.addProperty('abstract');
           p.value = { valueBoolean: true };
         }
@@ -683,12 +829,12 @@ class CodeSystemInformationProvider extends TerminologyWorker {
         // Add inactive property
         if (hasProp('inactive', true)) {
           const p = resp.addProperty('inactive');
-          p.value = { valueBoolean: provider.isInactive(this.opContext, ctxt) };
+          p.value = { valueBoolean: await provider.isInactive(this.opContext, ctxt) };
         }
 
         // Add definition property
         if (hasProp('definition', true)) {
-          const definition = provider.definition(this.opContext, ctxt);
+          const definition = await provider.definition(this.opContext, ctxt);
           if (definition) {
             const p = resp.addProperty('definition');
             p.value = { valueString: definition };
@@ -696,11 +842,11 @@ class CodeSystemInformationProvider extends TerminologyWorker {
         }
 
         resp.code = coding.code;
-        resp.display = provider.display(this.opContext, ctxt, this.opContext.langs);
+        resp.display = await provider.display(this.opContext, ctxt, this.opContext.langs);
 
         // Allow provider to extend lookup with additional properties
         if (provider.extendLookup) {
-          provider.extendLookup(this.opContext, ctxt, this.opContext.langs, props, resp);
+          await provider.extendLookup(this.opContext, ctxt, this.opContext.langs, props, resp);
         }
 
       } finally {
@@ -727,6 +873,7 @@ class CodeSystemInformationProvider extends TerminologyWorker {
       defaultToLatestVersion: true
     };
   }
+
 }
 
 module.exports = {

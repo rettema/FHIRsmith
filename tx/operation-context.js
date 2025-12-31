@@ -3,6 +3,8 @@ const inspector = require("inspector");
 const crypto = require("crypto");
 const {Languages} = require("../library/languages");
 const {TooCostlyError, TerminologyError} = require("./errors");
+const { I18nSupport } = require('../library/i18nsupport');
+const {Issue} = require("./library/operation-outcome");
 
 /**
  * Check if running under a debugger
@@ -351,8 +353,9 @@ class ExpansionCache {
 
 
 class OperationContext {
-  constructor(langs, id = null, timeLimit = 30, resourceCache = null, expansionCache = null) {
+  constructor(langs, i18n = null, id = null, timeLimit = 30, resourceCache = null, expansionCache = null) {
     this.langs = this._ensureLanguages(langs);
+    this.i18n = i18n;
     this.id = id || this._generateId();
     this.startTime = performance.now();
     this.contexts = [];
@@ -381,7 +384,7 @@ class OperationContext {
    */
   copy() {
     const newContext = new OperationContext(
-      this.langs, this.id, this.timeLimit / 1000,
+      this.langs, this.i18n, this.id, this.timeLimit / 1000,
       this.resourceCache, this.expansionCache
     );
     newContext.contexts = [...this.contexts];
@@ -427,9 +430,7 @@ class OperationContext {
   seeContext(vurl) {
     if (this.contexts.includes(vurl)) {
       const contextList = '[' + this.contexts.join(', ') + ']';
-      throw new TerminologyError(
-        `Circular reference detected for ${vurl} in contexts: ${contextList}`
-      );
+      throw new Issue("error", "processing", null, 'VALUESET_CIRCULAR_REFERENCE', this.i18n.formatMessage(this.langs, 'VALUESET_CIRCULAR_REFERENCE', [vurl, contextList]), null).handleAsOO(400);
     }
     this.contexts.push(vurl);
   }

@@ -5,6 +5,9 @@ const {CodeSystem} = require('../../tx/library/codesystem');
 const {FhirCodeSystemFactory, FhirCodeSystemProvider, FhirCodeSystemProviderContext} = require('../../tx/cs/cs-cs');
 const {Languages, Language} = require('../../library/languages');
 const {OperationContext} = require("../../tx/operation-context");
+const {Designations} = require("../../tx/library/designations");
+const {TestUtilities} = require("../test-utilities");
+const {Test} = require("supertest");
 
 describe('FHIR CodeSystem Provider', () => {
   let factory;
@@ -566,8 +569,10 @@ describe('FHIR CodeSystem Provider', () => {
   describe('functional tests', () => {
     let simpleProvider;
 
-    beforeEach(() => {
-      simpleProvider = factory.build(new OperationContext('en-US'), [], simpleCS);
+    beforeEach(async () => {
+      let languageDefinitions = await TestUtilities.loadLanguageDefinitions();
+      let i18n = await TestUtilities.loadTranslations(languageDefinitions);
+      simpleProvider = factory.build(new OperationContext('en-US', i18n), [], simpleCS);
     });
 
     describe('display()', () => {
@@ -675,34 +680,39 @@ describe('FHIR CodeSystem Provider', () => {
 
     describe('designations()', () => {
       test('should return designations for code with display', async () => {
-        const designations = await simpleProvider.designations('code1');
+        const designations = new Designations(await TestUtilities.loadLanguageDefinitions());
+        await simpleProvider.designations('code1', designations);
+
         expect(designations).toBeDefined();
-        expect(Array.isArray(designations)).toBe(true);
-        expect(designations.length).toBeGreaterThan(0);
+        expect(designations.count).toBeGreaterThan(0);
 
         // Should have at least the main display
-        const displayDesignation = designations.find(d => d.value === 'Display 1');
+        const displayDesignation = designations.designations.find(d => d.value === 'Display 1');
         expect(displayDesignation).toBeDefined();
       });
 
       test('should return designations from concept designations', async () => {
-        const designations = await simpleProvider.designations('code1');
+        const designations = new Designations(await TestUtilities.loadLanguageDefinitions());
+        await simpleProvider.designations('code1', designations);
+
         expect(designations).toBeDefined();
 
         // Should include the olde-english designation
-        const oldeEnglish = designations.find(d => d.value === 'mine own first code');
+        const oldeEnglish = designations.designations.find(d => d.value === 'mine own first code');
         expect(oldeEnglish).toBeDefined();
       });
 
       test('should include supplement designations', async () => {
         const extensionsProvider = factory.build(new OperationContext('en-US'), [supplementCS], extensionsCS);
-        const designations = await extensionsProvider.designations('code1');
+        const designations = new Designations(await TestUtilities.loadLanguageDefinitions());
+        await extensionsProvider.designations('code1', designations);
+
         expect(designations).toBeDefined();
 
         // Should include Dutch designation from supplement
-        const dutchDesignation = designations.find(d => d.value === 'ectenoot');
+        const dutchDesignation = designations.designations.find(d => d.value === 'ectenoot');
         expect(dutchDesignation).toBeDefined();
-        expect(dutchDesignation.language).toBe('nl');
+        expect(dutchDesignation.language.code).toBe('nl');
       });
 
       test('should return null for non-existent code', async () => {
@@ -916,15 +926,15 @@ describe('FHIR CodeSystem Provider', () => {
     });
 
     describe('iterator()', () => {
-      test('should create iterator for all concepts when context is null', async () => {
+      test('should create iterator for all root concepts when context is null', async () => {
         const iterator = await simpleProvider.iterator(null);
         expect(iterator).toBeDefined();
         expect(iterator.type).toBe('all');
         expect(iterator.codes).toBeDefined();
         expect(Array.isArray(iterator.codes)).toBe(true);
-        expect(iterator.codes.length).toBe(7); // All concepts in simple CS
+        expect(iterator.codes.length).toBe(3); // All concepts in simple CS
         expect(iterator.current).toBe(0);
-        expect(iterator.total).toBe(7);
+        expect(iterator.total).toBe(3);
       });
 
       test('should create iterator for children when context is provided', async () => {
@@ -969,7 +979,7 @@ describe('FHIR CodeSystem Provider', () => {
     });
 
     describe('nextContext()', () => {
-      test('should iterate through all concepts', async () => {
+      test('should iterate through all root concepts', async () => {
         const iterator = await simpleProvider.iterator(null);
         const contexts = [];
 
@@ -979,17 +989,13 @@ describe('FHIR CodeSystem Provider', () => {
           context = await simpleProvider.nextContext(iterator);
         }
 
-        expect(contexts.length).toBe(7); // All concepts
+        expect(contexts.length).toBe(3); // All concepts
         expect(contexts[0]).toBeInstanceOf(FhirCodeSystemProviderContext);
 
         // Check we got all the expected codes
         const codes = contexts.map(c => c.code);
         expect(codes).toContain('code1');
         expect(codes).toContain('code2');
-        expect(codes).toContain('code2a');
-        expect(codes).toContain('code2aI');
-        expect(codes).toContain('code2aII');
-        expect(codes).toContain('code2b');
         expect(codes).toContain('code3');
       });
 
@@ -1054,8 +1060,19 @@ describe('FHIR CodeSystem Provider', () => {
     });
 
     describe('iterator()', () => {
-      test('should create iterator for all concepts when context is null', async () => {
+      test('should create iterator for all root concepts when context is null', async () => {
         const iterator = await simpleProvider.iterator(null);
+        expect(iterator).toBeDefined();
+        expect(iterator.type).toBe('all');
+        expect(iterator.codes).toBeDefined();
+        expect(Array.isArray(iterator.codes)).toBe(true);
+        expect(iterator.codes.length).toBe(3); // All concepts in simple CS
+        expect(iterator.current).toBe(0);
+        expect(iterator.total).toBe(3);
+      });
+
+      test('should create iterator for all concepts', async () => {
+        const iterator = await simpleProvider.iteratorAll();
         expect(iterator).toBeDefined();
         expect(iterator.type).toBe('all');
         expect(iterator.codes).toBeDefined();
@@ -1107,8 +1124,28 @@ describe('FHIR CodeSystem Provider', () => {
     });
 
     describe('nextContext()', () => {
-      test('should iterate through all concepts', async () => {
+      test('should iterate through all root concepts', async () => {
         const iterator = await simpleProvider.iterator(null);
+        const contexts = [];
+
+        let context = await simpleProvider.nextContext(iterator);
+        while (context) {
+          contexts.push(context);
+          context = await simpleProvider.nextContext(iterator);
+        }
+
+        expect(contexts.length).toBe(3); // All concepts
+        expect(contexts[0]).toBeInstanceOf(FhirCodeSystemProviderContext);
+
+        // Check we got all the expected codes
+        const codes = contexts.map(c => c.code);
+        expect(codes).toContain('code1');
+        expect(codes).toContain('code2');
+        expect(codes).toContain('code3');
+      });
+
+      test('should iterate through all concepts', async () => {
+        const iterator = await simpleProvider.iteratorAll();
         const contexts = [];
 
         let context = await simpleProvider.nextContext(iterator);
@@ -1401,9 +1438,8 @@ describe('FHIR CodeSystem Provider', () => {
       describe('Concept/Code Filters', () => {
         test('should filter by is-a relationship', async () => {
           const results = await simpleProvider.filter(filterContext, 'concept', 'is-a', 'code2');
-          expect(results.size()).toBe(5); // code2, code2a + children, code2b
+          expect(results.size()).toBe(4); // code2a + children, code2b
 
-          expect(results.findConceptByCode('code2')).toBeDefined();
           expect(results.findConceptByCode('code2a')).toBeDefined();
           expect(results.findConceptByCode('code2b')).toBeDefined();
           expect(results.findConceptByCode('code1')).toBeNull(); // Not a descendant

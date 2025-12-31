@@ -10,15 +10,37 @@
 
 const { TerminologyWorker, TerminologySetupError } = require('./worker');
 const { TerminologyError } = require('../operation-context');
-const { ConceptDesignations, DesignationUse } = require('../library/concept-designations');
-const {CodeSystem} = require("../library/codesystem");
-const {ValueSetDatabase} = require("../vs/vs-database");
 
 // Expansion limits (from Pascal constants)
 const UPPER_LIMIT_NO_TEXT = 1000;
 const UPPER_LIMIT_TEXT = 1000;
 const INTERNAL_LIMIT = 10000;
 const EXPANSION_DEAD_TIME_SECS = 30;
+
+const copyExtensionUrls = [
+  'http://hl7.org/fhir/StructureDefinition/coding-sctdescid',
+  'http://hl7.org/fhir/StructureDefinition/rendering-style',
+  'http://hl7.org/fhir/StructureDefinition/rendering-xhtml',
+  'http://hl7.org/fhir/StructureDefinition/codesystem-alternate'
+];
+
+const vsCopyExtensionUrls = [
+  'http://hl7.org/fhir/StructureDefinition/valueset-supplement',
+  'http://hl7.org/fhir/StructureDefinition/valueset-deprecated',
+  'http://hl7.org/fhir/StructureDefinition/structuredefinition-standards-status',
+  'http://hl7.org/fhir/StructureDefinition/valueset-concept-definition',
+  'http://hl7.org/fhir/StructureDefinition/coding-sctdescid',
+  'http://hl7.org/fhir/StructureDefinition/rendering-style',
+  'http://hl7.org/fhir/StructureDefinition/rendering-xhtml'
+];
+
+const allowedDesignationExtensions = [
+  'http://hl7.org/fhir/StructureDefinition/coding-sctdescid',
+  'http://hl7.org/fhir/StructureDefinition/rendering-style',
+  'http://hl7.org/fhir/StructureDefinition/rendering-xhtml',
+  'http://hl7.org/fhir/StructureDefinition/structuredefinition-standards-status',
+  'http://hl7.org/fhir/StructureDefinition/codesystem-alternate'
+];
 
 /**
  * Total status for expansion
@@ -184,6 +206,7 @@ class EmptyFilterContext {
  * Handles the core logic of expanding a ValueSet definition into a list of codes
  */
 class ValueSetExpander {
+  expansionProperties;
   /**
    * @param {TerminologyWorker} worker - Parent worker for provider access
    * @param {Object} params - Expansion parameters
@@ -214,29 +237,36 @@ class ValueSetExpander {
     this.importedValueSets = new Map();
 
     // State flags
+    this.canBeHierarchy = true;
     this.hasExclusions = false;
     this.totalStatus = TotalStatus.Uninitialized;
     this.total = 0;
+    this.propertyList = [];
 
     // Limits from parameters
     this.limitCount = INTERNAL_LIMIT;
     this.offset = this._getParamInt('offset', 0);
     this.count = this._getParamInt('count', -1);
     this.filter = this._getParamString('filter', '');
-    this.includeDesignations = this._getParamBool('includeDesignations', false);
-    this.includeDefinition = this._getParamBool('includeDefinition', false);
-    this.activeOnly = this._getParamBool('activeOnly', false);
-    this.excludeNested = this._getParamBool('excludeNested', false);
-    this.excludeNotForUI = this._getParamBool('excludeNotForUI', false);
-    this.excludePostCoordinated = this._getParamBool('excludePostCoordinated', false);
+    this.includeDesignations = this._getParamBool('includeDesignations');
+    this.includeDefinition = this._getParamBool('includeDefinition');
+    this.activeOnly = this._getParamBool('activeOnly');
+    this.excludeNested = this._getParamBool('excludeNested');
+    this.excludeNotForUI = this._getParamBool('excludeNotForUI');
+    this.excludePostCoordinated = this._getParamBool('excludePostCoordinated');
+    for (let p of this.listParam("property")) {
+      this.propertyList.push(this._getParamValue(p));
+    }
 
-    this.canBeHierarchy = !this.excludeNested;
-
-    this.doingVersion = false;
+    // Update canBeHierarchy based on excludeNested
+    if (this.excludeNested === true) {
+      this.canBeHierarchy = false;
+    }
 
     // Used systems/valueSets tracking
     this.usedSystems = new Map(); // url -> version
     this.usedValueSets = new Map(); // url -> version
+    this.usedSupplements = new Set();
   }
 
   /**
@@ -260,10 +290,36 @@ class ValueSetExpander {
   }
 
   /**
-   * Get boolean parameter value
+   * Get string parameter value
    * @private
    */
-  _getParamBool(name, defaultValue) {
+  _getParamValue(param, defaultValue = null) {
+    if (!param) return defaultValue;
+
+    // Check for various value types
+    const valueTypes = [
+      'valueString', 'valueCode', 'valueUri', 'valueCanonical', 'valueUrl',
+      'valueBoolean', 'valueInteger', 'valueDecimal',
+      'valueDateTime', 'valueDate', 'valueTime',
+      'valueCoding', 'valueCodeableConcept',
+      'valueIdentifier', 'valueQuantity'
+    ];
+
+    for (const vt of valueTypes) {
+      if (param[vt] !== undefined) {
+        return param[vt];
+      }
+    }
+
+    return defaultValue;
+  }
+
+  /**
+   * Get boolean parameter value
+   * Returns null if not set (and no default provided), true/false if explicitly set
+   * @private
+   */
+  _getParamBool(name, defaultValue = null) {
     const p = this._findParam(name);
     if (!p) return defaultValue;
     if (p.valueBoolean !== undefined) return p.valueBoolean;
@@ -278,6 +334,10 @@ class ValueSetExpander {
   _findParam(name) {
     if (!this.params?.parameter) return null;
     return this.params.parameter.find(p => p.name === name);
+  }
+
+  listParam(name) {
+    return this.params.parameter.filter(p => p.name === name) || [];
   }
 
   /**
@@ -350,6 +410,14 @@ class ValueSetExpander {
     }
   }
 
+  recordSupplements(supplements) {
+    if (supplements) {
+      for (let cs of supplements) {
+        this.usedSupplements.add(cs.vurl);
+      }
+    }
+  }
+
   /**
    * Record a used value set
    * @param {string} url - ValueSet URL
@@ -387,17 +455,23 @@ class ValueSetExpander {
    * @returns {Object} Expanded ValueSet resource
    */
   async expand(valueSet) {
+    console.log('start expanding');
     // Handle wrapped valueSet (from database)
     const vs = valueSet.jsonObj ? valueSet.jsonObj : valueSet;
+    this.valueSet = vs;
+    this.worker.seeValueSet(vs, this.params);
     this.deadCheck('expand-start');
 
     // Process compose
     if (vs.compose) {
       await this.handleCompose(vs.compose, vs);
     }
+    console.log('build expansion');
 
     // Build the expansion output
-    return this.buildExpansion(vs);
+    let result = this.buildExpansion(vs);
+    console.log('build expansion done');
+    return result;
   }
 
   /**
@@ -504,7 +578,7 @@ class ValueSetExpander {
     this.deadCheck('handleCompose');
 
     // Check for inactive handling
-    const excludeInactive = compose.inactive === false || this.activeOnly;
+    const excludeInactive = compose.inactive === false || this.activeOnly === true;
 
     // First, process top-level imports (R2/R3 style)
     // In R4+, these are typically in include.valueSet, but older formats had imports
@@ -596,6 +670,7 @@ class ValueSetExpander {
     }
 
     this.recordUsedSystem(cs.system(), cs.version());
+    this.recordSupplements(cs.supplements);
 
     // Check for required supplements
     this.worker.checkSupplements(cs, cset);
@@ -677,7 +752,7 @@ class ValueSetExpander {
         continue;
       }
 
-      await this.addContainsEntry(entry);
+      this.addContainsEntry(entry);
     }
   }
 
@@ -761,7 +836,7 @@ class ValueSetExpander {
         continue;
       }
 
-      await this.addCodeFromProvider(cs, result.context, concept, cset);
+      await this.addCodeFromProvider(cs, result.context, concept, cset, concept.extension ? concept.extension : []);
     }
   }
 
@@ -858,7 +933,15 @@ class ValueSetExpander {
             break;
           }
 
-          await this.addCodeFromProvider(cs, context, null, cset);
+          let p = null;
+          if (cs.hasParents()) {
+            const key = this.makeKey(cs.system(), await cs.parent(code));
+            p = this.codeMap.get(key);
+          } else {
+            this.canBeHierarchy = false;
+          }
+
+          await this.addCodeFromProvider(cs, context, null, cset, [], p);
         }
       }
     } finally {
@@ -936,7 +1019,7 @@ class ValueSetExpander {
     // Use iterator if available
     const iterator = await cs.iterator(null);
     if (iterator) {
-      await this.includeViaIterator(cs, iterator, cset, excludeInactive);
+      await this.includeViaIteratorNested(cs, iterator, cset, excludeInactive);
       return;
     }
 
@@ -1035,6 +1118,34 @@ class ValueSetExpander {
         }
       }
 
+      context = await cs.nextContext(iterator);
+    }
+  }
+
+  /**
+   * Include concepts via iterator
+   */
+  async includeViaIteratorNested(cs, iterator, cset, excludeInactive, parent) {
+    let context = await cs.nextContext(iterator);
+    while (context) {
+      this.deadCheck('includeViaIteratorNested');
+
+      const code = await cs.code(context);
+
+      let p = null;
+
+      if (!this.isExcluded(cs.system(), cs.version(), code)) {
+        if (!excludeInactive || !await cs.isInactive(context)) {
+          if (!this.checkSystemLimit(cs)) {
+            p = await this.addCodeFromProvider(cs, context, null, cset, [], parent);
+          }
+        }
+      }
+
+      if (cs.hasParents()) {
+        let iter = await cs.iterator(context);
+        await this.includeViaIteratorNested(cs, iter, cset, excludeInactive, p);
+      }
       context = await cs.nextContext(iterator);
     }
   }
@@ -1189,15 +1300,31 @@ class ValueSetExpander {
     }
   }
 
+  hasExtension = (extList, url) => {
+    return extList && extList.some(ext => ext.url === url);
+  };
+
+  getExtensionString = (extList, url) => {
+    if (!extList) return null;
+    const ext = extList.find(e => e.url === url);
+    if (!ext) return null;
+    // Handle various value types
+    return ext.valueString || ext.valueCode || ext.valueUri ||
+      ext.valueDecimal?.toString() || ext.valueInteger?.toString() || null;
+  };
+
   /**
    * Add a code from a CodeSystemProvider to the expansion
    * @param {CodeSystemProvider} cs - Code system provider
    * @param {Object} context - Provider context for the concept
    * @param {Object} sourceConcept - Original concept from compose (if enumerated)
    * @param {Object} cset - Source ConceptSet
+   * @param {Object} parent - Parent contains entry (for hierarchy)
+   * @returns {Object|null} The added entry, or null if not added
    */
-  async addCodeFromProvider(cs, context, sourceConcept, cset) {
+  async addCodeFromProvider(cs, context, sourceConcept, cset,  vsExtList, parent = null) {
     this.deadCheck('addCodeFromProvider');
+    validateArrayParameter(vsExtList, "vsExtList", Object, false);
 
     const code = await cs.code(context);
     const system = cs.system();
@@ -1206,13 +1333,14 @@ class ValueSetExpander {
     // Check if already added
     const key = this.makeKey(system, code);
     if (this.codeMap.has(key)) {
-      return; // Already present
+      this.canBeHierarchy = false;
+      return null; // Already present
     }
 
     // Check limit
     if (this.fullList.length >= this.limitCount) {
       this.totalStatus = TotalStatus.Off;
-      return;
+      return null;
     }
 
     // Build the contains entry
@@ -1242,50 +1370,251 @@ class ValueSetExpander {
     if (await cs.isInactive(context)) {
       entry.inactive = true;
     }
+    let csExtList = await cs.extensions(context);
 
-    // Add designations if requested
-    if (this.includeDesignations) {
-      const designations = await cs.designations(context);
-      if (designations && designations.length > 0) {
-        entry.designation = designations.map(d => ({
-          language: d.language,
-          use: d.use,
-          value: d.value
-        }));
+    // Status property
+    const status = await cs.getStatus(context); // You'll need to implement this
+    const deprecated = await cs.isDeprecated(context); // You'll need to implement this
+
+    if (status && status  !== 'active') {
+      this.defineExpansionProperty(entry, 'http://hl7.org/fhir/concept-properties#status', 'status', { valueCode : status } );
+    } else if (deprecated) {
+      this.defineExpansionProperty(entry, 'http://hl7.org/fhir/concept-properties#status', 'status', { valueCode: 'deprecated'} );
+    }
+
+    // Label property (CS then VS, VS overrides)
+    if (this.hasExtension(csExtList, 'http://hl7.org/fhir/StructureDefinition/codesystem-label')) {
+      this.defineExpansionProperty(entry, 'http://hl7.org/fhir/concept-properties#label', 'label', { valueString: this.getExtensionString(csExtList, 'http://hl7.org/fhir/StructureDefinition/codesystem-label') } );
+    }
+    if (this.hasExtension(vsExtList, 'http://hl7.org/fhir/StructureDefinition/valueset-label')) {
+      this.defineExpansionProperty(entry, 'http://hl7.org/fhir/concept-properties#label', 'label', { valueString: this.getExtensionString(vsExtList, 'http://hl7.org/fhir/StructureDefinition/valueset-label') } );
+    }
+
+    // Order property (CS then VS, VS overrides)
+    if (this.hasExtension(csExtList, 'http://hl7.org/fhir/StructureDefinition/codesystem-conceptOrder')) {
+      this.defineExpansionProperty(entry, 'http://hl7.org/fhir/concept-properties#order', 'order', { valueDecimal: parseFloat(this.getExtensionString(csExtList, 'http://hl7.org/fhir/StructureDefinition/codesystem-conceptOrder')) } );
+    }
+    if (this.hasExtension(vsExtList, 'http://hl7.org/fhir/StructureDefinition/valueset-conceptOrder')) {
+      this.defineExpansionProperty(entry, 'http://hl7.org/fhir/concept-properties#order', 'order', { valueDecimal: parseFloat(this.getExtensionString(vsExtList, 'http://hl7.org/fhir/StructureDefinition/valueset-conceptOrder')) } );
+    }
+
+    // Weight property (CS then VS, VS overrides)
+    if (this.hasExtension(csExtList, 'http://hl7.org/fhir/StructureDefinition/itemWeight')) {
+      this.defineExpansionProperty(entry, 'http://hl7.org/fhir/concept-properties#itemWeight', 'weight', { valueDecimal: parseFloat(this.getExtensionString(csExtList, 'http://hl7.org/fhir/StructureDefinition/itemWeight')) } );
+    }
+    if (this.hasExtension(vsExtList, 'http://hl7.org/fhir/StructureDefinition/itemWeight')) {
+      this.defineExpansionProperty(entry, 'http://hl7.org/fhir/concept-properties#itemWeight', 'weight', { valueDecimal: parseFloat(this.getExtensionString(vsExtList, 'http://hl7.org/fhir/StructureDefinition/itemWeight')) } );
+    }
+
+    // Copy certain extensions from CS to entry
+    if (csExtList) {
+      for (const ext of csExtList) {
+        if (copyExtensionUrls.includes(ext.url)) {
+          if (!entry.extension) {
+            entry.extension = [];
+          }
+          entry.extension.push({ ...ext }); // Clone the extension
+        }
+        if (ext.url === 'http://hl7.org/fhir/StructureDefinition/structuredefinition-standards-status') {
+          const value = ext.valueCode || ext.valueString;
+          if (value) {
+            this.defineExpansionProperty(entry, 'http://hl7.org/fhir/concept-properties#status', 'status', { valueCode: value } );
+          }
+        }
       }
     }
 
-    await this.addContainsEntry(entry);
+    // Copy certain extensions from VS to entry
+    if (vsExtList) {
+      for (const ext of vsExtList) {
+        if (vsCopyExtensionUrls.includes(ext.url)) {
+          if (!entry.extension) {
+            entry.extension = [];
+          }
+          entry.extension.push({ ...ext }); // Clone the extension
+        }
+      }
+    }
+
+    // Add designations if requested
+    if (this.includeDesignations === true) {
+      const designations = await cs.designations(context);
+      if (sourceConcept?.designation) {
+        designations.push(...sourceConcept.designation.map(d => new Designation(
+          d.language || '',
+          d.use || null,
+          d.value,
+          d.extension?.length > 0 ? d.extension : null
+        )));
+      }
+      if (designations && designations.length > 0) {
+        entry.designation = designations
+          .filter(d => !this.isRedundantDisplay(entry, d.language, d.use, d.value))
+          .map(d => {
+            const filteredExtensions = d.extension?.filter(e => allowedDesignationExtensions.includes(e.url));
+            return {
+              ...(d.language && { language: d.language }),
+              ...(d.use && { use: d.use }),
+              value: d.value,
+              ...(filteredExtensions?.length > 0 && { extension: filteredExtensions })
+            };
+          });
+        // Remove empty array
+        if (entry.designation.length === 0) {
+          delete entry.designation;
+        }
+      }
+    }
+
+    for (let pn of this.propertyList) {
+      if (pn == 'definition') {
+        let defn = await cs.definition(context);
+        if (defn) {
+          this.defineExpansionProperty(entry, "http://hl7.org/fhir/concept-properties#definition", pn, { valueString: defn});
+        }
+      } else {
+        for (let prop of await cs.properties(context)) {
+          if (prop.code == pn) {
+            this.defineExpansionProperty(entry, this.getPropUrl(cs, pn), pn, prop);
+          }
+        }
+      }
+    }
+
+    return this.addContainsEntry(entry, parent);
+  }
+
+  getPropUrl(cs, pn) {
+    for (let p of cs.propertyDefinitions()) {
+      if (p.code == pn) {
+        return p.uri;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Define a property on a contains entry, ensuring the property is also defined at expansion level
+   * @param {Object} focus - The contains entry to add the property to
+   * @param {string} url - Property URI
+   * @param {string} code - Property code
+   * @param {Object} value - Property value object
+   * @param {boolean} overwrite - If true, replace existing property with same code
+   */
+  defineExpansionProperty(focus, url, code, value, overwrite = true) {
+    if (!this.expansionProperties) {
+      this.expansionProperties = [];
+    }
+
+    // Find existing property definition by url or code
+    let pdef = this.expansionProperties.find(p => p.uri === url || p.code === code);
+
+    if (!pdef) {
+      // Create new property definition
+      pdef = { uri: url, code: code };
+      this.expansionProperties.push(pdef);
+    } else if (!pdef.uri) {
+      pdef.uri = url;
+    } else if (pdef.uri !== url) {
+      throw new Error(`URL mismatch on expansion: ${pdef.uri} vs ${url} for code ${code}`);
+    }
+
+    // Use the canonical code from the property definition
+    value.code = pdef.code;
+
+    // Ensure focus.property array exists
+    if (!focus.property) {
+      focus.property = [];
+    }
+
+    if (overwrite) {
+      // Find and replace existing property with same code
+      const existingIndex = focus.property.findIndex(p => p.code === pdef.code);
+      if (existingIndex >= 0) {
+        focus.property[existingIndex] = value;
+      } else {
+        focus.property.push(value);
+      }
+    } else {
+      focus.property.push(value);
+    }
+  }
+  /**
+   * Check if a designation is redundant with the main display
+   * @param {Object} entry - The contains entry
+   * @param {string|null} lang - Language code of the designation
+   * @param {Object|null} use - Use coding of the designation
+   * @param {string} value - Value of the designation
+   * @returns {boolean} True if the designation is redundant
+   */
+  isRedundantDisplay(entry, lang, use, value) {
+    const vsLanguage = this.valueSet?.language || '';
+
+    // if not ((lang = nil) and (FValueSet.language = '')) or ((lang <> nil) and lang.code.StartsWith(FValueSet.language)) then
+    //   result := false
+    const langIsNil = !lang;
+    const vsLangEmpty = vsLanguage === '';
+    const langStartsWithVsLang = lang && vsLanguage && lang.startsWith(vsLanguage);
+
+    if (value === entry.display && vsLangEmpty) {
+      return true;
+    }
+
+    if (!(langIsNil && vsLangEmpty) || langStartsWithVsLang) {
+      return false;
+    }
+
+    // else if not ((use = nil) or (use.code = 'display')) then
+    //   result := false
+    if (use && use.code !== 'display') {
+      return false;
+    }
+
+    // else result := value.AsString = n.display
+    return value === entry.display;
   }
 
   /**
    * Add a contains entry to the expansion
    * @param {Object} entry - Contains entry
+   * @param {Object} parent - Parent contains entry (for hierarchy)
+   * @returns {Object|null} The added entry, or null if not added
    */
-  async addContainsEntry(entry) {
+  addContainsEntry(entry, parent = null) {
     const key = this.makeKey(entry.system, entry.code);
 
     if (this.codeMap.has(key)) {
-      return; // Already present
+      this.canBeHierarchy = false;
+      return null; // Already present
     }
 
     if (this.fullList.length >= this.limitCount) {
       this.totalStatus = TotalStatus.Off;
-      return;
+      return null;
     }
 
     // Apply text filter if present
     if (this.filter && !this.matchesFilter(entry)) {
-      return;
+      return null;
     }
 
     this.codeMap.set(key, entry);
     this.fullList.push(entry);
-    this.rootList.push(entry);
+
+    if (parent) {
+      if (!parent.contains) {
+        parent.contains = [];
+      }
+      parent.contains.push(entry);
+    } else {
+      this.rootList.push(entry);
+    }
 
     if (this.totalStatus === TotalStatus.Uninitialized) {
       this.total++;
     }
+
+    return entry;
   }
 
   /**
@@ -1327,7 +1656,12 @@ class ValueSetExpander {
    */
   buildExpansion(valueSet) {
     // Apply offset and count
-    let outputList = this.rootList;
+    let outputList = this.canBeHierarchy ? this.rootList : this.fullList;
+    if (!this.canBeHierarchy) {
+      for (let c of this.fullList) {
+        delete c.contains;
+      }
+    }
 
     if (this.offset > 0) {
       outputList = outputList.slice(this.offset);
@@ -1374,29 +1708,29 @@ class ValueSetExpander {
       }
     }
 
-    // Add excludeNested if set
-    if (this.excludeNested) {
-      parameters.push({ name: 'excludeNested', valueBoolean: true });
+    // Add excludeNested if explicitly set
+    if (this.excludeNested !== null) {
+      parameters.push({ name: 'excludeNested', valueBoolean: this.excludeNested });
     }
 
-    // Add activeOnly if set
-    if (this.activeOnly) {
-      parameters.push({ name: 'activeOnly', valueBoolean: true });
+    // Add activeOnly if explicitly set
+    if (this.activeOnly !== null) {
+      parameters.push({ name: 'activeOnly', valueBoolean: this.activeOnly });
     }
 
-    // Add includeDesignations if set
-    if (this.includeDesignations) {
-      parameters.push({ name: 'includeDesignations', valueBoolean: true });
+    // Add includeDesignations if explicitly set
+    if (this.includeDesignations !== null) {
+      parameters.push({ name: 'includeDesignations', valueBoolean: this.includeDesignations });
     }
 
-    // Add excludeNotForUI if set
-    if (this.excludeNotForUI) {
-      parameters.push({ name: 'excludeNotForUI', valueBoolean: true });
+    // Add excludeNotForUI if explicitly set
+    if (this.excludeNotForUI !== null) {
+      parameters.push({ name: 'excludeNotForUI', valueBoolean: this.excludeNotForUI });
     }
 
-    // Add excludePostCoordinated if set
-    if (this.excludePostCoordinated) {
-      parameters.push({ name: 'excludePostCoordinated', valueBoolean: true });
+    // Add excludePostCoordinated if explicitly set
+    if (this.excludePostCoordinated !== null) {
+      parameters.push({ name: 'excludePostCoordinated', valueBoolean: this.excludePostCoordinated });
     }
 
     // Add offset if specified (not just > 0, but if it was a parameter)
@@ -1408,6 +1742,7 @@ class ValueSetExpander {
     if (this.count >= 0) {
       parameters.push({ name: 'count', valueInteger: this.count });
     }
+
     // Add used systems
     for (const [system, version] of this.usedSystems) {
       const param = { name: 'used-codesystem', valueUri: system };
@@ -1415,6 +1750,9 @@ class ValueSetExpander {
         param.valueUri = `${system}|${version}`;
       }
       parameters.push(param);
+    }
+    for (let url of this.usedSupplements) {
+      parameters.push({name: 'used-supplement', valueUri: url});
     }
 
     // Add used valueSets
@@ -1435,6 +1773,7 @@ class ValueSetExpander {
       title: valueSet.title,
       status: valueSet.status,
       experimental: valueSet.experimental,
+      extension: valueSet.extension,
       expansion: {
         identifier: `urn:uuid:${this._generateUuid()}`,
         timestamp: new Date().toISOString(),
@@ -1442,6 +1781,9 @@ class ValueSetExpander {
       }
     };
 
+    if (this.expansionProperties) {
+      result.expansion.property = this.expansionProperties;
+    }
     if (valueSet.id) {
       result.id = valueSet.id;
     }
@@ -1474,6 +1816,7 @@ class ValueSetExpander {
       return v.toString(16);
     });
   }
+
 }
 
 class ExpandWorker extends TerminologyWorker {
@@ -1515,6 +1858,9 @@ class ExpandWorker extends TerminologyWorker {
         issue: [{
           severity: 'error',
           code: issueCode,
+          details: {
+            text : error.message
+          },
           diagnostics: error.message
         }]
       });
@@ -1540,6 +1886,9 @@ class ExpandWorker extends TerminologyWorker {
         issue: [{
           severity: 'error',
           code: issueCode,
+          details: {
+            text : error.message
+          },
           diagnostics: error.message
         }]
       });

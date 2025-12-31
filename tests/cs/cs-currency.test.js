@@ -1,6 +1,8 @@
 const { OperationContext } = require('../../tx/operation-context');
 const { Iso4217FactoryProvider } = require('../../tx/cs/cs-currency');
 const { Languages } = require('../../library/languages');
+const {Designations} = require("../../tx/library/designations");
+const {TestUtilities} = require("../test-utilities");
 
 describe('Iso4217Services', () => {
   let factory;
@@ -100,14 +102,15 @@ describe('Iso4217Services', () => {
 
     test('should return designations with display', async () => {
       const result = await provider.locate('USD');
-      const designations = await provider.designations(result.context);
-      expect(designations).toBeTruthy();
-      expect(Array.isArray(designations)).toBe(true);
-      expect(designations.length).toBeGreaterThan(0);
+      const designations = new Designations(await TestUtilities.loadLanguageDefinitions());
+      await provider.designations(result.context, designations);
 
-      const displayDesignation = designations.find(d => d.value === 'United States dollar');
+      expect(designations).toBeTruthy();
+      expect(designations.count).toBeGreaterThan(0);
+
+      const displayDesignation = designations.designations.find(d => d.value === 'United States dollar');
       expect(displayDesignation).toBeTruthy();
-      expect(displayDesignation.language).toBe('en');
+      expect(displayDesignation.language.code).toBe('en');
     });
 
     test('should access currency properties', async () => {

@@ -47,6 +47,12 @@ class CodeSystem extends CanonicalResource {
   codeMap = new Map();
 
   /**
+   * Map of code to concept object for fast lookup - not case sensitive, only for non-case sensitive code systems
+   * @type {Map<string, Object>}
+   */
+  codeMapNC;
+
+  /**
    * Map of display text to concept object for fast lookup
    * @type {Map<string, Object>}
    */
@@ -450,6 +456,9 @@ class CodeSystem extends CanonicalResource {
     this.id = this.jsonObj.id;
 
     this.codeMap.clear();
+    if (this.caseInsensitive()) {
+      this.codeMapNC = new Map();
+    }
     this.displayMap.clear();
     this.parentToChildrenMap.clear();
     this.childToParentsMap.clear();
@@ -465,6 +474,9 @@ class CodeSystem extends CanonicalResource {
     allConcepts.forEach(concept => {
       // Build code and display maps
       this.codeMap.set(concept.code, concept);
+      if (this.caseInsensitive()) {
+        this.codeMapNC.set(concept.code.toLowerCase(), concept);
+      }
       if (concept.display) {
         this.displayMap.set(concept.display, concept);
       }
@@ -574,7 +586,7 @@ class CodeSystem extends CanonicalResource {
    * @returns {Object|undefined} The concept object or undefined if not found
    */
   getConceptByCode(code) {
-    return this.codeMap.get(code);
+    return this.caseInsensitive() ? this.codeMapNC.get(code.toLowerCase()) : this.codeMap.get(code);
   }
 
   /**
@@ -610,24 +622,25 @@ class CodeSystem extends CanonicalResource {
    * @returns {string[]} Array of all descendant codes
    */
   getDescendants(code) {
-    const descendants = new Set();
-    const toProcess = [code];
-
-    while (toProcess.length > 0) {
-      const current = toProcess.pop();
-      const children = this.getChildren(current);
-
-      children.forEach(child => {
-        if (!descendants.has(child)) {
-          descendants.add(child);
-          toProcess.push(child);
-        }
-      });
-    }
-
-    return Array.from(descendants);
+    const descendants = [];
+    const descSet = new Set();
+    this.addDescendents(descendants, descSet, code, false);
+    return descendants;
   }
 
+  addDescendents(descendants, descSet, current, add) {
+    if (!descSet.has(current)) {
+      descSet.add(current);
+      if (add) {
+        descendants.push(current);
+      }
+      const children = this.getChildren(current);
+      for (let i = 0; i < children.length; i++) {
+        const child = children[i];
+        this.addDescendents(descendants, descSet, child, true);
+      }
+    }
+  }
   /**
    * Gets all ancestor codes (parents, grandparents, etc.) for a given code
    * @param {string} code - The descendant concept code
@@ -690,7 +703,7 @@ class CodeSystem extends CanonicalResource {
    * @returns {boolean} True if the code exists
    */
   hasCode(code) {
-    return this.codeMap.has(code);
+    return this.caseInsensitive() ? this.codeMapNC.has(code.toLowerCase()) : this.codeMap.has(code);
   }
 
   /**
@@ -750,6 +763,10 @@ class CodeSystem extends CanonicalResource {
 
   hasHierarchy() {
     return this.parentToChildrenMap.size > 0 || this.childToParentsMap.size > 0;
+  }
+
+  caseInsensitive() {
+    return this.jsonObj.caseSensitive == undefined || this.jsonObj.caseSensitive == false;
   }
 }
 

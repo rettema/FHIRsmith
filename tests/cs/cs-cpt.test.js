@@ -3,11 +3,14 @@ const path = require('path');
 const { CPTServices, CPTServicesFactory, CPTConcept, CPTExpression } = require('../../tx/cs/cs-cpt');
 const { OperationContext } = require('../../tx/operation-context');
 const {Languages} = require("../../library/languages");
+const {Designations} = require("../../tx/library/designations");
+const {TestUtilities} = require("../test-utilities");
 
 describe('CPT Provider', () => {
   const testDbPath = path.resolve(__dirname, '../../tx/data/cpt-fragment.db');
   let factory;
   let provider;
+  let langList = new Languages();
 
   // Test data from the fragment database
   const testData = {
@@ -161,11 +164,12 @@ describe('CPT Provider', () => {
 
     test('should return designations for codes', async () => {
       for (const code of testData.allCodes) {
-        const designations = await provider.designations(code);
-        expect(Array.isArray(designations)).toBe(true);
-        expect(designations.length).toBeGreaterThan(0);
+        const designations = new Designations(await TestUtilities.loadLanguageDefinitions());
+        await provider.designations(code, designations);
 
-        const firstDesignation = designations[0];
+        expect(designations.count).toBeGreaterThan(0);
+
+        const firstDesignation = designations.designations[0];
         expect(firstDesignation.language).toBeDefined();
         expect(firstDesignation.value).toBeDefined();
 
@@ -611,9 +615,10 @@ describe('CPT Provider', () => {
       expect(await provider.code(null)).toBeNull();
       expect(await provider.display(null)).toBeNull();
 
-      const designations = await provider.designations(null);
-      expect(Array.isArray(designations)).toBe(true);
-      expect(designations.length).toBe(0);
+      const designations = new Designations(await TestUtilities.loadLanguageDefinitions());
+      await provider.designations(null, designations);
+
+      expect(designations.count).toBe(0);
     });
 
     test('should handle subsumption test (not implemented)', async () => {

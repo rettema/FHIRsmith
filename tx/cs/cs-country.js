@@ -1,4 +1,4 @@
-const { CodeSystemProvider, Designation, FilterExecutionContext } = require('../../tx/cs/cs-api');
+const { CodeSystemProvider, FilterExecutionContext } = require('../../tx/cs/cs-api');
 const assert = require('assert');
 const { CodeSystem } = require("../library/codesystem");
 
@@ -101,15 +101,13 @@ class CountryCodeServices extends CodeSystemProvider {
   }
 
 
-  async designations(code) {
+  async designations(code, displays) {
     
     const ctxt = await this.#ensureContext(code);
-    let designations = [];
     if (ctxt != null) {
-      designations.push(new Designation('en', CodeSystem.makeUseForDisplay(), ctxt.display));
-      designations.push(...this._listSupplementDesignations(ctxt));
+      displays.addDesignation( true, true, 'en', CodeSystem.makeUseForDisplay(), ctxt.display);
+      this._listSupplementDesignations(ctxt, displays);
     }
-    return designations;
   }
 
   async #ensureContext(code) {
@@ -1079,6 +1077,10 @@ class CountryCodeFactoryProvider {
       this.codes.push(concept);
       this.codeMap.set(code, concept);
     }
+  }
+
+  async buildKnownValueSet(url, version) {
+    return null;
   }
 }
 

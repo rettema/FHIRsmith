@@ -563,51 +563,50 @@ class SnomedProvider extends CodeSystemProvider {
     return this.sct.isActive(ctxt.getReference()) ? 'active' : 'inactive';
   }
 
-  async designations(context) {
+  async designations(context, displays) {
     
     const ctxt = await this.#ensureContext(context);
-    const designations = [];
 
-    if (!ctxt) return designations;
+    if (ctxt) {
 
-    if (ctxt.isComplex()) {
-      // For complex expressions, just add the display
-      const display = await this.display(context);
-      if (display) {
-        designations.push(new Designation('en-US', null, display));
-      }
-    } else {
-      // Get all designations for the concept
-      try {
-        const concept = this.sct.concepts.getConcept(ctxt.getReference());
-        const descriptionsRef = concept.descriptions;
 
-        if (descriptionsRef !== 0) {
-          const descriptionIndices = this.sct.refs.getReferences(descriptionsRef);
+      if (ctxt.isComplex()) {
+        // For complex expressions, just add the display
+        const display = await this.display(context);
+        if (display) {
+          displays.addDesignation(true, true, new Designation('en-US', null, display));
+        }
+      } else {
+        // Get all designations for the concept
+        try {
+          const concept = this.sct.concepts.getConcept(ctxt.getReference());
+          const descriptionsRef = concept.descriptions;
 
-          for (const descIndex of descriptionIndices) {
-            const description = this.sct.descriptions.getDescription(descIndex);
-            if (description.active) {
-              const term = this.sct.strings.getEntry(description.iDesc).trim();
-              const langCode = this.getLanguageCode(description.lang);
+          if (descriptionsRef !== 0) {
+            const descriptionIndices = this.sct.refs.getReferences(descriptionsRef);
 
-              designations.push(new Designation(langCode, null, term));
+            for (const descIndex of descriptionIndices) {
+              const description = this.sct.descriptions.getDescription(descIndex);
+              if (description.active) {
+                const term = this.sct.strings.getEntry(description.iDesc).trim();
+                const langCode = this.getLanguageCode(description.lang);
+
+                displays.addDesignation(false, true, langCode, null, term);
+              }
             }
           }
+        } catch (error) {
+          // Add basic designation if we can't read detailed descriptions
+          const display = this.sct.getDisplayName(ctxt.getReference());
+          if (display) {
+            displays.addDesignation(true, true,'en-US', null, display);
+          }
         }
-      } catch (error) {
-        // Add basic designation if we can't read detailed descriptions
-        const display = this.sct.getDisplayName(ctxt.getReference());
-        if (display) {
-          designations.push(new Designation('en-US', null, display));
-        }
+
+        // Add supplement designations
+        this._listSupplementDesignations(ctxt.getCode(), displays);
       }
-
-      // Add supplement designations
-      designations.push(...this._listSupplementDesignations(ctxt.getCode()));
     }
-
-    return designations;
   }
 
   getLanguageCode(langIndex) {
@@ -738,7 +737,7 @@ class SnomedProvider extends CodeSystemProvider {
 
     if (prop === 'concept') {
       const id = this.sct.stringToIdOrZero(value);
-      if (id !== 0n && ['equal', 'is-a', 'descendent-of', 'in'].includes(op)) {
+      if (id !== 0n && ['=', 'is-a', 'descendent-of', 'in'].includes(op)) {
         return this.sct.conceptExists(value);
       }
     }
@@ -762,7 +761,7 @@ class SnomedProvider extends CodeSystemProvider {
       }
 
       switch (op) {
-        case 'equal':
+        case '=':
           return this.sct.filterEquals(id);
         case 'is-a':
           return this.sct.filterIsA(id, true);
@@ -969,6 +968,10 @@ class SnomedServicesFactory extends CodeSystemFactoryProvider {
 
   version() {
     return this._sharedData.versionUri;
+  }
+
+  async buildKnownValueSet(url, version) {
+    return null;
   }
 
   async #ensureLoaded() {

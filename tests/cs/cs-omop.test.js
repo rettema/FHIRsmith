@@ -2,6 +2,8 @@ const fs = require('fs');
 const path = require('path');
 const { OMOPServices, OMOPServicesFactory, OMOPConcept } = require('../../tx/cs/cs-omop');
 const { OperationContext } = require('../../tx/operation-context');
+const {Designations} = require("../../tx/library/designations");
+const {TestUtilities} = require("../test-utilities");
 
 describe('OMOP Provider', () => {
   const testDbPath = path.resolve(__dirname, '../../tx/data/omop-fragment.db');
@@ -182,18 +184,19 @@ describe('OMOP Provider', () => {
 
     test('should return designations for concepts', async () => {
       if (testData.sampleConcepts.length > 0) {
-        const designations = await provider.designations(testData.sampleConcepts[0]);
-        expect(Array.isArray(designations)).toBe(true);
-        expect(designations.length).toBeGreaterThan(0);
+        const designations = new Designations(await TestUtilities.loadLanguageDefinitions());
+        await provider.designations(testData.sampleConcepts[0], designations);
 
-        const firstDesignation = designations[0];
+        expect(designations.count).toBeGreaterThan(0);
+
+        const firstDesignation = designations.designations[0];
         expect(firstDesignation.language).toBeDefined();
         expect(firstDesignation.value).toBeDefined();
 
         console.log(`✓ Concept ${testData.sampleConcepts[0]} has ${designations.length} designations`);
 
         // Check if there are synonyms
-        const synonyms = designations.filter(d => !d.use);
+        const synonyms = designations.designations.filter(d => !d.use);
         if (synonyms.length > 0) {
           console.log(`  - Including ${synonyms.length} synonyms`);
         }
@@ -513,10 +516,9 @@ describe('OMOP Provider', () => {
     test('should handle null context in various methods', async () => {
       expect(await provider.code(null)).toBeNull();
       expect(await provider.display(null)).toBeNull();
-
-      const designations = await provider.designations(null);
-      expect(Array.isArray(designations)).toBe(true);
-      expect(designations.length).toBe(0);
+      const designations = new Designations(await TestUtilities.loadLanguageDefinitions());
+      await provider.designations(null, designations);
+      expect(designations.count).toBe(0);
     });
 
     test('should handle subsumption test (not implemented)', async () => {

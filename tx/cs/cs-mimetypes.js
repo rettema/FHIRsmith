@@ -1,4 +1,4 @@
-const { CodeSystemProvider, Designation, CodeSystemFactoryProvider} = require('./cs-api');
+const { CodeSystemProvider, CodeSystemFactoryProvider} = require('./cs-api');
 const assert = require('assert');
 const { CodeSystem } = require("../library/codesystem");
 
@@ -118,18 +118,16 @@ class MimeTypeServices extends CodeSystemProvider {
     return false; // MIME types are not deprecated
   }
 
-  async designations(code) {
+  async designations(code, displays) {
     
     const ctxt = await this.#ensureContext(code);
-    const designations = [];
     if (ctxt != null) {
       const display = await this.display(ctxt);
       if (display) {
-        designations.push(new Designation('en', CodeSystem.makeUseForDisplay(), display));
+        displays.addDesignation(true, true, 'en', CodeSystem.makeUseForDisplay(), display);
       }
-      designations.push(...this._listSupplementDesignations(ctxt.code));
+      this._listSupplementDesignations(ctxt.code, displays);
     }
-    return designations;
   }
 
   async #ensureContext(code) {
@@ -194,6 +192,10 @@ class MimeTypeServicesFactory extends CodeSystemFactoryProvider {
   }
 
   version() {
+    return null;
+  }
+
+  async buildKnownValueSet(url, version) {
     return null;
   }
 

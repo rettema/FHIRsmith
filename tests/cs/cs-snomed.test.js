@@ -26,6 +26,8 @@ const { SnomedServicesFactory } = require('../../tx/cs/cs-snomed');
 
 const {SnomedImporter} = require("../../tx/importers/import-sct.module");
 const { OperationContext } = require('../../tx/operation-context');
+const {Designations} = require("../../tx/library/designations");
+const {TestUtilities} = require("../test-utilities");
 
 // Shared cache file paths and utilities
 const testCachePath = path.resolve(__dirname, '../../data/snomed-testing.cache');
@@ -657,13 +659,13 @@ describe('SNOMED CT Subset Validation', () => {
         const result = await provider.locate(code);
 
         if (result.context) {
-          const designations = await provider.designations(result.context);
+          const designations = new Designations(await TestUtilities.loadLanguageDefinitions());
+          await provider.designations(result.context, designations);
 
-          expect(Array.isArray(designations)).toBe(true);
-          expect(designations.length).toBeGreaterThan(0);
+          expect(designations.count).toBeGreaterThan(0);
 
           // Check first designation
-          const firstDesignation = designations[0];
+          const firstDesignation = designations.designations[0];
           expect(firstDesignation.language).toBeDefined();
           expect(firstDesignation.value).toBeDefined();
           expect(firstDesignation.value.length).toBeGreaterThan(0);

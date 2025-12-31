@@ -2,6 +2,8 @@ const { OperationContext } = require('../../tx/operation-context');
 const { MimeTypeServices, MimeTypeServicesFactory, MimeTypeConcept } = require('../../tx/cs/cs-mimetypes');
 const { Languages } = require('../../library/languages');
 const { CodeSystem } = require('../../tx/library/codesystem');
+const {Designations} = require("../../tx/library/designations");
+const {TestUtilities} = require("../test-utilities");
 
 describe('MimeTypeServices', () => {
   let factory;
@@ -157,14 +159,15 @@ describe('MimeTypeServices', () => {
 
     test('should return designations with display', async () => {
       const result = await provider.locate('text/plain');
-      const designations = await provider.designations(result.context);
+      const designations = new Designations(await TestUtilities.loadLanguageDefinitions());
+      await provider.designations(result.context, designations);
       expect(designations).toBeTruthy();
-      expect(Array.isArray(designations)).toBe(true);
-      expect(designations.length).toBeGreaterThan(0);
 
-      const displayDesignation = designations.find(d => d.value === 'text/plain');
+      expect(designations.count).toBeGreaterThan(0);
+
+      const displayDesignation = designations.designations.find(d => d.value === 'text/plain');
       expect(displayDesignation).toBeTruthy();
-      expect(displayDesignation.language).toBe('en');
+      expect(displayDesignation.language.code).toBe('en');
     });
   });
 
@@ -433,10 +436,11 @@ describe('MimeTypeServices', () => {
       const display = await providerWithSupplement.display('application/json');
       expect(display).toBe('JSON Application Data');
 
-      const designations = await providerWithSupplement.designations('application/json');
-      expect(designations.length).toBeGreaterThan(1);
+      const designations = new Designations(await TestUtilities.loadLanguageDefinitions());
+      await providerWithSupplement.designations('application/json', designations);
+      expect(designations.count).toBeGreaterThan(1);
 
-      const frenchDesignation = designations.find(d => d.language === 'fr');
+      const frenchDesignation = designations.designations.find(d => d.language.code === 'fr');
       expect(frenchDesignation.value).toBe('Données JSON');
     });
 

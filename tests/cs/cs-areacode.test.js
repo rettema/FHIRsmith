@@ -309,10 +309,10 @@ describe('AreaCodeServices', () => {
       const factory = new AreaCodeFactoryProvider();
       expect(factory.useCount()).toBe(0);
 
-      factory.build(new OperationContext(Languages.fromAcceptLanguage('en')), []);
+      factory.build(new OperationContext(Languages.fromAcceptLanguage('en')), null, []);
       expect(factory.useCount()).toBe(1);
 
-      factory.build(new OperationContext(Languages.fromAcceptLanguage('en')), []);
+      factory.build(new OperationContext(Languages.fromAcceptLanguage('en')), null, []);
       expect(factory.useCount()).toBe(2);
     });
 
@@ -321,8 +321,8 @@ describe('AreaCodeServices', () => {
     });
 
     test('should build working providers', () => {
-      const provider1 = factory.build(new OperationContext(Languages.fromAcceptLanguage('en')), []);
-      const provider2 = factory.build(new OperationContext(Languages.fromAcceptLanguage('en')), []);
+      const provider1 = factory.build(new OperationContext(Languages.fromAcceptLanguage('en')), null, []);
+      const provider2 = factory.build(new OperationContext(Languages.fromAcceptLanguage('en')), null, []);
 
       expect(provider1).toBeTruthy();
       expect(provider2).toBeTruthy();

@@ -1,5 +1,7 @@
 const { HGVSServices, HGVSServicesFactory, HGVSCode } = require('../../tx/cs/cs-hgvs');
 const { OperationContext } = require('../../tx/operation-context');
+const {Designations} = require("../../tx/library/designations");
+const {TestUtilities} = require("../test-utilities");
 
 describe('HGVS Provider', () => {
   let factory;
@@ -172,21 +174,22 @@ describe('HGVS Provider', () => {
     test('should return designations for valid context', async () => {
       const testCode = 'NM_000518.5:c.1521_1523del';
       const context = new HGVSCode(testCode);
+      const designations = new Designations(await TestUtilities.loadLanguageDefinitions());
+      await provider.designations(context, designations);
 
-      const designations = await provider.designations(context);
-      expect(Array.isArray(designations)).toBe(true);
-      expect(designations.length).toBeGreaterThan(0);
+      expect(designations.count).toBeGreaterThan(0);
 
-      const firstDesignation = designations[0];
+      const firstDesignation = designations.designations[0];
       expect(firstDesignation.value).toBe(testCode);
 
       console.log(`✓ Designations for ${testCode}: ${designations.length} found`);
     });
 
     test('should return empty array for null context', async () => {
-      const designations = await provider.designations(null);
-      expect(Array.isArray(designations)).toBe(true);
-      expect(designations.length).toBe(0);
+      const designations = new Designations(await TestUtilities.loadLanguageDefinitions());
+      await provider.designations(null, designations);
+
+      expect(designations.count).toBe(0);
     });
   });
 
@@ -306,8 +309,9 @@ describe('HGVS Provider', () => {
           expect(display).toBe(testCode);
 
           // 3. Get designations
-          const designations = await provider.designations(locateResult.context);
-          expect(designations.length).toBeGreaterThan(0);
+          const designations = new Designations(await TestUtilities.loadLanguageDefinitions());
+          await provider.designations(locateResult.context, designations);
+          expect(designations.count).toBeGreaterThan(0);
 
           console.log(`✓ Complete workflow succeeded for: ${testCode}`);
         } else {

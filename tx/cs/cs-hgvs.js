@@ -75,18 +75,14 @@ class HGVSServices extends CodeSystemProvider {
     return false;
   }
 
-  async designations(context) {
-    
-    const designations = [];
+  async designations(context, displays) {
 
     if (context instanceof HGVSCode) {
-      designations.push(new Designation('', null, context.code));
+      displays.addDesignation(true, true, '', null, context.code);
 
       // Add supplement designations
-      designations.push(...this._listSupplementDesignations(context.code));
+      this._listSupplementDesignations(context.code, displays);
     }
-
-    return designations;
   }
 
   async extendLookup(ctxt, props, params) {
@@ -290,6 +286,10 @@ class HGVSServicesFactory extends CodeSystemFactoryProvider {
 
   version() {
     return '2.0';
+  }
+
+  async buildKnownValueSet(url, version) {
+    return null;
   }
 
   async build(opContext, supplements) {

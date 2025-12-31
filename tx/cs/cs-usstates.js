@@ -1,4 +1,4 @@
-const { CodeSystemProvider, Designation, CodeSystemFactoryProvider} = require('./cs-api');
+const { CodeSystemProvider, CodeSystemFactoryProvider} = require('./cs-api');
 const assert = require('assert');
 const { CodeSystem } = require("../library/codesystem");
 
@@ -92,15 +92,13 @@ class USStateServices extends CodeSystemProvider {
     return false; // No deprecated concepts
   }
 
-  async designations(code) {
+  async designations(code, displays) {
     
     const ctxt = await this.#ensureContext(code);
-    let designations = [];
     if (ctxt != null) {
-      designations.push(new Designation('en', CodeSystem.makeUseForDisplay(), ctxt.display));
-      designations.push(...this._listSupplementDesignations(ctxt.code));
+      displays.addDesignation(true, true, 'en', CodeSystem.makeUseForDisplay(), ctxt.display);
+      this._listSupplementDesignations(ctxt.code, displays);
     }
-    return designations;
   }
 
   async #ensureContext(code) {
@@ -195,6 +193,10 @@ class USStateFactoryProvider extends CodeSystemFactoryProvider {
 
   version() {
     return null; // No version specified
+  }
+
+  async buildKnownValueSet(url, version) {
+    return null;
   }
 
   async load() {

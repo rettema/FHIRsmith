@@ -1,7 +1,8 @@
 const sqlite3 = require('sqlite3').verbose();
 const assert = require('assert');
 const { CodeSystem } = require('../library/codesystem');
-const { CodeSystemProvider, Designation, CodeSystemFactoryProvider } = require('./cs-api');
+const { CodeSystemProvider, CodeSystemFactoryProvider } = require('./cs-api');
+const {Designations} = require("../library/designations");
 
 // Context for RxNorm concepts
 class RxNormConcept {
@@ -162,25 +163,22 @@ class RxNormServices extends CodeSystemProvider {
     return ctxt ? ctxt.archived : false;
   }
 
-  async designations(context) {
+  async designations(context, displays) {
     
     const ctxt = await this.#ensureContext(context);
-    let designations = [];
 
     if (ctxt) {
       // Add main display
-      designations.push(new Designation('en-US', CodeSystem.makeUseForDisplay(), ctxt.display));
+      displays.addDesignation(true, true, 'en-US', CodeSystem.makeUseForDisplay(), ctxt.display);
 
       // Add other displays
       for (const other of ctxt.others) {
-        designations.push(new Designation('en-US', null, other));
+        displays.addDesignation(false, true, 'en-US', null, other);
       }
 
       // Add supplement designations
-      designations.push(...this._listSupplementDesignations(ctxt.code));
+      this._listSupplementDesignations(ctxt.code, displays);
     }
-
-    return designations;
   }
 
   async #ensureContext(context) {
@@ -309,27 +307,27 @@ class RxNormServices extends CodeSystemProvider {
     prop = prop.toUpperCase();
 
     // TTY filters
-    if (prop === 'TTY' && ['equal', 'in'].includes(op)) {
+    if (prop === 'TTY' && ['=', 'in'].includes(op)) {
       return true;
     }
 
     // STY filter
-    if (prop === 'STY' && op === 'equal') {
+    if (prop === 'STY' && op === '=') {
       return true;
     }
 
     // SAB filter
-    if (prop === 'SAB' && op === 'equal') {
+    if (prop === 'SAB' && op === '=') {
       return true;
     }
 
     // Relationship filters (REL values like 'SY', 'RN', etc.)
-    if (this.rels.includes(prop) && op === 'equal' && (value.startsWith('CUI:') || value.startsWith('AUI:'))) {
+    if (this.rels.includes(prop) && op === '=' && (value.startsWith('CUI:') || value.startsWith('AUI:'))) {
       return true;
     }
 
     // Relationship type filters (RELA values)
-    if (this.reltypes.includes(prop) && op === 'equal' && (value.startsWith('CUI:') || value.startsWith('AUI:'))) {
+    if (this.reltypes.includes(prop) && op === '=' && (value.startsWith('CUI:') || value.startsWith('AUI:'))) {
       return true;
     }
 
@@ -357,7 +355,7 @@ class RxNormServices extends CodeSystemProvider {
       values.forEach((val, i) => {
         params[`tty${i}`] = this.#sqlWrapString(val);
       });
-    } else if (op === 'equal') {
+    } else if (op === '=') {
       if (prop === 'STY') {
         sql = `AND ${this.getCodeField()} IN (SELECT RXCUI FROM rxnsty WHERE TUI = $sty)`;
         params.sty = this.#sqlWrapString(value);
@@ -618,7 +616,8 @@ class RxNormServices extends CodeSystemProvider {
     params.abstract = false;
 
     // Add designations
-    const designations = await this.designations(ctxt);
+    const designations =  new Designations(this.opContext.i18n.languageDefinitions);
+    await this.designations(ctxt, designations);
     for (const designation of designations) {
       this.#addProperty(params, 'designation', 'display', designation.value, designation.language);
     }
@@ -660,6 +659,10 @@ class RxNormTypeServicesFactory extends CodeSystemFactoryProvider {
 
   version() {
     return this._sharedData.version;
+  }
+
+  async buildKnownValueSet(url, version) {
+    return null;
   }
 
   async #ensureLoaded() {

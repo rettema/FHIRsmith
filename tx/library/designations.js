@@ -1,6 +1,6 @@
-const { LanguagePartType, Languages, Language} = require('../library/languages');
-const { TypeHelper } = require('./type-helpers');
-const {validateParameter, validateOptionalParameter, validateArrayParameter} = require("../library/utilities");
+const { LanguagePartType, Languages, Language, LanguageDefinitions} = require('../../library/languages');
+const { TypeHelper } = require('../type-helpers');
+const {validateParameter, validateOptionalParameter, validateArrayParameter} = require("../../library/utilities");
 
 /**
  * Display checking modes for concept designations
@@ -78,11 +78,11 @@ class SearchFilterText {
     if (!cds) return false;
 
     if (this.null) {
-      return cds.designations.some(cd => cd.value && cd.value.value);
+      return cds.designations.some(cd => cd.value && cd.value);
     }
 
     for (const cd of cds.designations) {
-      if (cd.value && this.passes(cd.value.value)) {
+      if (cd.value && this.passes(cd.value)) {
         return true;
       }
     }
@@ -174,50 +174,88 @@ class SearchFilterText {
   }
 }
 
-  /**
-   * Display difference types
-   */
-  const DisplayDifference = {
-    DIFFERENT: 'different',
-    CASE: 'case',
-    NORMALISED: 'normalised'
-  };
-
-  /**
-   * Language matching types
-   */
-  const LangMatchType = {
+/**
+ * Language matching types
+ */
+const LangMatchType = {
     LITERAL: 'literal',
     FULL: 'full',
     LANG_REGION: 'langRegion',
     LANG: 'lang'
   };
 
-  /**
-   * Individual concept designation with language, use, and value
-   */
-  class Designation {
+/**
+ * Display comparison sensitivity modes
+ */
+const DisplayCompareSensitivity = {
+  CaseSensitive: 'case-sensitive',
+  CaseInsensitive: 'case-insensitive',
+  Normalized: 'normalized'  // Ignore whitespace differences
+};
+
+/**
+ * Display difference results
+ */
+const DisplayDifference = {
+  Exact: 'exact',
+  Case: 'case',
+  Normalized: 'normalized',
+  None: 'none'
+};
+
+
+/**
+ * Standard use codes for designations
+ */
+const DesignationUse = {
+  DISPLAY: {
+    system: 'http://terminology.hl7.org/CodeSystem/designation-use',
+    code: 'display'
+  },
+  FSN: {
+    system: 'http://snomed.info/sct',
+    code: '900000000000003001'  // Fully Specified Name
+  },
+  PREFERRED: {
+    system: 'http://snomed.info/sct',
+    code: '900000000000548007'  // Preferred term
+  },
+  SYNONYM: {
+    system: 'http://snomed.info/sct',
+    code: '900000000000013009'  // Synonym
+  }
+};
+
+/**
+ * Individual concept designation with language, use, and value
+ */
+class Designation {
+  isActive;
+  language;
+  use; // Coding {system, version, code, display} - well be DesignationUse.DISPLAY if is display
+  value; // string
+  extensions = []; // extensions on the designation
+
   constructor() {
-    this.base = false;
     this.active = false;
     this.language = null;
-    this.use = null; // TFHIRCoding equivalent: {system, version, code, display}
-    this.value = null; // TFHIRPrimitive equivalent: {value, extension, id}
-    this.extensions = []; // Array of extension objects
+    this.use = null;
+    this.value = null;
+    this.extensions = [];
   }
 
   /**
    * Get the display text for this designation
    */
   get display() {
-    return this.value ? this.value.value || '' : '';
+    return this.value ? this.value || '' : '';
   }
 
   /**
    * Get a string representation of this designation
    */
   present() {
-    let result = this.value ? `"${this.value.value || ''}"` : '""';
+    let result = this.value ? `"${this.value || ''}"` : '""';
 
     if (this.language || this.use) {
       result += ' (';
@@ -242,6 +280,41 @@ class SearchFilterText {
     if (coding.code) return coding.code;
     return coding.system || '--';
   }
+
+  /**
+   * Check if this designation's use indicates it's a display
+   * @returns {boolean}
+   */
+  isUseADisplay() {
+    if (!this.use) {
+      return true; // No use specified, assume display
+    }
+
+    // Check for standard display use codes
+    if (this.use.system === DesignationUse.DISPLAY.system &&
+      this.use.code === DesignationUse.DISPLAY.code) {
+      return true;
+    }
+
+    // SNOMED preferred term is a display
+    if (this.use.system === DesignationUse.PREFERRED.system &&
+      this.use.code === DesignationUse.PREFERRED.code) {
+      return true;
+    }
+
+    // No use or unknown use - treat as display
+    return !this.use.code;
+  }
+
+  isDisplay() {
+    return this.use && this.use.system == DesignationUse.DISPLAY.system &&
+      this.use.code == DesignationUse.DISPLAY.code;
+  }
+
+  isPreferred() {
+    return this.use && this.use.system == DesignationUse.PREFERRED.system &&
+      this.use.code == DesignationUse.PREFERRED.code;
+  }
 }
 
 /**
@@ -249,6 +322,7 @@ class SearchFilterText {
  */
 class Designations {
   constructor(languageDefinitions) {
+    validateParameter(languageDefinitions, "languageDefinitions", LanguageDefinitions);
     this.languageDefinitions = languageDefinitions;
     this.baseLang = null;
     this.designations = [];
@@ -261,31 +335,36 @@ class Designations {
   clear() {
     this.baseLang = null;
     this.designations = [];
+    this.source = null; // Reference to CodeSystemProvider
   }
 
   /**
    * Add a designation with string parameters
    */
-  addDesignation(base, active, isDisplay, lang, display) {
-    validateParameter(base, "base", Boolean);
+  addDesignation(isDisplay, active, lang, use, display, extensions = []) {
     validateParameter(active, "active", Boolean);
     validateParameter(isDisplay, "isDisplay", Boolean);
     validateParameter(lang, "lang", String);
+    validateOptionalParameter(use, "use", Object);
     validateParameter(display, "display", String);
+    validateArrayParameter(extensions, "extensions", Object);
 
     const designation = new Designation();
     designation.language = this.languageDefinitions.parse(lang);
-    designation.value = TypeHelper.makeString(display);
-    designation.base = base;
+    designation.value = display;
     designation.active = active;
 
     if (isDisplay) {
       designation.use = {
-        system: 'http://terminology.hl7.org/CodeSystem/hl7TermMaintInfra',
-        code: 'preferredForLanguage'
+        system: DesignationUse.DISPLAY.system,
+        code: DesignationUse.DISPLAY.code
       };
+    } else if (use) {
+      designation.use = use;
     }
-
+    if (extensions.length > 0) {
+      designation.extensions.push(...extensions)
+    }
     this.designations.push(designation);
     return designation;
   }
@@ -293,8 +372,7 @@ class Designations {
   /**
    * Add designations from an array of displays
    */
-  addDesignationsFromArray(base, active, isDisplay, lang, displays) {
-    validateParameter(base, "base", Boolean);
+  addDesignationsFromArray(active, isDisplay, lang, use, displays) {
     validateParameter(active, "active", Boolean);
     validateParameter(isDisplay, "isDisplay", Boolean);
     validateParameter(lang, "lang", String);
@@ -302,105 +380,46 @@ class Designations {
 
     if (displays) {
       for (const display of displays) {
-        this.addDesignation(base, active, isDisplay, lang, display);
+        this.addDesignation(active, isDisplay, lang, use, display);
       }
     }
-  }
-
-  /**
-   * Add a designation with primitive value and extensions
-   */
-  addDesignationWithValue(base, active, isDisplay, lang, value, extensions = null) {
-    validateParameter(base, "base", Boolean);
-    validateParameter(active, "active", Boolean);
-    validateParameter(isDisplay, "isDisplay", Boolean);
-    validateParameter(lang, "lang", String);
-    validateParameter(value, "value", Object, false);
-    validateArrayParameter(extensions, "extensions", Object, true);
-
-    const designation = new Designation();
-    designation.language = this.languageDefinitions.parse(lang);
-    designation.value = value; // Use value directly
-    designation.base = base;
-    designation.active = active;
-
-    if (extensions) {
-      designation.extensions = [...extensions]; // Copy array
-    }
-
-    if (isDisplay) {
-      designation.use = {
-        system: 'http://terminology.hl7.org/CodeSystem/hl7TermMaintInfra',
-        code: 'preferredForLanguage'
-      };
-    }
-
-    this.designations.push(designation);
-    return designation;
   }
 
   /**
    * Add designation from FHIR CodeSystem concept designation
    */
-  addDesignationFromConcept(ccd) {
-    validateParameter(ccd, 'ccd', Object);
-    const designation = new Designation();
-    designation.language = this.languageDefinitions.parse(ccd.language);
-    designation.use = ccd.use;
-    designation.value = TypeHelper.readString(ccd, "value");
+  addDesignationFromConcept(context, baseLanguage = null) {
+    validateOptionalParameter(context, 'context', Object);
+    if (!context) return;
 
-    // Handle extensions
-    if (ccd.hasExtensions) {
-      const sctExtensions = ccd.getExtensions('http://hl7.org/fhir/StructureDefinition/coding-sctdescid');
-      if (sctExtensions && sctExtensions.length > 0) {
-        designation.extensions = [...sctExtensions];
+    if (context.display) {
+      this.addDesignation(true, true, baseLanguage, null, context.display)
+    }
+    if (context.designation && Array.isArray(context.designation)) {
+      for (const d of context.designation) {
+        this.addDesignation(false, true, d.language, d.use, d.value, d.extension);
       }
     }
-
-    this.designations.push(designation);
-    return designation;
-  }
-
-  /**
-   * Add designation from FHIR ValueSet include concept designation
-   */
-  addDesignationFromValueSet(ccd) {
-    validateParameter(ccd, 'ccd', Object);
-    const designation = new Designation();
-    designation.language = this.languageDefinitions.parse(ccd.language);
-    designation.use = ccd.use;
-    designation.value = TypeHelper.readString(ccd, "value");
-
-    // Handle extensions
-    if (ccd.hasExtensions) {
-      const sctExtensions = ccd.getExtensions('http://hl7.org/fhir/StructureDefinition/coding-sctdescid');
-      if (sctExtensions && sctExtensions.length > 0) {
-        designation.extensions = [...sctExtensions];
-      }
-    }
-
-    this.designations.push(designation);
-    return designation;
   }
 
   /**
    * Check if a display value exists with specified matching criteria
    */
   hasDisplay(langList, defLang, value, active, mode) {
-    validateParameter(langList, 'langList', Languages, true); // Allow null
+    validateOptionalParameter(langList, 'langList', Languages, true); // Allow null
     validateOptionalParameter(defLang, 'defLang', Language);
     validateParameter(value, 'value', String);
     validateParameter(active, 'active', Boolean);
     validateParameter(mode, 'mode', String);
 
-    const result = { hasDisplay: false, difference: DisplayDifference.DIFFERENT };
+    const result = { found: false, difference: DisplayDifference.None };
 
     for (const cd of this.designations) {
       if (this._langsMatch(langList, cd.language, LangMatchType.LANG, defLang) &&
         (!active || cd.active) &&
         cd.value &&
-        this._stringMatches(value, cd.value.value, mode, cd.language)) {
-        result.hasDisplay = true;
+        this._stringMatches(value, cd.value, mode, cd.language)) {
+        result.found = true;
         return result;
       }
     }
@@ -410,8 +429,8 @@ class Designations {
         if (this._langsMatch(langList, cd.language, LangMatchType.LANG, defLang) &&
           (!active || cd.active) &&
           cd.value &&
-          this._stringMatches(value, cd.value.value, DisplayCheckingStyle.CASE_INSENSITIVE, cd.language)) {
-          result.difference = DisplayDifference.CASE;
+          this._stringMatches(value, cd.value, DisplayCheckingStyle.CASE_INSENSITIVE, cd.language)) {
+          result.difference = DisplayDifference.Case;
           return result;
         }
       }
@@ -422,8 +441,8 @@ class Designations {
         if (this._langsMatch(langList, cd.language, LangMatchType.LANG, defLang) &&
           (!active || cd.active) &&
           cd.value &&
-          this._stringMatches(value, cd.value.value, DisplayCheckingStyle.NORMALISED, cd.language)) {
-          result.difference = DisplayDifference.NORMALISED;
+          this._stringMatches(value, cd.value, DisplayCheckingStyle.NORMALISED, cd.language)) {
+          result.difference = DisplayDifference.Normalized;
           return result;
         }
       }
@@ -436,7 +455,7 @@ class Designations {
    * Count displays matching language criteria
    */
   displayCount(langList, defLang, displayOnly) {
-    validateParameter(langList, 'langList', Languages, true); // Allow null
+    validateOptionalParameter(langList, 'langList', Languages, true); // Allow null
     validateOptionalParameter(defLang, 'defLang', Language);
     validateParameter(displayOnly, 'displayOnly', Boolean);
 
@@ -480,7 +499,7 @@ class Designations {
    * Present all matching designations as a formatted string
    */
   present(langList, defLang, displayOnly) {
-    validateParameter(langList, 'langList', Languages, true); // Allow null
+    validateOptionalParameter(langList, 'langList', Languages, true); // Allow null
     validateOptionalParameter(defLang, 'defLang', Language);
     validateParameter(displayOnly, 'displayOnly', Boolean);
 
@@ -537,23 +556,20 @@ class Designations {
       return null;
     }
 
-    if (!langList || langList.languages.length == 0) {
+    if (!langList || langList.length == 0) {
       // No language list, prefer base designations
-      for (const cd of this.designations) {
-        if (cd.base) {
-          return cd;
-        }
-      }
       for (const cd of this.designations) {
         if (this._isDisplay(cd)) {
           return cd;
         }
       }
+      for (const cd of this.designations) {
+        if (this._isPreferred(cd)) {
+          return cd;
+        }
+      }
       return this.designations[0];
     }
-
-    // Collect all valid matches with their scores
-    const allMatches = [];
 
     for (const lang of langList.languages) {
       if (lang.quality <= 0) continue;
@@ -562,29 +578,29 @@ class Designations {
 
       for (const matchType of matchTypes) {
         for (const cd of this.designations) {
+          if (this._langMatches(lang, cd.language, matchType) && this._isDisplay(cd)) {
+            return cd;
+          }
+        }
+        for (const cd of this.designations) {
+          if (this._langMatches(lang, cd.language, matchType) && this._isPreferred(cd)) {
+            return cd;
+          }
+        }
+        for (const cd of this.designations) {
           if (this._langMatches(lang, cd.language, matchType)) {
-            allMatches.push({
-              designation: cd,
-              language: lang,
-              matchType: matchType,
-              quality: lang.quality
-            });
+            return cd;
           }
         }
       }
     }
 
-    if (allMatches.length === 0) {
-      return null;
-    }
-
-    // Now select the best match from all collected matches
-    return this._selectBestMatch(allMatches);
+    return null;
   }
 
   /**
    * Select the best designation from all collected matches
-   */
+   */ /*
   _selectBestMatch(matches) {
     // Sort by priority:
     // 1. Match type (FULL > LANG_REGION > LANG)
@@ -630,7 +646,7 @@ class Designations {
 
     return matches[0].designation;
   }
-
+*/
   /**
    * Get preferred display text
    */
@@ -678,10 +694,21 @@ class Designations {
    */
   _isDisplay(cd) {
     return !cd.use ||
-      (cd.use.system === 'http://terminology.hl7.org/CodeSystem/hl7TermMaintInfra' &&
-        cd.use.code === 'preferredForLanguage') ||
-      (cd.use.system === 'http://terminology.hl7.org/CodeSystem/designation-usage' &&
-        cd.use.code === 'display');
+      (cd.use.system === DesignationUse.DISPLAY.system &&
+        cd.use.code === DesignationUse.DISPLAY.code) ||
+      (cd.use.system === DesignationUse.PREFERRED.system &&
+        cd.use.code === DesignationUse.PREFERRED.code);
+  }
+
+  /**
+   * Check if designation is a display designation
+   */
+  _isPreferred(cd) {
+    return !cd.use ||
+      (cd.use.system === DesignationUse.DISPLAY.system &&
+        cd.use.code === DesignationUse.DISPLAY.code) ||
+      (cd.use.system === DesignationUse.PREFERRED.system &&
+        cd.use.code === DesignationUse.PREFERRED.code);
   }
 
   /**
@@ -793,11 +820,109 @@ class Designations {
     const lastItem = items.pop();
     return `${items.join(', ')}, or ${lastItem}`;
   }
+
+  /**
+   * Get allowed displays as a list (for error messages)
+   * @param {Array<string>} output - Array to populate
+   * @param {Languages} languages - Languages to consider
+   * @param {Language} defaultLang - Default language fallback
+   */
+  allowedDisplays(output, languages = null, defaultLang = null) {
+    const seen = new Set();
+
+    for (const d of this.designations) {
+      if (!d.isActive || !d.isUseADisplay() || !d.value) continue;
+      if (seen.has(d.value)) continue;
+
+      // Check language match
+      if (languages && languages.length > 0) {
+        let langMatch = false;
+        if (d.language) {
+          langMatch = languagesHasMatch(languages, d.language);
+        } else if (defaultLang || this.baseLang) {
+          langMatch = true;
+        }
+        if (!langMatch) continue;
+      }
+
+      seen.add(d.value);
+      output.push(d.value);
+    }
+  }
+
+
+  /**
+   * Get the inactive status string for a display
+   * @param {string} display - Display text to find
+   * @returns {string} Status string or empty
+   */
+  inactiveStatus(display) {
+    for (const d of this.designations) {
+      if (d.value === display && !d.isActive) {
+        return 'inactive';
+      }
+    }
+    return '';
+  }
+
+  /**
+   * Check if this collection has any displays for the given languages
+   * @param {Languages} languages - Languages to check
+   * @returns {boolean}
+   */
+  hasAnyDisplays(languages) {
+    return this.displayCount(languages, null, true) > 0;
+  }
+
+  /**
+   * Get all designations as an array (for iteration)
+   * @returns {ConceptDesignation[]}
+   */
+  all() {
+    return [...this.designations];
+  }
+
+  /**
+   * Get count of all designations
+   * @returns {number}
+   */
+  get count() {
+    return this.designations.length;
+  }
+
+  /**
+   * Iterator support
+   */
+  [Symbol.iterator]() {
+    return this.designations[Symbol.iterator]();
+  }
 }
+
+
+/**
+ * Check if a Languages collection has a match for a given language
+ * @param {Languages} langs - Languages collection
+ * @param {Language|string} target - Target language to match
+ * @returns {boolean}
+ */
+function languagesHasMatch(langs, target) {
+  if (!langs || langs.length === 0) return false;
+
+  const targetLang = typeof target === 'string' ? new Language(target) : target;
+
+  for (const lang of langs) {
+    if (lang.matchesForDisplay(targetLang)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 
 module.exports = {
   Designation,
   Designations,
+  DesignationUse,
   SearchFilterText,
   DisplayCheckingStyle,
   DisplayDifference,

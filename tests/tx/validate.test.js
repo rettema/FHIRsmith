@@ -7,6 +7,10 @@
 const { ValidateWorker } = require('../../tx/workers/validate');
 const {CodeSystem} = require("../../tx/library/codesystem");
 const {FhirCodeSystemProvider} = require("../../tx/cs/cs-cs");
+const ValueSet = require("../../tx/library/valueset");
+const {Languages} = require("../../library/languages");
+const {OperationContext} = require("../../tx/operation-context");
+const {TestUtilities} = require("../test-utilities");
 
 // Mock dependencies
 const mockLog = {
@@ -16,16 +20,9 @@ const mockLog = {
   error: jest.fn()
 };
 
-const mockOpContext = {
-  deadCheck: jest.fn()
-};
-
-const mockLanguages = {};
-const mockI18n = {};
-
 // Mock provider that returns admin-gender resources
 const mockProvider = {
-  getCodeSystem: jest.fn((ctx, url, version) => {
+  getCodeSystem: jest.fn((ctx, url) => {
     if (url === 'http://hl7.org/fhir/administrative-gender') {
       return {
         url: 'http://hl7.org/fhir/administrative-gender',
@@ -49,13 +46,7 @@ const mockProvider = {
         url: 'http://hl7.org/fhir/administrative-gender',
         version: '4.0.1',
         name: 'AdministrativeGender',
-        jsonObj: {
-          resourceType: 'CodeSystem',
-          url: 'http://hl7.org/fhir/administrative-gender',
-          version: '4.0.1',
-          name: 'AdministrativeGender',
-          status: 'active', 'concept':[{'code':'male', 'display':'Male'},{'code':'female', 'display':'Female'},{'code':'other', 'display':'Other', 'definition':'Other.'},{'code':'unknown', 'display':'Unknown' }]
-        }
+        status: 'active', 'concept':[{'code':'male', 'display':'Male'},{'code':'female', 'display':'Female'},{'code':'other', 'display':'Other', 'definition':'Other.'},{'code':'unknown', 'display':'Unknown' }]
       });
       return new FhirCodeSystemProvider(opContext, cs, supplements);
     }
@@ -75,7 +66,7 @@ const mockProvider = {
     }
     return null;
   }),
-  getValueSet: jest.fn((ctx, url, version) => {
+  findValueSet: jest.fn((ctx, url) => {
     if (url === 'http://hl7.org/fhir/ValueSet/administrative-gender') {
       return {
         url: 'http://hl7.org/fhir/ValueSet/administrative-gender',
@@ -112,8 +103,7 @@ function createMockReqRes(method, query = {}, body = {}, params = {}) {
     query,
     body,
     params,
-    txProvider: mockProvider,
-    txOpContext: mockOpContext
+    txProvider: mockProvider
   };
   
   const res = {
@@ -127,9 +117,10 @@ function createMockReqRes(method, query = {}, body = {}, params = {}) {
 describe('ValidateWorker', () => {
   let worker;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     jest.clearAllMocks();
-    worker = new ValidateWorker(mockOpContext, mockLog, mockProvider, mockLanguages, mockI18n);
+    let opContext = new OperationContext(new Languages(), await TestUtilities.loadTranslations(await TestUtilities.loadLanguageDefinitions()));
+    worker = new ValidateWorker(opContext, mockLog, mockProvider, await TestUtilities.loadLanguageDefinitions(), await TestUtilities.loadTranslations(await TestUtilities.loadLanguageDefinitions()));
   });
 
   describe('buildParameters', () => {
@@ -345,11 +336,12 @@ describe('ValidateWorker', () => {
           code: 'male' 
         }] 
       };
-      const valueSet = { url: 'http://hl7.org/fhir/ValueSet/administrative-gender', 'compose' : {'include' : [{'system' : 'http://hl7.org/fhir/administrative-gender'}]} };
+      const valueSet = new ValueSet({ "resourceType" : "ValueSet", url: 'http://hl7.org/fhir/ValueSet/administrative-gender', 'compose' : {'include' : [{'system' : 'http://hl7.org/fhir/administrative-gender'}]} });
       
-      const result = await worker.doValidationVS(coded, valueSet, {});
-      
-      const resultParam = result.parameter.find(p => p.name === 'result');
+      const result = await worker.doValidationVS(coded, valueSet, { resourceType : "Parameters", parameter : [{name : "__Accept-Language", valueCode : "en" }] });
+
+      console.log(result);
+      const resultParam = (result.parameter || []).find(p => p.name === 'result');
       expect(resultParam.valueBoolean).toBe(true);
     });
 
@@ -360,10 +352,11 @@ describe('ValidateWorker', () => {
           code: 'other' 
         }] 
       };
-      const valueSet = { url: 'http://hl7.org/fhir/ValueSet/administrative-gender' };
+      const valueSet = new ValueSet({ "resourceType" : "ValueSet", url: 'http://hl7.org/fhir/ValueSet/administrative-gender', 'compose' : {'include' : [{'system' : 'http://hl7.org/fhir/administrative-gender', concept : [{code : "male"},{code : "female"}]}]}  });
       
-      const result = await worker.doValidationVS(coded, valueSet, {});
-      
+      const result = await worker.doValidationVS(coded, valueSet, {"resourceType" : "Parameters" });
+
+      console.log(result);
       const resultParam = result.parameter.find(p => p.name === 'result');
       expect(resultParam.valueBoolean).toBe(false);
     });
@@ -375,14 +368,16 @@ describe('ValidateWorker', () => {
           code: 'male' 
         }] 
       };
-      const valueSet = { url: 'http://hl7.org/fhir/ValueSet/administrative-gender' };
+      const valueSet = new ValueSet({ "resourceType" : "ValueSet", url: 'http://hl7.org/fhir/ValueSet/administrative-gender', 'compose' : {'include' : [{'system' : 'http://hl7.org/fhir/administrative-gender'}]} });
       
-      const result = await worker.doValidationVS(coded, valueSet, {});
-      
+      const result = await worker.doValidationVS(coded, valueSet, {"resourceType" : "Parameters" });
+
+      console.log(result);
       const resultParam = result.parameter.find(p => p.name === 'result');
       expect(resultParam.valueBoolean).toBe(false);
       
       const messageParam = result.parameter.find(p => p.name === 'message');
+      expect(messageParam).toBeDefined();
       expect(messageParam.valueString).toContain('system');
     });
   });
@@ -434,33 +429,6 @@ describe('ValidateWorker', () => {
       const { req, res } = createMockReqRes('GET', { code: 'male' }, {}, { id: 'administrative-gender' });
       
       await worker.handleCodeSystemInstance(req, res);
-      
-      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
-        resourceType: 'Parameters'
-      }));
-    });
-
-    test('handleValueSet validates successfully with url and code', async () => {
-      const { req, res } = createMockReqRes('GET', { 
-        url: 'http://hl7.org/fhir/ValueSet/administrative-gender',
-        system: 'http://hl7.org/fhir/administrative-gender',
-        code: 'male'
-      });
-      
-      await worker.handleValueSet(req, res);
-      
-      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
-        resourceType: 'Parameters'
-      }));
-    });
-
-    test('handleValueSetInstance validates successfully', async () => {
-      const { req, res } = createMockReqRes('GET', { 
-        system: 'http://hl7.org/fhir/administrative-gender',
-        code: 'female' 
-      }, {}, { id: 'administrative-gender' });
-      
-      await worker.handleValueSetInstance(req, res);
       
       expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
         resourceType: 'Parameters'

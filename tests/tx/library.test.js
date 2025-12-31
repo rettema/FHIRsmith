@@ -171,10 +171,10 @@ describe('Provider Test', () => {
 
     // Test with invalid parameters
     await expect(library.createCodeSystemProvider(null, {}, []))
-      .rejects.toThrow("opContext must be a provided");
+      .rejects.toThrow("opContext must be provided");
 
     await expect(library.createCodeSystemProvider(opContext, null, []))
-      .rejects.toThrow("codeSystem must be a provided");
+      .rejects.toThrow("codeSystem must be provided");
 
     await expect(library.createCodeSystemProvider(opContext, library.codeSystems.get("http://terminology.hl7.org/CodeSystem/adjudication-error"), "not-an-array"))
       .rejects.toThrow("supplements must be an array");

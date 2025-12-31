@@ -2,7 +2,7 @@ const sqlite3 = require('sqlite3').verbose();
 const assert = require('assert');
 const { CodeSystem } = require('../library/codesystem');
 const { Language, Languages} = require('../../library/languages');
-const { CodeSystemProvider, Designation, CodeSystemFactoryProvider} = require('./cs-api');
+const { CodeSystemProvider, CodeSystemFactoryProvider} = require('./cs-api');
 const { validateOptionalParameter} = require("../../library/utilities");
 
 // Context kinds matching Pascal enum
@@ -227,14 +227,12 @@ class LoincServices extends CodeSystemProvider {
     return false; // Handle via status if needed
   }
 
-  async designations(context) {
+  async designations(context, displays) {
     
     const ctxt = await this.#ensureContext(context);
-    let designations = [];
-
     if (ctxt) {
       // Add main display
-      designations.push(new Designation('en-US', CodeSystem.makeUseForDisplay(), ctxt.desc));
+      displays.addDesignation(true, true, 'en-US', CodeSystem.makeUseForDisplay(), ctxt.desc);
 
       // Add cached designations
       if (ctxt.displays.length === 0) {
@@ -243,14 +241,13 @@ class LoincServices extends CodeSystemProvider {
 
       for (const entry of ctxt.displays) {
         const use = entry.display ? CodeSystem.makeUseForDisplay() : null;
-        designations.push(new Designation(entry.lang, use, entry.value));
+        displays.addDesignation(false, true, entry.lang, use, entry.value);
       }
 
       // Add supplement designations
-      designations.push(...this._listSupplementDesignations(ctxt.code));
+      this._listSupplementDesignations(ctxt.code, displays);
     }
 
-    return designations;
   }
 
   async extendLookup(ctxt, props, params) {
@@ -548,41 +545,48 @@ class LoincServices extends CodeSystemProvider {
 
   // Filter support
   async doesFilter(prop, op, value) {
-    
-
     // Relationship filters
-    if (this.relationships.has(prop) && ['equal', 'in'].includes(op)) {
-      return this.codes.has(value) || true; // Allow description matching too
+    if (this.relationships.has(prop) && ['=', 'in', 'exists', 'regex'].includes(op)) {
+      return true;
     }
 
     // Property filters
-    if (this.properties.has(prop) && ['equal', 'in'].includes(op)) {
+    if (this.properties.has(prop) && ['=', 'in', 'exists', 'regex'].includes(op)) {
       return true;
     }
 
-    // Special filters
-    if (prop === 'STATUS' && op === 'equal' && this.statusKeys.has(value)) {
+    // Status filter
+    if (prop === 'STATUS' && op === '=' && this.statusKeys.has(value)) {
       return true;
     }
 
-    if (prop === 'LIST' && op === 'equal' && this.codes.has(value)) {
+    // LIST filter
+    if (prop === 'LIST' && op === '=' && this.codes.has(value)) {
       return true;
     }
 
-    if (prop === 'answers-for' && op === 'equal') {
+    // CLASSSTYPE filter
+    if (prop === 'CLASSTYPE' && op === '=' && ["1", "2", "3", "4"].includes(value)) {
       return true;
     }
 
-    if (prop === 'concept' && ['is-a', 'descendent-of'].includes(op)) {
+    // answers-for filter
+    if (prop === 'answers-for' && op === '=') {
       return true;
     }
 
-    if (prop === 'copyright' && op === 'equal' && ['LOINC', '3rdParty'].includes(value)) {
+    // concept filters
+    if (prop === 'concept' && ['is-a', 'descendent-of', '=', 'in', 'not-in'].includes(op)) {
       return true;
     }
 
-    // Regex support
-    if ((this.relationships.has(prop) || this.properties.has(prop)) && op === 'regex') {
+    // code filters (VSAC workaround)
+    if (prop === 'code' && ['is-a', 'descendent-of', '='].includes(op)) {
+      return true;
+    }
+
+    // copyright filter
+    if (prop === 'copyright' && op === '=' && ['LOINC', '3rdParty'].includes(value)) {
       return true;
     }
 
@@ -600,62 +604,128 @@ class LoincServices extends CodeSystemProvider {
     await this.#executeFilterQuery(prop, op, value, filter);
     filterContext.filters.push(filter);
   }
+
   async #executeFilterQuery(prop, op, value, filter) {
     let sql = '';
     let lsql = '';
 
     // LIST filter
-    if (prop === 'LIST' && op === 'equal' && this.codes.has(value)) {
+    if (prop === 'LIST' && op === '=' && this.codes.has(value)) {
       sql = `SELECT TargetKey as Key FROM Relationships
-             WHERE RelationshipTypeKey = ${this.relationships.get('Answer')} AND SourceKey IN (SELECT CodeKey FROM Codes WHERE Code = '${this.#sqlWrapString(value)}')
-             ORDER BY SourceKey ASC`;
-      lsql = `
-          SELECT COUNT(TargetKey) FROM Relationships
-          WHERE RelationshipTypeKey = ${this.relationships.get('Answer')} AND SourceKey IN (SELECT CodeKey FROM Codes WHERE Code = '${this.#sqlWrapString(value)}')
-            AND TargetKey =
-      `;
+           WHERE RelationshipTypeKey = ${this.relationships.get('Answer')} 
+           AND SourceKey IN (SELECT CodeKey FROM Codes WHERE Code = '${this.#sqlWrapString(value)}')
+           ORDER BY SourceKey ASC`;
+      lsql = `SELECT COUNT(TargetKey) FROM Relationships
+            WHERE RelationshipTypeKey = ${this.relationships.get('Answer')} 
+            AND SourceKey IN (SELECT CodeKey FROM Codes WHERE Code = '${this.#sqlWrapString(value)}')
+            AND TargetKey = `;
     }
     // answers-for filter
-    else if (prop === 'answers-for' && op === 'equal') {
+    else if (prop === 'answers-for' && op === '=') {
       if (value.startsWith('LL')) {
-        sql = `SELECT TargetKey as Key FROM Relationships WHERE RelationshipTypeKey = ${this.relationships.get('Answer')} AND SourceKey IN (SELECT CodeKey FROM Codes WHERE Code = '${this.#sqlWrapString(value)}') ORDER BY SourceKey ASC`;
-        lsql = `SELECT COUNT(TargetKey) FROM Relationships WHERE RelationshipTypeKey = ${this.relationships.get('Answer')} AND SourceKey IN (SELECT CodeKey FROM Codes WHERE Code = '${this.#sqlWrapString(value)}') AND TargetKey = `;
+        sql = `SELECT TargetKey as Key FROM Relationships 
+             WHERE RelationshipTypeKey = ${this.relationships.get('Answer')} 
+             AND SourceKey IN (SELECT CodeKey FROM Codes WHERE Code = '${this.#sqlWrapString(value)}') 
+             ORDER BY SourceKey ASC`;
+        lsql = `SELECT COUNT(TargetKey) FROM Relationships 
+              WHERE RelationshipTypeKey = ${this.relationships.get('Answer')} 
+              AND SourceKey IN (SELECT CodeKey FROM Codes WHERE Code = '${this.#sqlWrapString(value)}') 
+              AND TargetKey = `;
       } else {
-        sql = `
-            SELECT TargetKey as Key FROM Relationships
-            WHERE RelationshipTypeKey = ${this.relationships.get('Answer')}
-              AND SourceKey IN (
-                SELECT SourceKey FROM Relationships
-                WHERE RelationshipTypeKey = ${this.relationships.get('answers-for')}
-              AND TargetKey IN (SELECT CodeKey FROM Codes WHERE Code = '${this.#sqlWrapString(value)}')
-                )
-            ORDER BY SourceKey ASC
-        `;
-        lsql = `SELECT COUNT(TargetKey) FROM Relationships WHERE RelationshipTypeKey = ${this.relationships.get('Answer')} AND SourceKey IN (SELECT SourceKey FROM Relationships WHERE RelationshipTypeKey = ${this.relationships.get('answers-for')} AND TargetKey IN (SELECT CodeKey FROM Codes WHERE Code = '${this.#sqlWrapString(value)}')) AND TargetKey = `;
+        sql = `SELECT TargetKey as Key FROM Relationships
+             WHERE RelationshipTypeKey = ${this.relationships.get('Answer')}
+             AND SourceKey IN (
+               SELECT SourceKey FROM Relationships
+               WHERE RelationshipTypeKey = ${this.relationships.get('answers-for')}
+               AND TargetKey IN (SELECT CodeKey FROM Codes WHERE Code = '${this.#sqlWrapString(value)}')
+             )
+             ORDER BY SourceKey ASC`;
+        lsql = `SELECT COUNT(TargetKey) FROM Relationships 
+              WHERE RelationshipTypeKey = ${this.relationships.get('Answer')} 
+              AND SourceKey IN (SELECT SourceKey FROM Relationships 
+                WHERE RelationshipTypeKey = ${this.relationships.get('answers-for')} 
+                AND TargetKey IN (SELECT CodeKey FROM Codes WHERE Code = '${this.#sqlWrapString(value)}')) 
+              AND TargetKey = `;
       }
     }
-    // Relationship filters
-    else if (this.relationships.has(prop) && op === 'equal') {
+    // Relationship equal filter
+    else if (this.relationships.has(prop) && op === '=') {
       if (this.codes.has(value)) {
-        sql = `
-            SELECT SourceKey as Key FROM Relationships
-            WHERE RelationshipTypeKey = ${this.relationships.get(prop)}
-              AND TargetKey IN (SELECT CodeKey FROM Codes WHERE Code = '${this.#sqlWrapString(value)}')
-            ORDER BY SourceKey ASC
-        `;
-        lsql = `SELECT COUNT(SourceKey) FROM Relationships WHERE RelationshipTypeKey = ${this.relationships.get(prop)} AND TargetKey IN (SELECT CodeKey FROM Codes WHERE Code = '${this.#sqlWrapString(value)}') AND SourceKey = `;
+        sql = `SELECT SourceKey as Key FROM Relationships
+             WHERE RelationshipTypeKey = ${this.relationships.get(prop)}
+             AND TargetKey IN (SELECT CodeKey FROM Codes WHERE Code = '${this.#sqlWrapString(value)}')
+             ORDER BY SourceKey ASC`;
+        lsql = `SELECT COUNT(SourceKey) FROM Relationships 
+              WHERE RelationshipTypeKey = ${this.relationships.get(prop)} 
+              AND TargetKey IN (SELECT CodeKey FROM Codes WHERE Code = '${this.#sqlWrapString(value)}') 
+              AND SourceKey = `;
       } else {
-        sql = `
-            SELECT SourceKey as Key FROM Relationships
-            WHERE RelationshipTypeKey = ${this.relationships.get(prop)}
-              AND TargetKey IN (SELECT CodeKey FROM Codes WHERE Description = '${this.#sqlWrapString(value)}' COLLATE NOCASE)
-            ORDER BY SourceKey ASC
-        `;
-        lsql = `SELECT COUNT(SourceKey) FROM Relationships WHERE RelationshipTypeKey = ${this.relationships.get(prop)} AND TargetKey IN (SELECT CodeKey FROM Codes WHERE Description = '${this.#sqlWrapString(value)}' COLLATE NOCASE) AND SourceKey = `;
+        sql = `SELECT SourceKey as Key FROM Relationships
+             WHERE RelationshipTypeKey = ${this.relationships.get(prop)}
+             AND TargetKey IN (SELECT CodeKey FROM Codes WHERE Description = '${this.#sqlWrapString(value)}' COLLATE NOCASE)
+             ORDER BY SourceKey ASC`;
+        lsql = `SELECT COUNT(SourceKey) FROM Relationships 
+              WHERE RelationshipTypeKey = ${this.relationships.get(prop)} 
+              AND TargetKey IN (SELECT CodeKey FROM Codes WHERE Description = '${this.#sqlWrapString(value)}' COLLATE NOCASE) 
+              AND SourceKey = `;
       }
     }
-    // Property filters
-    else if (this.properties.has(prop) && op === 'equal') {
+    // Relationship 'in' filter
+    else if (this.relationships.has(prop) && op === 'in') {
+      const codes = this.#commaListOfCodes(value);
+      sql = `SELECT SourceKey as Key FROM Relationships
+           WHERE RelationshipTypeKey = ${this.relationships.get(prop)}
+           AND TargetKey IN (SELECT CodeKey FROM Codes WHERE Code IN (${codes}))
+           ORDER BY SourceKey ASC`;
+      lsql = `SELECT COUNT(SourceKey) FROM Relationships 
+            WHERE RelationshipTypeKey = ${this.relationships.get(prop)} 
+            AND TargetKey IN (SELECT CodeKey FROM Codes WHERE Code IN (${codes})) 
+            AND SourceKey = `;
+    }
+    // Relationship 'exists' filter
+    else if (this.relationships.has(prop) && op === 'exists') {
+      if (this.codes.has(value)) {
+        sql = `SELECT SourceKey as Key FROM Relationships
+             WHERE RelationshipTypeKey = ${this.relationships.get(prop)}
+             AND EXISTS (SELECT CodeKey FROM Codes WHERE Code = '${this.#sqlWrapString(value)}')
+             ORDER BY SourceKey ASC`;
+        lsql = `SELECT COUNT(SourceKey) FROM Relationships 
+              WHERE RelationshipTypeKey = ${this.relationships.get(prop)} 
+              AND EXISTS (SELECT CodeKey FROM Codes WHERE Code = '${this.#sqlWrapString(value)}') 
+              AND SourceKey = `;
+      } else {
+        sql = `SELECT SourceKey as Key FROM Relationships
+             WHERE RelationshipTypeKey = ${this.relationships.get(prop)}
+             AND EXISTS (SELECT CodeKey FROM Codes WHERE Description = '${this.#sqlWrapString(value)}' COLLATE NOCASE)
+             ORDER BY SourceKey ASC`;
+        lsql = `SELECT COUNT(SourceKey) FROM Relationships 
+              WHERE RelationshipTypeKey = ${this.relationships.get(prop)} 
+              AND EXISTS (SELECT CodeKey FROM Codes WHERE Description = '${this.#sqlWrapString(value)}' COLLATE NOCASE) 
+              AND SourceKey = `;
+      }
+    }
+    // Relationship regex filter
+    else if (this.relationships.has(prop) && op === 'regex') {
+      const matchingKeys = await this.#findRegexMatches(
+        `SELECT CodeKey as Key, Description FROM Codes 
+       WHERE CodeKey IN (SELECT TargetKey FROM Relationships WHERE RelationshipTypeKey = ${this.relationships.get(prop)})`,
+        value,
+        'Description'
+      );
+      if (matchingKeys.length > 0) {
+        sql = `SELECT SourceKey as Key FROM Relationships
+             WHERE RelationshipTypeKey = ${this.relationships.get(prop)}
+             AND TargetKey IN (${matchingKeys.join(',')})
+             ORDER BY SourceKey ASC`;
+        lsql = `SELECT COUNT(SourceKey) FROM Relationships 
+              WHERE RelationshipTypeKey = ${this.relationships.get(prop)} 
+              AND TargetKey IN (${matchingKeys.join(',')}) 
+              AND SourceKey = `;
+      }
+    }
+    // Property equal filter (with CLASSTYPE handling)
+    else if (this.properties.has(prop) && op === '=') {
+      let actualValue = value;
       if (prop === 'CLASSTYPE' && ['1', '2', '3', '4'].includes(value)) {
         const classTypes = {
           '1': 'Laboratory class',
@@ -663,52 +733,132 @@ class LoincServices extends CodeSystemProvider {
           '3': 'Claims attachments',
           '4': 'Surveys'
         };
-        value = classTypes[value];
+        actualValue = classTypes[value];
       }
-
-      sql = `
-          SELECT CodeKey as Key FROM Properties, PropertyValues
-          WHERE Properties.PropertyTypeKey = ${this.properties.get(prop)}
-            AND Properties.PropertyValueKey = PropertyValues.PropertyValueKey
-            AND PropertyValues.Value = '${this.#sqlWrapString(value)}' COLLATE NOCASE
-          ORDER BY CodeKey ASC
-      `;
-      lsql = `SELECT COUNT(CodeKey) FROM Properties, PropertyValues WHERE Properties.PropertyTypeKey = ${this.properties.get(prop)} AND Properties.PropertyValueKey = PropertyValues.PropertyValueKey AND PropertyValues.Value = '${this.#sqlWrapString(value)}' COLLATE NOCASE AND CodeKey = `;
+      sql = `SELECT CodeKey as Key FROM Properties, PropertyValues
+           WHERE Properties.PropertyTypeKey = ${this.properties.get(prop)}
+           AND Properties.PropertyValueKey = PropertyValues.PropertyValueKey
+           AND PropertyValues.Value = '${this.#sqlWrapString(actualValue)}' COLLATE NOCASE
+           ORDER BY CodeKey ASC`;
+      lsql = `SELECT COUNT(CodeKey) FROM Properties, PropertyValues 
+            WHERE Properties.PropertyTypeKey = ${this.properties.get(prop)} 
+            AND Properties.PropertyValueKey = PropertyValues.PropertyValueKey 
+            AND PropertyValues.Value = '${this.#sqlWrapString(actualValue)}' COLLATE NOCASE 
+            AND CodeKey = `;
+    }
+    // Property 'in' filter
+    else if (this.properties.has(prop) && op === 'in') {
+      const codes = this.#commaListOfCodes(value);
+      sql = `SELECT CodeKey as Key FROM Properties, PropertyValues
+           WHERE Properties.PropertyTypeKey = ${this.properties.get(prop)}
+           AND Properties.PropertyValueKey = PropertyValues.PropertyValueKey
+           AND PropertyValues.Value IN (${codes}) COLLATE NOCASE
+           ORDER BY CodeKey ASC`;
+      lsql = `SELECT COUNT(CodeKey) FROM Properties, PropertyValues 
+            WHERE Properties.PropertyTypeKey = ${this.properties.get(prop)} 
+            AND Properties.PropertyValueKey = PropertyValues.PropertyValueKey 
+            AND PropertyValues.Value IN (${codes}) COLLATE NOCASE 
+            AND CodeKey = `;
+    }
+    // Property 'exists' filter
+    else if (this.properties.has(prop) && op === 'exists') {
+      sql = `SELECT DISTINCT CodeKey as Key FROM Properties
+           WHERE Properties.PropertyTypeKey = ${this.properties.get(prop)}
+           ORDER BY CodeKey ASC`;
+      lsql = `SELECT COUNT(CodeKey) FROM Properties 
+            WHERE Properties.PropertyTypeKey = ${this.properties.get(prop)} 
+            AND CodeKey = `;
+    }
+    // Property regex filter
+    else if (this.properties.has(prop) && op === 'regex') {
+      const matchingKeys = await this.#findRegexMatches(
+        `SELECT PropertyValueKey, Value FROM PropertyValues 
+       WHERE PropertyValueKey IN (SELECT PropertyValueKey FROM Properties WHERE PropertyTypeKey = ${this.properties.get(prop)})`,
+        value,
+        'Value',
+        'PropertyValueKey'
+      );
+      if (matchingKeys.length > 0) {
+        sql = `SELECT CodeKey as Key FROM Properties
+             WHERE PropertyTypeKey = ${this.properties.get(prop)}
+             AND PropertyValueKey IN (${matchingKeys.join(',')})
+             ORDER BY CodeKey ASC`;
+        lsql = `SELECT COUNT(CodeKey) FROM Properties 
+              WHERE PropertyTypeKey = ${this.properties.get(prop)} 
+              AND PropertyValueKey IN (${matchingKeys.join(',')}) 
+              AND CodeKey = `;
+      }
     }
     // Status filter
-    else if (prop === 'STATUS' && op === 'equal' && this.statusKeys.has(value)) {
-      sql = `
-          SELECT CodeKey as Key FROM Codes
-          WHERE StatusKey = ${this.statusKeys.get(value)}
-          ORDER BY CodeKey ASC
-      `;
-      lsql = `SELECT COUNT(CodeKey) FROM Codes WHERE StatusKey = ${this.statusKeys.get(value)} AND CodeKey = `;
+    else if (prop === 'STATUS' && op === '=' && this.statusKeys.has(value)) {
+      sql = `SELECT CodeKey as Key FROM Codes
+           WHERE StatusKey = ${this.statusKeys.get(value)}
+           ORDER BY CodeKey ASC`;
+      lsql = `SELECT COUNT(CodeKey) FROM Codes 
+            WHERE StatusKey = ${this.statusKeys.get(value)} 
+            AND CodeKey = `;
     }
-    // Concept hierarchy filters
+    // Concept hierarchy filters (is-a, descendent-of)
     else if (prop === 'concept' && ['is-a', 'descendent-of'].includes(op)) {
-      sql = `
-          SELECT DescendentKey as Key FROM Closure
-          WHERE AncestorKey IN (SELECT CodeKey FROM Codes WHERE Code = '${this.#sqlWrapString(value)}')
-          ORDER BY DescendentKey ASC
-      `;
-      lsql = `SELECT COUNT(DescendentKey) FROM Closure WHERE AncestorKey IN (SELECT CodeKey FROM Codes WHERE Code = '${this.#sqlWrapString(value)}') AND DescendentKey = `;
+      sql = `SELECT DescendentKey as Key FROM Closure
+           WHERE AncestorKey IN (SELECT CodeKey FROM Codes WHERE Code = '${this.#sqlWrapString(value)}')
+           ORDER BY DescendentKey ASC`;
+      lsql = `SELECT COUNT(DescendentKey) FROM Closure 
+            WHERE AncestorKey IN (SELECT CodeKey FROM Codes WHERE Code = '${this.#sqlWrapString(value)}') 
+            AND DescendentKey = `;
+    }
+    // Concept equal filter (workaround for VSAC misuse)
+    else if (prop === 'concept' && op === '=') {
+      sql = `SELECT CodeKey as Key FROM Codes
+           WHERE Code = '${this.#sqlWrapString(value)}'
+           ORDER BY CodeKey ASC`;
+      lsql = `SELECT COUNT(CodeKey) FROM Codes 
+            WHERE Code = '${this.#sqlWrapString(value)}' 
+            AND CodeKey = `;
+    }
+    // Concept 'in' filter (workaround for VSAC misuse)
+    else if (prop === 'concept' && op === 'in') {
+      const codes = this.#commaListOfCodes(value);
+      sql = `SELECT CodeKey as Key FROM Codes
+           WHERE Code IN (${codes})
+           ORDER BY CodeKey ASC`;
+      lsql = `SELECT COUNT(CodeKey) FROM Codes 
+            WHERE Code IN (${codes}) 
+            AND CodeKey = `;
+    }
+    // Code property filters (workaround for VSAC misuse)
+    else if (prop === 'code' && ['is-a', 'descendent-of'].includes(op)) {
+      sql = `SELECT DescendentKey as Key FROM Closure
+           WHERE AncestorKey IN (SELECT CodeKey FROM Codes WHERE Code = '${this.#sqlWrapString(value)}')
+           ORDER BY DescendentKey ASC`;
+      lsql = `SELECT COUNT(DescendentKey) FROM Closure 
+            WHERE AncestorKey IN (SELECT CodeKey FROM Codes WHERE Code = '${this.#sqlWrapString(value)}') 
+            AND DescendentKey = `;
+    }
+    else if (prop === 'code' && op === '=') {
+      sql = `SELECT CodeKey as Key FROM Codes
+           WHERE Code = '${this.#sqlWrapString(value)}'
+           ORDER BY CodeKey ASC`;
+      lsql = `SELECT COUNT(CodeKey) FROM Codes 
+            WHERE Code = '${this.#sqlWrapString(value)}' 
+            AND CodeKey = `;
     }
     // Copyright filters
-    else if (prop === 'copyright' && op === 'equal') {
+    else if (prop === 'copyright' && op === '=') {
       if (value === 'LOINC') {
-        sql = `
-            SELECT CodeKey as Key FROM Codes
-            WHERE NOT CodeKey IN (SELECT CodeKey FROM Properties WHERE PropertyTypeKey = 9)
-            ORDER BY CodeKey ASC
-        `;
-        lsql = `SELECT COUNT(CodeKey) FROM Codes WHERE NOT CodeKey IN (SELECT CodeKey FROM Properties WHERE PropertyTypeKey = 9) AND CodeKey = `;
+        sql = `SELECT CodeKey as Key FROM Codes
+             WHERE NOT CodeKey IN (SELECT CodeKey FROM Properties WHERE PropertyTypeKey = 9)
+             ORDER BY CodeKey ASC`;
+        lsql = `SELECT COUNT(CodeKey) FROM Codes 
+              WHERE NOT CodeKey IN (SELECT CodeKey FROM Properties WHERE PropertyTypeKey = 9) 
+              AND CodeKey = `;
       } else if (value === '3rdParty') {
-        sql = `
-            SELECT CodeKey as Key FROM Codes
-            WHERE CodeKey IN (SELECT CodeKey FROM Properties WHERE PropertyTypeKey = 9)
-            ORDER BY CodeKey ASC
-        `;
-        lsql = `SELECT COUNT(CodeKey) FROM Codes WHERE CodeKey IN (SELECT CodeKey FROM Properties WHERE PropertyTypeKey = 9) AND CodeKey = `;
+        sql = `SELECT CodeKey as Key FROM Codes
+             WHERE CodeKey IN (SELECT CodeKey FROM Properties WHERE PropertyTypeKey = 9)
+             ORDER BY CodeKey ASC`;
+        lsql = `SELECT COUNT(CodeKey) FROM Codes 
+              WHERE CodeKey IN (SELECT CodeKey FROM Properties WHERE PropertyTypeKey = 9) 
+              AND CodeKey = `;
       }
     }
 
@@ -718,6 +868,35 @@ class LoincServices extends CodeSystemProvider {
     } else {
       throw new Error(`The filter "${prop} ${op} ${value}" is not supported for LOINC`);
     }
+  }
+
+// Helper method for regex matching
+  async #findRegexMatches(sql, pattern, valueColumn, keyColumn = 'Key') {
+    return new Promise((resolve, reject) => {
+      const regex = new RegExp(pattern);
+      const matchingKeys = [];
+
+      this.db.all(sql, (err, rows) => {
+        if (err) {
+          reject(err);
+        } else {
+          for (const row of rows) {
+            if (regex.test(row[valueColumn])) {
+              matchingKeys.push(row[keyColumn]);
+            }
+          }
+          resolve(matchingKeys);
+        }
+      });
+    });
+  }
+
+// Helper method for comma-separated code lists
+  #commaListOfCodes(source) {
+    const codes = source.split(',')
+      .filter(s => this.codes.has(s.trim()))
+      .map(s => `'${this.#sqlWrapString(s.trim())}'`);
+    return codes.join(',');
   }
 
   async #executeSQL(sql, filter) {
@@ -1099,6 +1278,86 @@ class LoincServicesFactory extends CodeSystemFactoryProvider {
 
   recordUse() {
     this.uses++;
+  }
+
+  async buildKnownValueSet(url, version) {
+
+    if (version && version != this.version()) {
+      return null;
+    }
+    if (!url.startsWith('http://loinc.org/vs')) {
+      return null;
+    }
+    if (url == 'http://loinc.org/vs') {
+      // All LOINC codes
+      return {
+        resourceType: 'ValueSet', url: 'http://loinc.org/vs', version: this.version(), status: 'active',
+        name: 'LOINC Value Set - all LOINC codes', description: 'All LOINC codes',
+        date: new Date().toISOString(), experimental: false,
+        compose: { include: [{ system: this.system() }] }
+      };
+    }
+
+    if (url.startsWith('http://loinc.org/vs/')) {
+      const code = url.substring(20);
+      const ci = this._sharedData.codes.get(code);
+      if (!ci) {
+        return null;
+      }
+
+      if (ci.kind === LoincProviderContextKind.PART) {
+        // Part-based value set with ancestor filter
+        return {
+          resourceType: 'ValueSet',  url: url, version: this.version(), status: 'active',
+          name: 'LOINCValueSetFor' + ci.code.replace(/-/g, '_'), description: 'LOINC value set for code ' + ci.code + ': ' + ci.desc,
+          date: new Date().toISOString(),  experimental: false,
+          compose: { include: [{ system: this.system(), filter: [{ property: 'ancestor', op: '=', value: code }] }]
+          }
+        };
+      }
+
+      if (ci.kind === LoincProviderContextKind.LIST) {
+        // Answer list - enumerate concepts from database
+        const concepts = await this.#getAnswerListConcepts(ci.key);
+        return {
+          resourceType: 'ValueSet', url: url, version: this.version(), status: 'active',
+          name: 'LOINCAnswerList' + ci.code.replace(/-/g, '_'),  description: 'LOINC Answer list for code ' + ci.code + ': ' + ci.desc,
+          date: new Date().toISOString(), experimental: false,
+          compose: { include: [{ system: this.system(), concept: concepts }] }
+        };
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Get answer list concepts from database
+   * @param {number} sourceKey - Key of the answer list
+   * @returns {Promise<Array>} Array of {code, display} objects
+   */
+  async #getAnswerListConcepts(sourceKey) {
+    return new Promise((resolve, reject) => {
+      let db = new sqlite3.Database(this.dbPath);
+      const sql = `
+      SELECT Code, Description 
+      FROM Relationships, Codes 
+      WHERE SourceKey = ? 
+        AND RelationshipTypeKey = 40 
+        AND Relationships.TargetKey = Codes.CodeKey
+    `;
+
+      db.all(sql, [sourceKey], (err, rows) => {
+        if (err) {
+          reject(err);
+        } else {
+          const concepts = rows.map(row => ({
+            code: row.Code
+          }));
+          resolve(concepts);
+        }
+      });
+    });
   }
 }
 

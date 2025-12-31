@@ -3,15 +3,7 @@
  * Port of the Java VersionUtilities class for FHIR version handling
  */
 
-const { Utilities } = require('./utilities');
-
-// Custom error class (equivalent to FHIRException)
-class FHIRException extends Error {
-    constructor(message) {
-        super(message);
-        this.name = 'FHIRException';
-    }
-}
+const { Utilities, validateParameter} = require('./utilities');
 
 // Enums
 const VersionPrecision = {
@@ -554,12 +546,12 @@ class VersionUtilities {
 
         const parsedCriteria = SemverParser.parseSemver(criteria, true, false);
         if (!parsedCriteria.isSuccess()) {
-            throw new FHIRException("Invalid criteria: " + criteria + ": (" + parsedCriteria.getError() + ")");
+            throw new Error("Invalid criteria: " + criteria + ": (" + parsedCriteria.getError() + ")");
         }
 
         const parsedCandidate = SemverParser.parseSemver(candidate, false, false);
         if (!parsedCandidate.isSuccess()) {
-            throw new FHIRException("Invalid candidate: " + candidate + " (" + parsedCandidate.getError() + ")");
+            throw new Error("Invalid candidate: " + candidate + " (" + parsedCandidate.getError() + ")");
         }
 
         let thisOrLater;
@@ -649,11 +641,13 @@ class VersionUtilities {
      * returns true if v1 and v2 are both semver, and they 'match'
      */
     static versionMatches(criteria, candidate) {
+        validateParameter(criteria, "criteria", String);
+        validateParameter(candidate, "candidate", String);
         if (Utilities.noString(criteria)) {
-            throw new FHIRException("Invalid criteria: null / empty");
+            throw new Error("Invalid criteria: null / empty");
         }
         if (Utilities.noString(candidate)) {
-            throw new FHIRException("Invalid candidate: null / empty");
+            throw new Error("Invalid candidate: null / empty");
         }
         criteria = this.fixForSpecialValue(criteria);
         candidate = this.fixForSpecialValue(candidate);
@@ -666,12 +660,12 @@ class VersionUtilities {
 
         const parsedCriteria = SemverParser.parseSemver(criteria, true, false);
         if (!parsedCriteria.isSuccess()) {
-            throw new FHIRException("Invalid criteria: " + criteria + ": (" + parsedCriteria.getError() + ")");
+            throw new Error("Invalid criteria: " + criteria + ": (" + parsedCriteria.getError() + ")");
         }
 
         const parsedCandidate = SemverParser.parseSemver(candidate, false, false);
         if (!parsedCandidate.isSuccess()) {
-            throw new FHIRException("Invalid candidate: " + candidate + " (" + parsedCandidate.getError() + ")");
+            throw new Error("Invalid candidate: " + candidate + " (" + parsedCandidate.getError() + ")");
         }
 
         if (!this.partMatches(parsedCriteria.getMajor(), parsedCandidate.getMajor(), true)) { return false; }
@@ -800,9 +794,9 @@ class VersionUtilities {
 
     static checkVersionNotNullAndValid(s, label = null) {
         if (s == null) {
-            throw new FHIRException("Invalid" + (label ? " " + label : "") + " version: null");
+            throw new Error("Invalid" + (label ? " " + label : "") + " version: null");
         } else if (!this.isSemVer(s)) {
-            throw new FHIRException("Invalid" + (label ? " " + label : "") + " version: '" + s + "'");
+            throw new Error("Invalid" + (label ? " " + label : "") + " version: '" + s + "'");
         } else {
             return s;
         }
@@ -810,9 +804,9 @@ class VersionUtilities {
 
     static checkVersionNotNullAndValidWildcards(s, label = null) {
         if (s == null) {
-            throw new FHIRException("Invalid" + (label ? " " + label : "") + " version: null");
+            throw new Error("Invalid" + (label ? " " + label : "") + " version: null");
         } else if (!this.isSemVerWithWildcards(s)) {
-            throw new FHIRException("Invalid" + (label ? " " + label : "") + " version: '" + s + "'");
+            throw new Error("Invalid" + (label ? " " + label : "") + " version: '" + s + "'");
         } else {
             return s;
         }
@@ -822,7 +816,7 @@ class VersionUtilities {
         if (s == null) {
             return null;
         } else if (!this.isSemVer(s)) {
-            throw new FHIRException("Invalid" + (label ? " " + label : "") + " version: '" + s + "'");
+            throw new Error("Invalid" + (label ? " " + label : "") + " version: '" + s + "'");
         } else {
             return s;
         }
@@ -864,4 +858,4 @@ class VersionUtilities {
     }
 }
 
-module.exports = { VersionUtilities, VersionPrecision, FHIRException, SemverParser };
+module.exports = { VersionUtilities, VersionPrecision, SemverParser };

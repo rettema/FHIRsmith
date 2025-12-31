@@ -1,7 +1,7 @@
 const sqlite3 = require('sqlite3').verbose();
 const assert = require('assert');
 const { CodeSystem } = require('../library/codesystem');
-const { CodeSystemProvider, Designation, FilterExecutionContext, CodeSystemFactoryProvider } = require('./cs-api');
+const { CodeSystemProvider, FilterExecutionContext, CodeSystemFactoryProvider } = require('./cs-api');
 const {validateOptionalParameter} = require("../../library/utilities");
 
 class OMOPConcept {
@@ -202,26 +202,23 @@ class OMOPServices extends CodeSystemProvider {
     return false; // Handle via invalid_reason if needed
   }
 
-  async designations(context) {
+  async designations(context, displays) {
     
     const ctxt = await this.#ensureContext(context);
-    let designations = [];
 
     if (ctxt) {
       // Add main display
-      designations.push(new Designation('en', CodeSystem.makeUseForDisplay(), ctxt.display));
+      displays.addDesignation(true, true, 'en', CodeSystem.makeUseForDisplay(), ctxt.display);
 
       // Add synonyms
       const synonyms = await this.#getSynonyms(ctxt.code);
       for (const synonym of synonyms) {
-        designations.push(new Designation(synonym.language, null, synonym.value));
+        displays.addDesignation(false, true, synonym.language, null, synonym.value);
       }
 
       // Add supplement designations
-      designations.push(...this._listSupplementDesignations(ctxt.code));
+      this._listSupplementDesignations(ctxt.code, displays);
     }
-
-    return designations;
   }
 
   async #getSynonyms(code) {
@@ -477,7 +474,7 @@ class OMOPServices extends CodeSystemProvider {
 
   // Filter support
   async doesFilter(prop, op, value) {
-    if (prop === 'domain' && op === 'equal') {
+    if (prop === 'domain' && op === '=') {
       return value != null;
     }
     return false;
@@ -490,7 +487,7 @@ class OMOPServices extends CodeSystemProvider {
   async filter(filterContext, prop, op, value) {
     
 
-    if (prop === 'domain' && op === 'equal') {
+    if (prop === 'domain' && op === '=') {
       const sql = `
           SELECT concept_id, concept_name, domain_id
           FROM Concepts
@@ -667,7 +664,7 @@ class OMOPServices extends CodeSystemProvider {
                 system: this.system(),
                 filter: [{
                   property: 'domain',
-                  op: 'equal',
+                  op: '=',
                   value: domain
                 }]
               }]
@@ -731,6 +728,36 @@ class OMOPServicesFactory extends CodeSystemFactoryProvider {
 
   version() {
     return this._sharedData._version;
+  }
+
+  async buildKnownValueSet(url, version) {
+    if (!url.startsWith('https://fhir-terminology.ohdsi.org/ValueSet')) {
+      return null;
+    }
+    if (version && version != this.version()) {
+      return null;
+    }
+    const domain = url.substring(44);
+    return {
+      resourceType: 'ValueSet',
+      url: url,
+      status: 'active',
+      version: this.version(),
+      name: 'OMOPDomain' + domain,
+      description: 'OMOP value set for domain ' + domain,
+      date: new Date().toISOString(),
+      experimental: false,
+      compose: {
+        include: [{
+          system: this.system(),
+          filter: [{
+            property: 'domain',
+            op: '=',
+            value: domain
+          }]
+        }]
+      }
+    };
   }
 
   async #ensureLoaded() {

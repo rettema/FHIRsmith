@@ -8,6 +8,8 @@ const {
 const { LanguageDefinitions, Languages, Language } = require('../../library/languages');
 const { FilterExecutionContext} = require('../../tx/cs/cs-api');
 const {OperationContext} = require("../../tx/operation-context");
+const {Designations} = require("../../tx/library/designations");
+const {TestUtilities} = require("../test-utilities");
 
 describe('IETF Language CodeSystem Provider', () => {
   let languageDefinitions;
@@ -131,23 +133,23 @@ describe('IETF Language CodeSystem Provider', () => {
 
   describe('Designations', () => {
     test('should return designations for valid language', async () => {
-      const designations = await provider.designations('en');
-      expect(Array.isArray(designations)).toBe(true);
-      expect(designations.length).toBeGreaterThan(0);
+      const designations = new Designations(await TestUtilities.loadLanguageDefinitions());
+      await provider.designations('en', designations);
+      expect(designations.count).toBeGreaterThan(0);
       
       // Should have at least one primary designation
-      const primary = designations.find(d => d.language === 'en');
+      const primary = designations.designations.find(d => d.language.code === 'en');
       expect(primary).toBeTruthy();
       expect(primary.value).toBeTruthy();
     });
 
     test('should return multiple designations for language-region codes', async () => {
-      const designations = await provider.designations('en-US');
-      expect(Array.isArray(designations)).toBe(true);
-      expect(designations.length).toBeGreaterThan(1);
+      const designations = new Designations(await TestUtilities.loadLanguageDefinitions());
+      await provider.designations('en-US',  designations);
+      expect(designations.count).toBeGreaterThan(1);
       
       // Should have region variant designations
-      const regionVariant = designations.find(d => d.value.includes('('));
+      const regionVariant = designations.designations.find(d => d.value.includes('('));
       expect(regionVariant).toBeTruthy();
     });
 

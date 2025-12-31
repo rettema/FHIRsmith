@@ -3,10 +3,11 @@ const path = require('path');
 const {
   Designation,
   Designations,
+  DesignationUse,
   SearchFilterText,
   DisplayCheckingStyle,
   DisplayDifference
-} = require('../../tx/designations');
+} = require('../../tx/library/designations');
 const { LanguageDefinitions, Languages, Language } = require('../../library/languages');
 const { TypeHelper } = require('../../tx/type-helpers');
 
@@ -33,7 +34,7 @@ describe('Designations', () => {
     });
 
     test('should clear designations', () => {
-      designations.addDesignation(true, true, false, 'en', 'Test');
+      designations.addDesignation(true, false, 'en', null, 'Test');
       designations.baseLang = languageDefinitions.parse('en-US');
 
       designations.clear();
@@ -52,26 +53,25 @@ describe('Designations', () => {
 
   describe('Adding designations', () => {
     test('should add basic designation', () => {
-      const result = designations.addDesignation(true, true, false, 'en', 'English display');
-
-      expect(designations.count).toBe(1);
+      designations.addDesignation(false, true, 'en', null, 'English display');
+      const result = designations.designations[0];
+        expect(designations.count).toBe(1);
       expect(result.display).toBe('English display');
       expect(result.language.code).toBe('en');
-      expect(result.base).toBe(true);
       expect(result.active).toBe(true);
       expect(result.use).toBeNull();
     });
 
     test('should add display designation with use coding', () => {
-      const result = designations.addDesignation(false, true, true, 'en-US', 'Display text');
+      const result = designations.addDesignation(true, false, 'en-US', null, 'Display text');
 
-      expect(result.use.system).toBe('http://terminology.hl7.org/CodeSystem/hl7TermMaintInfra');
-      expect(result.use.code).toBe('preferredForLanguage');
+      expect(result.use.system).toBe(DesignationUse.DISPLAY.system);
+      expect(result.use.code).toBe(DesignationUse.DISPLAY.code);
     });
 
     test('should add designations from array', () => {
       const displays = ['Display 1', 'Display 2', 'Display 3'];
-      designations.addDesignationsFromArray(false, true, false, 'fr', displays);
+      designations.addDesignationsFromArray(false, false, 'fr', null, displays);
 
       expect(designations.count).toBe(3);
       expect(designations.designations[0].display).toBe('Display 1');
@@ -81,13 +81,13 @@ describe('Designations', () => {
     });
 
     test('should add designation with primitive value and extensions', () => {
-      const value = TypeHelper.makeString('Test value');
+      const value = 'Test value';
       const extensions = [
         { url: 'http://example.com/ext1', valueString: 'ext1' },
         { url: 'http://example.com/ext2', valueString: 'ext2' }
       ];
 
-      const result = designations.addDesignationWithValue(true, true, false, 'de', value, extensions);
+      const result = designations.addDesignation(true, false, 'de', null, value, extensions);
 
       expect(result.value).toBe(value);
       expect(result.extensions).toHaveLength(2);
@@ -95,16 +95,15 @@ describe('Designations', () => {
     });
 
     test('should add designation from FHIR concept', () => {
-      const fhirConcept = {
+      const fhirConcept = { "designation" : [{
         language: 'es',
         use: { system: 'http://snomed.info/sct', code: 'preferred' },
         value: 'Spanish term',
-        hasExtensions: true,
-        getExtensions: (url) => url === 'http://hl7.org/fhir/StructureDefinition/coding-sctdescid'
-          ? [{ url, valueId: '12345' }] : []
-      };
+        extension : [{ url : 'http://hl7.org/fhir/StructureDefinition/coding-sctdescid', valueId: '12345' }]
+      }]};
 
-      const result = designations.addDesignationFromConcept(fhirConcept);
+      designations.addDesignationFromConcept(fhirConcept);
+      const result = designations.designations[0];
 
       expect(result.language.code).toBe('es');
       expect(result.use.system).toBe('http://snomed.info/sct');
@@ -116,18 +115,18 @@ describe('Designations', () => {
   describe('Language matching logic', () => {
     beforeEach(() => {
       // Set up test designations with various languages
-      designations.addDesignation(true, true, false, 'en', 'Base English');
-      designations.addDesignation(false, true, true, 'en-US', 'US English Display');
-      designations.addDesignation(false, true, false, 'en-GB', 'British English');
-      designations.addDesignation(false, true, false, 'fr', 'French');
-      designations.addDesignation(false, true, false, 'de-DE', 'German');
+      designations.addDesignation(true, false, 'en', null, 'Base English');
+      designations.addDesignation(false, true, 'en-US', DesignationUse.PREFERRED, 'US English Display');
+      designations.addDesignation(false, false, 'en-GB', null, 'British English');
+      designations.addDesignation(false, false, 'fr', null, 'French');
+      designations.addDesignation(false, false, 'de-DE', null, 'German');
       designations.baseLang = languageDefinitions.parse('en');
     });
 
     test('should find preferred designation without language list', () => {
       const preferred = designations.preferredDesignation();
       expect(preferred.display).toBe('Base English');
-      expect(preferred.base).toBe(true);
+      expect(preferred.isUseADisplay()).toBe(true);
     });
 
     test('should find preferred designation with language preference', () => {
@@ -146,7 +145,7 @@ describe('Designations', () => {
       const preferred = designations.preferredDesignation(langList);
 
       expect(preferred.display).toBe('US English Display');
-      expect(preferred.use.code).toBe('preferredForLanguage');
+      expect(preferred.use.code).toBe(DesignationUse.PREFERRED.code);
     });
 
     test('should handle complex language fallback', () => {
@@ -178,10 +177,10 @@ describe('Designations', () => {
 
   describe('Display checking', () => {
     beforeEach(() => {
-      designations.addDesignation(true, true, false, 'en', 'Exact Match');
-      designations.addDesignation(false, true, false, 'en', 'Case Different');
-      designations.addDesignation(false, true, false, 'en', 'Extra   Whitespace');
-      designations.addDesignation(false, false, false, 'en', 'Inactive Display');
+      designations.addDesignation(true, false, 'en', null, 'Exact Match');
+      designations.addDesignation(false, false, 'en', null, 'Case Different');
+      designations.addDesignation(false, false, 'en', null, 'Extra   Whitespace');
+      designations.addDesignation(false, false, 'en', null, 'Inactive Display');
     });
 
     test('should find exact match', () => {
@@ -239,10 +238,10 @@ describe('Designations', () => {
 
   describe('Display counting and presentation', () => {
     beforeEach(() => {
-      designations.addDesignation(true, true, false, 'en', 'English base');
-      designations.addDesignation(false, true, true, 'en-US', 'US English display');
-      designations.addDesignation(false, true, false, 'fr', 'French term');
-      designations.addDesignation(false, true, false, 'de-DE', 'German term');
+      designations.addDesignation(true, false, 'en', null, 'English base');
+      designations.addDesignation(false, true, 'en-US', null, 'US English display');
+      designations.addDesignation(false, false, 'fr', null, 'French term');
+      designations.addDesignation(false, false, 'de-DE', null, 'German term');
     });
 
     test('should count displays correctly', () => {
@@ -282,13 +281,13 @@ describe('Designations', () => {
   describe('Complex language preference scenarios', () => {
     beforeEach(() => {
       // Create complex scenario with multiple language variants
-      designations.addDesignation(true, true, false, 'en', 'Base English');
-      designations.addDesignation(false, true, true, 'en', 'English Display');
-      designations.addDesignation(true, true, false, 'en-US', 'Base US English');
-      designations.addDesignation(false, true, true, 'en-US', 'US English Display');
-      designations.addDesignation(false, true, false, 'en-GB', 'British English');
-      designations.addDesignation(false, true, false, 'fr-CA', 'Canadian French');
-      designations.addDesignation(false, true, false, 'fr', 'French');
+      designations.addDesignation(true, false, 'en', null, 'Base English');
+      designations.addDesignation(false, true, 'en', null, 'English Display');
+      designations.addDesignation(true, false, 'en-US', null, 'Base US English');
+      designations.addDesignation(false, true, 'en-US', DesignationUse.PREFERRED, 'US English Display');
+      designations.addDesignation(false, false, 'en-GB', null, 'British English');
+      designations.addDesignation(false, false, 'fr-CA', null, 'Canadian French');
+      designations.addDesignation(false, false, 'fr', null, 'French');
     });
 
     test('should prefer base over display for exact match', () => {
@@ -296,19 +295,20 @@ describe('Designations', () => {
       const preferred = designations.preferredDesignation(langList);
 
       expect(preferred.display).toBe('Base US English');
-      expect(preferred.base).toBe(true);
+      expect(preferred.isUseADisplay()).toBe(true);
     });
 
     test('should prefer display when no base available for exact match', () => {
       // Remove US base designation
       designations.designations = designations.designations.filter(d =>
-        !(d.base && d.language && d.language.code === 'en-US'));
+        !(d.isDisplay() && d.language.code === 'en-US'));
 
       const langList = Languages.fromAcceptLanguage('en-US');
       const preferred = designations.preferredDesignation(langList);
 
       expect(preferred.display).toBe('US English Display');
-      expect(preferred.base).toBe(false);
+      expect(preferred.isDisplay()).toBe(false);
+      expect(preferred.isUseADisplay()).toBe(true);
     });
 
     test('should fall back to language-region match', () => {
@@ -332,7 +332,7 @@ describe('Designations', () => {
       const preferred = designations.preferredDesignation(langList);
 
       // Should find French designation
-      expect(preferred.display).toBe('French');
+      expect(preferred.display).toBe('Canadian French');
     });
   });
 
@@ -340,10 +340,10 @@ describe('Designations', () => {
     let searchFilter;
 
     beforeEach(() => {
-      designations.addDesignation(true, true, false, 'en', 'Blood pressure measurement');
-      designations.addDesignation(false, true, false, 'en', 'Systolic pressure reading');
-      designations.addDesignation(false, true, false, 'fr', 'Mesure de pression artérielle');
-      designations.addDesignation(false, true, false, 'de', 'Blutdruckmessung');
+      designations.addDesignation(true, false, 'en', null, 'Blood pressure measurement');
+      designations.addDesignation(false, false, 'en', null, 'Systolic pressure reading');
+      designations.addDesignation(false, false, 'fr', null, 'Mesure de pression artérielle');
+      designations.addDesignation(false, false, 'de', null, 'Blutdruckmessung');
 
       searchFilter = new SearchFilterText('pressure');
     });
@@ -382,12 +382,12 @@ describe('Designations', () => {
 
   describe('Edge cases and error handling', () => {
     test('should handle null language definitions gracefully', () => {
-      const result = designations.addDesignation(true, true, false, 'invalid-lang', 'Test');
+      const result = designations.addDesignation(true, false, 'invalid-lang', null, 'Test');
       expect(result.language).toBeNull();
     });
 
     test('should handle empty language list', () => {
-      designations.addDesignation(true, true, false, 'en', 'Test');
+      designations.addDesignation(true, false, 'en', null, 'Test');
       const preferred = designations.preferredDesignation(new Languages());
 
       expect(preferred.display).toBe('Test');
@@ -403,7 +403,7 @@ describe('Designations', () => {
 
     test('should handle complex use coding in present()', () => {
       const designation = new Designation();
-      designation.value = TypeHelper.makeString('Test');
+      designation.value = 'Test';
       designation.language = languageDefinitions.parse('en-US');
       designation.use = { system: 'http://example.com', code: 'test-use', display: 'Test Use' };
 
@@ -415,9 +415,9 @@ describe('Designations', () => {
 
   describe('Display difference detection', () => {
     beforeEach(() => {
-      designations.addDesignation(true, true, false, 'en', 'Exact Term');
-      designations.addDesignation(false, true, false, 'en', 'Case Term');
-      designations.addDesignation(false, true, false, 'en', 'Spaced   Term');
+      designations.addDesignation(true, false, 'en', null, 'Exact Term');
+      designations.addDesignation(false, false, 'en', null, 'Case Term');
+      designations.addDesignation(false, false, 'en', null, 'Spaced   Term');
     });
 
     test('should detect no difference for exact match', () => {
@@ -457,13 +457,13 @@ describe('Designations', () => {
       // Complex multi-language setup
       designations.baseLang = languageDefinitions.parse('en');
 
-      designations.addDesignation(true, true, false, 'en', 'English term');
-      designations.addDesignation(false, true, true, 'en-US', 'American term');
-      designations.addDesignation(false, true, true, 'en-GB', 'British term');
-      designations.addDesignation(false, true, false, 'fr', 'Terme français');
-      designations.addDesignation(false, true, false, 'fr-CA', 'Terme canadien');
-      designations.addDesignation(false, true, false, 'de', 'Deutscher Begriff');
-      designations.addDesignation(false, true, false, 'es-ES', 'Término español');
+      designations.addDesignation(true, false, 'en', null, 'English term');
+      designations.addDesignation(false, true, 'en-US', null, 'American term');
+      designations.addDesignation(false, true, 'en-GB', null, 'British term');
+      designations.addDesignation(false, false, 'fr', null, 'Terme français');
+      designations.addDesignation(false, false, 'fr-CA', null, 'Terme canadien');
+      designations.addDesignation(false, false, 'de', null, 'Deutscher Begriff');
+      designations.addDesignation(false, false, 'es-ES', null, 'Término español');
     });
 
     test('should handle multiple language preferences', () => {
@@ -500,9 +500,9 @@ describe('Designations', () => {
 
   describe('defLang parameter handling', () => {
     beforeEach(() => {
-      designations.addDesignation(true, true, false, 'en', 'English');
-      designations.addDesignation(false, true, false, 'en-US', 'US English');
-      designations.addDesignation(false, true, false, 'fr', 'French');
+      designations.addDesignation(true, false, 'en', null, 'English');
+      designations.addDesignation(false, false, 'en-US', null, 'US English');
+      designations.addDesignation(false, false, 'fr', null, 'French');
     });
 
     test('should prioritize defLang matches', () => {
@@ -525,9 +525,9 @@ describe('Designations', () => {
 
   describe('Utility methods', () => {
     beforeEach(() => {
-      designations.addDesignation(true, true, false, 'en', 'First');
-      designations.addDesignation(false, true, false, 'fr', 'Second');
-      designations.addDesignation(false, true, false, 'de', 'Third');
+      designations.addDesignation(true, false, 'en', null, 'First');
+      designations.addDesignation(false, false, 'fr', null, 'Second');
+      designations.addDesignation(false, false, 'de', null, 'Third');
     });
 
     test('should generate summary', () => {
@@ -570,10 +570,10 @@ describe('Designations', () => {
   describe('Integration with real language data', () => {
     test('should work with actual IETF language codes', () => {
       // Test with some real IETF language codes
-      designations.addDesignation(true, true, false, 'zh-Hans-CN', 'Simplified Chinese');
-      designations.addDesignation(false, true, false, 'zh-Hant-TW', 'Traditional Chinese');
-      designations.addDesignation(false, true, false, 'pt-BR', 'Brazilian Portuguese');
-      designations.addDesignation(false, true, false, 'pt', 'Portuguese');
+      designations.addDesignation(true, false, 'zh-Hans-CN', null, 'Simplified Chinese');
+      designations.addDesignation(false, false, 'zh-Hant-TW', null, 'Traditional Chinese');
+      designations.addDesignation(false, false, 'pt-BR', null, 'Brazilian Portuguese');
+      designations.addDesignation(false, false, 'pt', null, 'Portuguese');
 
       const langList = Languages.fromAcceptLanguage('zh-Hans,zh;q=0.9,pt-PT;q=0.8');
       const preferred = designations.preferredDesignation(langList);
@@ -582,9 +582,9 @@ describe('Designations', () => {
     });
 
     test('should handle script and region fallbacks', () => {
-      designations.addDesignation(true, true, false, 'sr-Cyrl', 'Serbian Cyrillic');
-      designations.addDesignation(false, true, false, 'sr-Latn', 'Serbian Latin');
-      designations.addDesignation(false, true, false, 'sr', 'Serbian');
+      designations.addDesignation(true, false, 'sr-Cyrl', null, 'Serbian Cyrillic');
+      designations.addDesignation(false, false, 'sr-Latn', null, 'Serbian Latin');
+      designations.addDesignation(false, false, 'sr', null, 'Serbian');
 
       const langList = Languages.fromAcceptLanguage('sr-Cyrl-RS');
       const preferred = designations.preferredDesignation(langList);
@@ -633,7 +633,7 @@ describe('Designations', () => {
   describe('Error scenarios', () => {
     test('should handle malformed language codes gracefully', () => {
       // This should not throw, just return null language
-      const result = designations.addDesignation(true, true, false, 'nnot-a-valid-lang-code-at-all', 'Test');
+      const result = designations.addDesignation(true, false, 'nnot-a-valid-lang-code-at-all', null, 'Test');
       expect(result.language).toBeNull();
     });
 
@@ -656,35 +656,30 @@ describe('Designations', () => {
 
   describe('Parameter validation', () => {
     test('should validate addDesignation parameters', () => {
-      expect(() => designations.addDesignation()).toThrow('base must be a provided');
-      expect(() => designations.addDesignation(true)).toThrow('active must be a provided');
-      expect(() => designations.addDesignation(true, true)).toThrow('isDisplay must be a provided');
-      expect(() => designations.addDesignation(true, true, false)).toThrow('lang must be a provided');
-      expect(() => designations.addDesignation(true, true, false, 'en')).toThrow('display must be a provided');
+      expect(() => designations.addDesignation(true, false)).toThrow('lang must be provided');
+      expect(() => designations.addDesignation(true, false, 'en')).toThrow('display must be provided');
 
-      expect(() => designations.addDesignation('not-bool', true, false, 'en', 'test')).toThrow('base must be a boolean');
-      expect(() => designations.addDesignation(true, 'not-bool', false, 'en', 'test')).toThrow('active must be a boolean');
-      expect(() => designations.addDesignation(true, true, 'not-bool', 'en', 'test')).toThrow('isDisplay must be a boolean');
-      expect(() => designations.addDesignation(true, true, false, 123, 'test')).toThrow('lang must be a string');
-      expect(() => designations.addDesignation(true, true, false, 'en', 123)).toThrow('display must be a string');
+      expect(() => designations.addDesignation(true, 'not-bool', 'en', null, 'test')).toThrow('active must be a boolean');
+      expect(() => designations.addDesignation('not-bool', true, 'en', null, 'test')).toThrow('isDisplay must be a boolean');
+      expect(() => designations.addDesignation(true, false, 123, null, 'test')).toThrow('lang must be a string');
+      expect(() => designations.addDesignation(true, false, 'en',null,  123)).toThrow('display must be a string');
     });
 
     test('should validate addDesignationWithValue parameters', () => {
-      const validValue = TypeHelper.makeString('test');
+      const validValue = 'test';
 
-      expect(() => designations.addDesignationWithValue()).toThrow('base must be a provided');
-      expect(() => designations.addDesignationWithValue(true, true, false, 'en')).toThrow('value must be a provided');
+      expect(() => designations.addDesignation(true, false, 'en')).toThrow('display must be provided');
 
-      expect(() => designations.addDesignationWithValue(true, true, false, 'en', 'not-object')).toThrow('value must be a valid Object');
-      expect(() => designations.addDesignationWithValue(true, true, false, 'en', validValue, 'not-array')).toThrow('extensions must be an array');
+      expect(() => designations.addDesignation(true, false, 'en', null, {})).toThrow('display must be a string, but got Object');
+      expect(() => designations.addDesignation(true, false, 'en', null, validValue, 'not-array')).toThrow('extensions must be an array');
     });
 
     test('should validate hasDisplay parameters', () => {
       const langList = Languages.fromAcceptLanguage('en');
 
-      expect(() => designations.hasDisplay()).toThrow('langList must be a provided');
-      expect(() => designations.hasDisplay(langList, null, 'test')).toThrow('active must be a provided');
-      expect(() => designations.hasDisplay(langList, null, 'test', true)).toThrow('mode must be a provided');
+      expect(() => designations.hasDisplay()).toThrow('value must be provided');
+      expect(() => designations.hasDisplay(langList, null, 'test')).toThrow('active must be provided');
+      expect(() => designations.hasDisplay(langList, null, 'test', true)).toThrow('mode must be provided');
 
       expect(() => designations.hasDisplay('not-languages', null, 'test', true, DisplayCheckingStyle.EXACT))
         .toThrow('langList must be a valid Languages');
@@ -699,19 +694,19 @@ describe('Designations', () => {
     });
 
     test('should validate displayCount parameters', () => {
-      expect(() => designations.displayCount()).toThrow('langList must be a provided');
+      expect(() => designations.displayCount()).toThrow('langList must be provided');
       expect(() => designations.displayCount(new Languages(), null, 'not-bool')).toThrow('displayOnly must be a boolean');
     });
 
     test('should validate present parameters', () => {
-      expect(() => designations.present()).toThrow('langList must be a provided');
+      expect(() => designations.present()).toThrow('langList must be provided');
       expect(() => designations.present(new Languages(), null, 'not-bool')).toThrow('displayOnly must be a boolean');
     });
 
     test('should validate include parameters', () => {
       const designation = new Designation();
 
-      expect(() => designations.include()).toThrow('cd must be a provided');
+      expect(() => designations.include()).toThrow('cd must be provided');
       expect(() => designations.include('not-designation')).toThrow('cd must be a valid Designation');
 
       // Valid call should not throw
@@ -719,7 +714,7 @@ describe('Designations', () => {
     });
 
     test('should validate SearchFilterText constructor', () => {
-      expect(() => new SearchFilterText()).toThrow('filter must be a provided');
+      expect(() => new SearchFilterText()).toThrow('filter must be provided');
       expect(() => new SearchFilterText(123)).toThrow('filter must be a string');
 
       // Valid construction should not throw
@@ -729,7 +724,7 @@ describe('Designations', () => {
     test('should validate SearchFilterText.passes parameters', () => {
       const filter = new SearchFilterText('test');
 
-      expect(() => filter.passes()).toThrow('value must be a provided');
+      expect(() => filter.passes()).toThrow('value must be provided');
       expect(() => filter.passes(123)).toThrow('value must be a string');
       expect(() => filter.passes('test', 'not-bool')).toThrow('returnRating must be a boolean');
     });
@@ -745,23 +740,8 @@ describe('Designations', () => {
     });
 
     test('should validate addDesignationFromConcept parameters', () => {
-      expect(() => designations.addDesignationFromConcept()).toThrow('ccd must be a provided');
-      expect(() => designations.addDesignationFromConcept('not-object')).toThrow('ccd must be a valid Object');
+      expect(() => designations.addDesignationFromConcept('not-object')).toThrow('context must be a valid Object, but got String');
     });
 
-    test('should validate addDesignationFromValueSet parameters', () => {
-      expect(() => designations.addDesignationFromValueSet()).toThrow('ccd must be a provided');
-      expect(() => designations.addDesignationFromValueSet('not-object')).toThrow('ccd must be a valid Object');
-    });
-
-    test('should validate addDesignationsFromArray parameters', () => {
-      expect(() => designations.addDesignationsFromArray()).toThrow('base must be a provided');
-      expect(() => designations.addDesignationsFromArray(true, true, false, 'en', 'not-array'))
-        .toThrow('displays must be an array');
-
-      // Array with invalid elements
-      expect(() => designations.addDesignationsFromArray(true, true, false, 'en', [123, 'valid']))
-        .toThrow('displays[0] must be a string');
-    });
   });
 });

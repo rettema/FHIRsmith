@@ -258,16 +258,16 @@ class ValueSet extends CanonicalResource {
       throw new Error('Invalid ValueSet: url is required and must be a string');
     }
 
-    if (!this.jsonObj.name || typeof this.jsonObj.name !== 'string') {
-      throw new Error('Invalid ValueSet: name is required and must be a string');
+    if (this.jsonObj.name && typeof this.jsonObj.name !== 'string') {
+      throw new Error('Invalid ValueSet: name must be a string if present');
     }
 
-    if (!this.jsonObj.status || typeof this.jsonObj.status !== 'string') {
-      throw new Error('Invalid ValueSet: status is required and must be a string');
+    if (this.jsonObj.status && typeof this.jsonObj.status !== 'string') {
+      throw new Error('Invalid ValueSet: status must be a string if present');
     }
 
     const validStatuses = ['draft', 'active', 'retired', 'unknown'];
-    if (!validStatuses.includes(this.jsonObj.status)) {
+    if (this.jsonObj.status && !validStatuses.includes(this.jsonObj.status)) {
       throw new Error(`Invalid ValueSet: status must be one of ${validStatuses.join(', ')}, got "${this.jsonObj.status}"`);
     }
 

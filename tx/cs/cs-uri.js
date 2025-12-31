@@ -93,14 +93,12 @@ class UriServices extends CodeSystemProvider {
     return false; // URIs are not deprecated
   }
 
-  async designations(code) {
+  async designations(code, displays) {
     
     const ctxt = await this.#ensureContext(code);
-    const designations = [];
     if (ctxt != null) {
-      designations.push(...this._listSupplementDesignations(ctxt));
+      this._listSupplementDesignations(ctxt, displays);
     }
-    return designations;
   }
 
   async properties(code) {
@@ -119,7 +117,7 @@ class UriServices extends CodeSystemProvider {
       }
     }
 
-    return allProperties.length > 0 ? allProperties : null;
+    return allProperties;
   }
 
   async sameConcept(a, b) {
@@ -182,6 +180,10 @@ class UriServicesFactory extends CodeSystemFactoryProvider {
 
   version() {
     return 'n/a';
+  }
+
+  async buildKnownValueSet(url, version) {
+    return null;
   }
 
   async build(opContext, supplements) {
