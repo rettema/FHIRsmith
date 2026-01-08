@@ -78,7 +78,7 @@ class HGVSServices extends CodeSystemProvider {
   async designations(context, displays) {
 
     if (context instanceof HGVSCode) {
-      displays.addDesignation(true, true, '', null, context.code);
+      displays.addDesignation(true, 'active', '', null, context.code);
 
       // Add supplement designations
       this._listSupplementDesignations(context.code, displays);
@@ -267,11 +267,16 @@ class HGVSServices extends CodeSystemProvider {
     
     // No special features
   }
+
+
+  versionAlgorithm() {
+    return null;
+  }
 }
 
 class HGVSServicesFactory extends CodeSystemFactoryProvider {
-  constructor() {
-    super();
+  constructor(i18n) {
+    super(i18n);
     this.uses = 0;
   }
 

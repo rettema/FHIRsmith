@@ -2,6 +2,7 @@ const { TerminologyWorker, TerminologySetupError } = require('../../tx/workers/w
 const { OperationContext } = require('../../tx/operation-context');
 const {CodeSystem} = require("../../tx/library/codesystem");
 const ValueSet = require("../../tx/library/valueset");
+const {TestUtilities} = require("../test-utilities");
 
 // Mock classes for testing
 class MockProvider {
@@ -69,8 +70,8 @@ describe('TerminologyWorker', () => {
   let worker;
   let mockLogger;
 
-  beforeEach(() => {
-    mockOpContext = new OperationContext('en-US', null,'test-123');
+  beforeEach(async () => {
+    mockOpContext = new OperationContext('en-US', await TestUtilities.loadTranslations(),'test-123');
     mockProvider = new MockProvider();
     mockLanguages = new MockLanguageDefinitions();
     mockI18n = new MockI18nSupport();

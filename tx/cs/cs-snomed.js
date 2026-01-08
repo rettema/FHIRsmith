@@ -574,7 +574,7 @@ class SnomedProvider extends CodeSystemProvider {
         // For complex expressions, just add the display
         const display = await this.display(context);
         if (display) {
-          displays.addDesignation(true, true, new Designation('en-US', null, display));
+          displays.addDesignation(true, 'active', new Designation('en-US', null, display));
         }
       } else {
         // Get all designations for the concept
@@ -587,19 +587,21 @@ class SnomedProvider extends CodeSystemProvider {
 
             for (const descIndex of descriptionIndices) {
               const description = this.sct.descriptions.getDescription(descIndex);
-              if (description.active) {
-                const term = this.sct.strings.getEntry(description.iDesc).trim();
-                const langCode = this.getLanguageCode(description.lang);
+              const term = this.sct.strings.getEntry(description.iDesc).trim();
+              const langCode = this.getLanguageCode(description.lang);
+              const kind = this.sct.concepts.getConcept(description.kind);
+              const kid = String(kind.identity);
+              const kdesc = this.sct.getDisplayName(description.kind);
+              let use = { system: 'http://snomed.info/sct', code: kid, display : kdesc};
 
-                displays.addDesignation(false, true, langCode, null, term);
-              }
+              displays.addDesignation(false, description.active ? 'active' : 'inactive', langCode, use, term);
             }
           }
         } catch (error) {
           // Add basic designation if we can't read detailed descriptions
           const display = this.sct.getDisplayName(ctxt.getReference());
           if (display) {
-            displays.addDesignation(true, true,'en-US', null, display);
+            displays.addDesignation(true, 'active','en-US', null, display);
           }
         }
 
@@ -611,13 +613,13 @@ class SnomedProvider extends CodeSystemProvider {
 
   getLanguageCode(langIndex) {
     const languageMap = {
-      1: 'en-US',
+      1: 'en',
       2: 'en-GB',
       3: 'es',
       4: 'fr',
       5: 'de'
     };
-    return languageMap[langIndex] || 'en-US';
+    return languageMap[langIndex] || 'en';
   }
 
   // Lookup methods
@@ -948,14 +950,22 @@ class SnomedProvider extends CodeSystemProvider {
 
     throw new Error(`Unknown type at #ensureContext: ${typeof context}`);
   }
+
+  versionAlgorithm() {
+    return 'url';
+  }
+
+  isNotClosed() {
+    return true;
+  }
 }
 
 /**
  * Factory for creating SNOMED services and providers
  */
 class SnomedServicesFactory extends CodeSystemFactoryProvider {
-  constructor(filePath) {
-    super();
+  constructor(i18n, filePath) {
+    super(i18n);
     this.filePath = filePath;
     this.uses = 0;
     this._loaded = false;
@@ -970,6 +980,7 @@ class SnomedServicesFactory extends CodeSystemFactoryProvider {
     return this._sharedData.versionUri;
   }
 
+  // eslint-disable-next-line no-unused-vars
   async buildKnownValueSet(url, version) {
     return null;
   }

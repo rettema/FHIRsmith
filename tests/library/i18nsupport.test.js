@@ -110,7 +110,7 @@ describe('I18nSupport', () => {
 
       if (testMessageId) {
         const result = i18nSupport.formatMessage(languages, testMessageId);
-        expect(result).toBe(enBundle[testMessageId]);
+        expect(result).toBe(enBundle[testMessageId].replaceAll("''", "'"));
       }
     });
 

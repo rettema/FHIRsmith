@@ -1,6 +1,7 @@
 const { CodeSystemProvider, FilterExecutionContext } = require('../../tx/cs/cs-api');
 const assert = require('assert');
 const { CodeSystem } = require("../library/codesystem");
+const {CodeSystemFactoryProvider} = require("./cs-api");
 
 class CountryCodeConcept {
   constructor(code, display) {
@@ -105,7 +106,7 @@ class CountryCodeServices extends CodeSystemProvider {
     
     const ctxt = await this.#ensureContext(code);
     if (ctxt != null) {
-      displays.addDesignation( true, true, 'en', CodeSystem.makeUseForDisplay(), ctxt.display);
+      displays.addDesignation( true, 'active', 'en', CodeSystem.makeUseForDisplay(), ctxt.display);
       this._listSupplementDesignations(ctxt, displays);
     }
   }
@@ -278,10 +279,15 @@ class CountryCodeServices extends CodeSystemProvider {
     await this.#ensureContext(codeB);
     return 'not-subsumed'; // No subsumption relationships
   }
+
+  versionAlgorithm() {
+    return 'date';
+  }
 }
 
-class CountryCodeFactoryProvider {
-  constructor() {
+class CountryCodeFactoryProvider extends CodeSystemFactoryProvider {
+  constructor(i18n) {
+    super(i18n);
     this.uses = 0;
   }
 
@@ -1079,6 +1085,7 @@ class CountryCodeFactoryProvider {
     }
   }
 
+  // eslint-disable-next-line no-unused-vars
   async buildKnownValueSet(url, version) {
     return null;
   }

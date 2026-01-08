@@ -12,16 +12,18 @@ const {Designations} = require("../../tx/library/designations");
 const {TestUtilities} = require("../test-utilities");
 
 describe('IETF Language CodeSystem Provider', () => {
+  let opContext;
   let languageDefinitions;
   let provider;
 
   beforeAll(async () => {
     // Load language definitions from data file
-    const dataPath = path.join(__dirname, '../../tx/data/lang.dat');
-    languageDefinitions = await LanguageDefinitions.fromFile(dataPath);
+
+    languageDefinitions = await TestUtilities.loadLanguageDefinitions();
+    opContext = new OperationContext('en', await TestUtilities.loadTranslations(languageDefinitions));
     
     // Create provider instance
-    provider = new IETFLanguageCodeProvider(new OperationContext(Languages.fromAcceptLanguage('en-US')), [], languageDefinitions);
+    provider = new IETFLanguageCodeProvider(opContext, []);
   });
 
   describe('Metadata', () => {
@@ -390,12 +392,11 @@ describe('IETF Language CodeSystem Provider', () => {
   describe('Factory', () => {
     let factory;
 
-    beforeEach(() => {
-      factory = new IETFLanguageCodeFactory(languageDefinitions);
+    beforeEach(async () => {
+      factory = new IETFLanguageCodeFactory(await TestUtilities.loadTranslations(await TestUtilities.loadLanguageDefinitions()));
     });
 
     test('should create factory correctly', () => {
-      expect(factory.languageDefinitions).toBe(languageDefinitions);
       expect(factory.useCount()).toBe(0);
     });
 
@@ -404,18 +405,18 @@ describe('IETF Language CodeSystem Provider', () => {
     });
 
     test('should build providers and track usage', () => {
-      const provider1 = factory.build(new OperationContext(Languages.fromAcceptLanguage('en-US')), null);
+      const provider1 = factory.build(opContext, null);
       expect(provider1).toBeInstanceOf(IETFLanguageCodeProvider);
       expect(factory.useCount()).toBe(1);
 
-      const provider2 = factory.build(new OperationContext(Languages.fromAcceptLanguage('en-US')), []);
+      const provider2 = factory.build(opContext, []);
       expect(provider2).toBeInstanceOf(IETFLanguageCodeProvider);
       expect(factory.useCount()).toBe(2);
     });
 
     test('should pass supplements to built providers', () => {
       const supplements = [];
-      const provider = factory.build(new OperationContext(Languages.fromAcceptLanguage('en-US')), supplements);
+      const provider = factory.build(opContext, supplements);
       expect(provider.supplements).toBe(supplements);
     });
   });

@@ -251,8 +251,7 @@ function renderBundle(json, req) {
  * Render a search result Bundle
  */
 function renderSearchBundle(json, req) {
-  const entries = json.entry || [];
-  
+
   // Check if there are any actual search parameters (not just pagination/control params)
   const selfLink = json.link?.find(l => l.relation === 'self')?.url || '';
   const hasSearchParams = checkForSearchParams(selfLink);

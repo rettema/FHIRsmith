@@ -96,7 +96,7 @@ class USStateServices extends CodeSystemProvider {
     
     const ctxt = await this.#ensureContext(code);
     if (ctxt != null) {
-      displays.addDesignation(true, true, 'en', CodeSystem.makeUseForDisplay(), ctxt.display);
+      displays.addDesignation(true, 'active', 'en', CodeSystem.makeUseForDisplay(), ctxt.display);
       this._listSupplementDesignations(ctxt.code, displays);
     }
   }
@@ -159,11 +159,15 @@ class USStateServices extends CodeSystemProvider {
     await this.#ensureContext(codeB);
     return 'not-subsumed'; // No subsumption relationships
   }
+
+  versionAlgorithm() {
+    return null; // none
+  }
 }
 
 class USStateFactoryProvider extends CodeSystemFactoryProvider {
-  constructor() {
-    super();
+  constructor(i18n) {
+    super(i18n);
     this.uses = 0;
     this.codes = null;
     this.codeMap = null;
@@ -195,6 +199,7 @@ class USStateFactoryProvider extends CodeSystemFactoryProvider {
     return null; // No version specified
   }
 
+  // eslint-disable-next-line no-unused-vars
   async buildKnownValueSet(url, version) {
     return null;
   }

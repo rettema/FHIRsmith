@@ -536,6 +536,112 @@ describe('VersionUtilities', () => {
         });
     });
 
+    // added 1/1/2026 when migrating from pascal
+    describe('versionMatches - strict part presence', () => {
+        test('should require same structure (no implicit .0)', () => {
+            // Two-part vs three-part
+            test_versionMatches("2.0", "2.0.0", false);
+            test_versionMatches("2.0.0", "2.0", false);
+            test_versionMatches("1.5", "1.5.0", false);
+            test_versionMatches("1.5.0", "1.5", false);
+
+            // With different values
+            test_versionMatches("2.0", "2.0.1", false);
+            test_versionMatches("2.1", "2.1.5", false);
+        });
+
+        test('should match when structure is identical', () => {
+            test_versionMatches("2.0", "2.0", true);
+            test_versionMatches("2.0.0", "2.0.0", true);
+            test_versionMatches("1.5.3", "1.5.3", true);
+        });
+    });
+
+    describe('versionMatches - minor wildcard with/without patch', () => {
+        test('2.* should only match two-part versions', () => {
+            test_versionMatches("2.*", "2.0", true);
+            test_versionMatches("2.*", "2.1", true);
+            test_versionMatches("2.*", "2.99", true);
+            test_versionMatches("2.*", "2.0.0", false);  // Three parts = no match
+            test_versionMatches("2.*", "2.1.0", false);
+            test_versionMatches("2.*", "2.0-alpha", false); // Has prerelease
+        });
+
+        test('2.x.x should only match three-part versions without labels', () => {
+            test_versionMatches("2.x.x", "2.0.0", true);
+            test_versionMatches("2.x.x", "2.1.5", true);
+            test_versionMatches("2.x.x", "2.99.99", true);
+            test_versionMatches("2.x.x", "2.0", false);     // Two parts = no match
+            test_versionMatches("2.x.x", "2.1", false);
+            test_versionMatches("2.x.x", "2.0.0-alpha", false); // Has prerelease
+            test_versionMatches("2.x.x", "2.0.0+build", false); // Has build
+        });
+    });
+
+    describe('versionMatches - patch wildcard', () => {
+        test('2.0.* should match three-part versions without labels', () => {
+            test_versionMatches("2.0.*", "2.0.0", true);
+            test_versionMatches("2.0.*", "2.0.1", true);
+            test_versionMatches("2.0.*", "2.0.99", true);
+            test_versionMatches("2.0.*", "2.0", false);         // Two parts = no match
+            test_versionMatches("2.0.*", "2.0.0-alpha", false); // Has prerelease
+            test_versionMatches("2.0.*", "2.0.0+build", false); // Has build
+            test_versionMatches("2.0.*", "2.1.0", false);       // Wrong minor
+        });
+    });
+
+    describe('versionMatches - prerelease wildcard (-*)', () => {
+        test('should match only versions with prerelease and no build', () => {
+            test_versionMatches("2.0.0-*", "2.0.0-alpha", true);
+            test_versionMatches("2.0.0-*", "2.0.0-beta", true);
+            test_versionMatches("2.0.0-*", "2.0.0-rc.1", true);
+            test_versionMatches("2.0.0-*", "2.0.0-alpha.beta.1", true);
+            test_versionMatches("2.0.0-*", "2.0.0", false);           // No prerelease
+            test_versionMatches("2.0.0-*", "2.0.0+build", false);     // Build only
+            test_versionMatches("2.0.0-*", "2.0.0-alpha+build", false); // Has build too
+            test_versionMatches("2.0.0-*", "2.0.1-alpha", false);     // Wrong patch
+        });
+    });
+
+    describe('versionMatches - build wildcard (+*)', () => {
+        test('should match only versions with build and no prerelease', () => {
+            test_versionMatches("2.0.0+*", "2.0.0+build", true);
+            test_versionMatches("2.0.0+*", "2.0.0+123", true);
+            test_versionMatches("2.0.0+*", "2.0.0+build.456", true);
+            test_versionMatches("2.0.0+*", "2.0.0", false);           // No build
+            test_versionMatches("2.0.0+*", "2.0.0-alpha", false);     // Prerelease only
+            test_versionMatches("2.0.0+*", "2.0.0-alpha+build", false); // Has prerelease too
+            test_versionMatches("2.0.0+*", "2.0.1+build", false);     // Wrong patch
+        });
+    });
+
+    describe('versionMatches - x/X in labels should NOT be wildcards', () => {
+        test('x/X in prerelease should match literally', () => {
+            test_versionMatches("2.0.0-x", "2.0.0-x", true);
+            test_versionMatches("2.0.0-x", "2.0.0-y", false);
+            test_versionMatches("2.0.0-x", "2.0.0-alpha", false);
+            test_versionMatches("2.0.0-X", "2.0.0-X", true);
+            test_versionMatches("2.0.0-X", "2.0.0-Y", false);
+        });
+
+        test('x/X in build should match literally', () => {
+            test_versionMatches("2.0.0+x", "2.0.0+x", true);
+            test_versionMatches("2.0.0+x", "2.0.0+y", false);
+            test_versionMatches("2.0.0+X", "2.0.0+X", true);
+            test_versionMatches("2.0.0+X", "2.0.0+Y", false);
+        });
+    });
+
+    describe('versionMatches - combined wildcards', () => {
+        test('should handle multiple wildcard types', () => {
+            test_versionMatches("2.*.x", "2.0.0", true);  // Both minor and patch wild
+            test_versionMatches("2.*.x", "2.5.9", true);
+            test_versionMatches("2.*.x", "2.0", false);   // Missing patch
+            test_versionMatches("*.*.x", "1.2.3", true);  // All version parts wild
+            test_versionMatches("*.*.x", "99.99.0", true);
+        });
+    });
+
     // Helper methods
     function test_isSemVer(version, expected) {
         expect(VersionUtilities.isSemVer(version)).toBe(expected);

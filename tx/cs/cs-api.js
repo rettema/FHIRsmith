@@ -2,14 +2,18 @@
 
 const assert = require('assert');
 const {CodeSystem, CodeSystemContentMode} = require("../library/codesystem");
-const {Languages, Language} = require("../../library/languages");
+const {Languages, Language, LanguageDefinitions} = require("../../library/languages");
 const { OperationContext } = require("../operation-context");
+const {Extensions} = require("../library/extensions");
+const {validateParameter, validateArrayParameter} = require("../../library/utilities");
+const {I18nSupport} = require("../../library/i18nsupport");
 
 class FilterExecutionContext {
   filters = [];
 }
 
 class CodeSystemProvider {
+
   /**
    * {OperationContext} The context in which this is executing
    */
@@ -68,6 +72,13 @@ class CodeSystemProvider {
    */
   version() { throw new Error("Must override"); }
 
+  vurl() {
+    if (this.version()) {
+      return this.system()+ "|"+ this.version();
+    } else {
+      return this.system();
+    }
+  }
   /**
    * @returns {string} default language for the code system
    */
@@ -103,6 +114,13 @@ class CodeSystemProvider {
    */
   propertyDefinitions() { return null; }
 
+  /**
+   * returns true if the code system cannot be completely enumerated - e.g. it has a grammar
+   * @returns {boolean}
+   */
+  isNotClosed() {
+    return false;
+  }
   /**
    * @param {Languages} languages language specification
    * @returns {boolean} defined properties for the code system
@@ -186,7 +204,7 @@ class CodeSystemProvider {
    * @returns {string[]} all supplements in scope
    */
   listSupplements() {
-    return this.supplements ? this.supplements.map(s => s.jsonObj.url) : [];
+    return this.supplements ? this.supplements.map(s => s.vurl) : [];
   }
 
   /**
@@ -337,11 +355,12 @@ class CodeSystemProvider {
         const concept= supplement.getConceptByCode(code);
         if (concept) {
           if (concept.display) {
-            displays.addDesignation(true, true, supplement.jsonObj.language, CodeSystem.makeUseForDisplay(), concept.display);
+            displays.addDesignation(true, 'active', supplement.jsonObj.language, CodeSystem.makeUseForDisplay(), concept.display);
           }
           if (concept.designation) {
             for (const d of concept.designation) {
-              displays.addDesignation(false, true, d.language, d.use, d.value, d.extension?.length > 0 ? d.extension : []);
+              let status = Extensions.readString(d, "http://hl7.org/fhir/StructureDefinition/structuredefinition-standards-status");
+              displays.addDesignation(false, status || 'active', d.language, d.use, d.value, d.extension?.length > 0 ? d.extension : []);
             }
           }
         }
@@ -602,7 +621,7 @@ class CodeSystemProvider {
     );
 
     if (typeof param === 'string') {
-      return Languages.fromAcceptLanguage(param);
+      return Languages.fromAcceptLanguage(param, this.languageDefinitions, false);
     } else if (Array.isArray(param)) {
       const languages = new Languages();
       for (const str of param) {
@@ -615,10 +634,35 @@ class CodeSystemProvider {
     }
   }
 
+  /**
+   * @returns {String} the version algorithm for this version of the code system
+   */
+  versionAlgorithm() {
+    return null;
+  }
+
+  /**
+   * @returns {string} valueset for the code system
+   */
+  valueSet() {
+    return null;
+  }
 }
 
 class CodeSystemFactoryProvider {
   uses = 0;
+
+  /**
+   * {I18nSupport}
+   */
+  i18n;
+
+  constructor(i18n) {
+    validateParameter(i18n, "i18n", I18nSupport);
+
+    this.i18n = i18n;
+  }
+
 
   /**
    * @returns {String} the latest version, if known
@@ -628,8 +672,6 @@ class CodeSystemFactoryProvider {
   async load() {
     // nothing here
   }
-
-
 
   /**
    

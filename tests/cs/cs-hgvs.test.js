@@ -6,6 +6,7 @@ const {TestUtilities} = require("../test-utilities");
 describe('HGVS Provider', () => {
   let factory;
   let provider;
+  let opContext;
 
   // Test data - known HGVS examples
   const testData = {
@@ -28,8 +29,9 @@ describe('HGVS Provider', () => {
 
   beforeAll(async () => {
     // Create factory and provider
-    factory = new HGVSServicesFactory();
-    provider = await factory.build(new OperationContext('en'), []);
+    opContext = new OperationContext('en', await TestUtilities.loadTranslations());
+    factory = new HGVSServicesFactory(opContext.i18n);
+    provider = await factory.build(opContext, []);
   });
 
   describe('Factory and Basic Setup', () => {

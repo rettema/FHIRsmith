@@ -19,7 +19,15 @@ const Utilities = {
     if (typeof str !== 'string' || str === '') return false;
     const num = parseInt(str, 10);
     return num.toString() === str && !isNaN(num);
-  }
+  },
+  parseIntOrDefault(value, defaultValue) {
+    const num = parseInt(value, 10);
+    return isNaN(num) ? defaultValue : num;
+  },
+  parseFloatOrDefault(value, defaultValue) {
+  const num = parseFloat(value);
+  return isNaN(num) ? defaultValue : num;
+}
 
 };
 
@@ -43,6 +51,9 @@ function validateParameter(param, name, type) {
       throw new Error(`${name} must be a boolean, but got ${actualType}`);
     }
   } else {
+    if (typeof param !== 'object') {
+      throw new Error(`${name} must be a valid ${type.name}, but got ${actualType}`);
+    }
     // Handle object types with instanceof
     if (!(param instanceof type)) {
       throw new Error(`${name} must be a valid ${type.name}, but got ${actualType}`);
@@ -109,8 +120,28 @@ function getValuePrimitive(obj) {
   return null;
 }
 
+
+function getValueName(obj) {
+  if (!obj) return null;
+
+  const primitiveTypes = [
+    'valueString', 'valueCode', 'valueUri', 'valueUrl', 'valueCanonical',
+    'valueBoolean', 'valueInteger', 'valueDecimal', 'valueDate', 'valueDateTime',
+    'valueTime', 'valueInstant', 'valueId', 'valueOid', 'valueUuid',
+    'valueMarkdown', 'valueBase64Binary', 'valuePositiveInt', 'valueUnsignedInt', 'valueInteger64',
+    'valueCoding', 'valueCodeableConcept', 'valueAttachment'
+  ];
+
+  for (const type of primitiveTypes) {
+    if (obj[type] !== undefined) {
+      return type;
+    }
+  }
+  return null;
+}
+
 function isAbsoluteUrl(s) {
   return s && (s.startsWith('urn:') || s.startsWith('http:') || s.startsWith('https:') || s.startsWith('ftp:'));
 }
 
-module.exports = { Utilities, validateParameter, validateOptionalParameter, validateArrayParameter, validateResource, strToBool, getValuePrimitive, isAbsoluteUrl };
+module.exports = { Utilities, validateParameter, validateOptionalParameter, validateArrayParameter, validateResource, strToBool, getValuePrimitive, getValueName, isAbsoluteUrl };

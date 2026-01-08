@@ -2,9 +2,10 @@ const { CodeSystem}  = require("../library/codesystem");
 const { CodeSystemFactoryProvider, CodeSystemProvider, FilterExecutionContext }  = require( "./cs-api");
 const { VersionUtilities }  = require("../../library/version-utilities");
 const { Language }  = require ("../../library/languages");
-const {validateParameter, validateOptionalParameter, getValuePrimitive} = require("../../library/utilities");
+const { validateOptionalParameter, getValuePrimitive} = require("../../library/utilities");
 const {Issue} = require("../library/operation-outcome");
 const {Designations} = require("../library/designations");
+const {Extensions} = require("../library/extensions");
 
 /**
  * Context class for FHIR CodeSystem provider concepts
@@ -143,6 +144,13 @@ class FhirCodeSystemProvider extends CodeSystemProvider {
   }
 
   /**
+   * @returns {string|null} valueset for the code system
+   */
+  valueSet() {
+    return this.codeSystem.jsonObj.valueSet || null;
+  }
+
+  /**
    * @returns {string} Default language for the code system
    */
   defLang() {
@@ -242,12 +250,7 @@ class FhirCodeSystemProvider extends CodeSystemProvider {
    * @returns {boolean} True if v1 is more detailed than v2
    */
   versionIsMoreDetailed(v1, v2) {
-    validateOptionalParameter(v1, "v1", String);
-    validateOptionalParameter(v2, "v2", String);
-
-    // Simple implementation - could be enhanced with semantic version comparison
-    if (!v1 || !v2) return false;
-    return VersionUtilities.versionMatches(v1+"?", v2);
+    return VersionUtilities.versionMatchesByAlgorithm(v1, v2, this.versionAlgorithm());
   }
 
   /**
@@ -398,6 +401,7 @@ class FhirCodeSystemProvider extends CodeSystemProvider {
     if (ctxt.concept.property && Array.isArray(ctxt.concept.property)) {
       const abstractProp = ctxt.concept.property.find(p =>
         p.code === 'abstract' ||
+        p.code === 'not-selectable' ||
         p.code === 'notSelectable' ||
         p.uri === 'http://hl7.org/fhir/concept-properties#notSelectable'
       );
@@ -564,7 +568,7 @@ class FhirCodeSystemProvider extends CodeSystemProvider {
             ext.url === 'http://hl7.org/fhir/StructureDefinition/itemWeight'
           );
           if (itemWeightExt && itemWeightExt.valueDecimal !== undefined) {
-            return itemWeightExt.valueDecimal.toString();
+            return itemWeightExt.valueDecimal;
           }
         }
       }
@@ -587,14 +591,15 @@ class FhirCodeSystemProvider extends CodeSystemProvider {
 
     // Add main display as a designation
     if (ctxt.concept.display) {
-      const displayLang = this.defaultLanguage ? this.defaultLanguage.toString() : 'en';
-      displays.addDesignation(true, true, displayLang, CodeSystem.makeUseForDisplay(), ctxt.concept.display);
+      const displayLang = this.defaultLanguage ? this.defaultLanguage.toString() : null; // 'en';
+      displays.addDesignation(true, 'active', displayLang, CodeSystem.makeUseForDisplay(), ctxt.concept.display);
     }
 
     // Add concept designations
     if (ctxt.concept.designation && Array.isArray(ctxt.concept.designation)) {
       for (const designation of ctxt.concept.designation) {
-        displays.addDesignation(false, true,
+        let status = Extensions.readString(designation, "http://hl7.org/fhir/StructureDefinition/structuredefinition-standards-status");
+        displays.addDesignation(false, status || 'active',
           designation.language || '',
           designation.use || null,
           designation.value,
@@ -1107,7 +1112,7 @@ class FhirCodeSystemProvider extends CodeSystemProvider {
       return new FhirCodeSystemProviderContext(code, concept);
     }
 
-    return `Code '${code}' not found in filter results`;
+    return null; // `Code '${code}' not found in filter results`;
   }
 
   /**
@@ -1268,7 +1273,7 @@ class FhirCodeSystemProvider extends CodeSystemProvider {
     }
 
     if (results == null) {
-      throw new Error(`The filter ${prop}${op}${value} was not understood`)
+      throw new Error(`The filter ${prop} ${op} ${value} was not understood`)
     }
     // Add to filter context
     if (!filterContext.filters) {
@@ -1356,12 +1361,18 @@ class FhirCodeSystemProvider extends CodeSystemProvider {
    * @private
    */
   async _addDescendants(results, ancestorCode, includeRoot) {
-    const descendants = this.codeSystem.getDescendants(ancestorCode);
-    for (const code of descendants) {
-      if (includeRoot || code !== ancestorCode) {
-        const concept = this.codeSystem.getConceptByCode(code);
-        if (concept) {
-          results.add(concept, 0);
+    const concept = this.codeSystem.getConceptByCode(ancestorCode);
+    if (concept) {
+      if (includeRoot) {
+        results.add(concept, 0);
+      }
+      const descendants = this.codeSystem.getDescendants(ancestorCode);
+      for (const code of descendants) {
+        if (code !== ancestorCode) {
+          const concept = this.codeSystem.getConceptByCode(code);
+          if (concept) {
+            results.add(concept, 0);
+          }
         }
       }
     }
@@ -1531,11 +1542,14 @@ class FhirCodeSystemProvider extends CodeSystemProvider {
     return results;
   }
 
+  versionAlgorithm() {
+    return this.codeSystem.versionAlgorithm();
+  }
 }
 
 class FhirCodeSystemFactory extends CodeSystemFactoryProvider {
-  constructor() {
-    super();
+  constructor(i18n) {
+    super(i18n);
   }
 
   defaultVersion() {
@@ -1576,6 +1590,7 @@ class FhirCodeSystemFactory extends CodeSystemFactoryProvider {
     return new FhirCodeSystemProvider(opContext, codeSystem, supplements);
   }
 
+  // eslint-disable-next-line no-unused-vars
   async buildKnownValueSet(url, version) {
     return null;
   }

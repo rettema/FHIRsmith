@@ -115,7 +115,7 @@ class NdcServices extends CodeSystemProvider {
     if (ctxt) {
       // Add main display
       if (ctxt.display) {
-        displays.addDesignation(true, true, 'en', CodeSystem.makeUseForDisplay(), ctxt.display.trim());
+        displays.addDesignation(true, 'active', 'en', CodeSystem.makeUseForDisplay(), ctxt.display.trim());
       }
 
       // Add supplement designations
@@ -555,11 +555,14 @@ class NdcServices extends CodeSystemProvider {
 
   // Iterator methods - not supported for NDC
 
+  versionAlgorithm() {
+    return 'date';
+  }
 }
 
 class NdcServicesFactory extends CodeSystemFactoryProvider {
-  constructor(dbPath) {
-    super();
+  constructor(i18n, dbPath) {
+    super(i18n);
     this.dbPath = dbPath;
     this.uses = 0;
     this._loaded = false;
@@ -577,6 +580,7 @@ class NdcServicesFactory extends CodeSystemFactoryProvider {
     return this._version;
   }
 
+  // eslint-disable-next-line no-unused-vars
   async buildKnownValueSet(url, version) {
     return null;
   }

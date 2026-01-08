@@ -9,7 +9,8 @@
 
 const { TerminologyWorker } = require('./worker');
 const { FhirCodeSystemProvider } = require('../cs/cs-cs');
-const {Designation, Designations} = require("../library/designations");
+const { Designations} = require("../library/designations");
+const {TxParameters} = require("../params");
 
 class LookupWorker extends TerminologyWorker {
   /**
@@ -71,7 +72,7 @@ class LookupWorker extends TerminologyWorker {
       console.error('$lookup error:', error); // Full stack trace for debugging
       //      const statusCode = error.statusCode || 500;
       const issueCode = error.issueCode || 'exception';
-      return res.status(statusCode).json({
+      return res.status(400).json({
         resourceType: 'OperationOutcome',
         issue: [{
           severity: 'error',
@@ -95,7 +96,9 @@ class LookupWorker extends TerminologyWorker {
     }
 
     // Parse parameters from request
-    const params = this.parseParameters(req);
+    const params = this.buildParameters(req);
+    const txp = new TxParameters(this.opContext.i18n.languageDefinitions, this.opContext.i18n);
+    txp.readParams(params);
 
     // Determine how the code system is identified
     let csProvider;
@@ -137,7 +140,7 @@ class LookupWorker extends TerminologyWorker {
     }
 
     // Perform the lookup
-    const result = await this.doLookup(csProvider, code, params);
+    const result = await this.doLookup(csProvider, code, txp);
     return res.json(result);
   }
 
@@ -164,7 +167,9 @@ class LookupWorker extends TerminologyWorker {
     }
 
     // Parse parameters from request
-    const params = this.parseParameters(req);
+    const params = this.buildParameters(req);
+    const txp = new TxParameters(this.opContext.i18n.languageDefinitions, this.opContext.i18n);
+    txp.readParams(params);
 
     // For instance-level, code is required (system/version come from the resource)
     let code;
@@ -184,162 +189,8 @@ class LookupWorker extends TerminologyWorker {
     const csProvider = new FhirCodeSystemProvider(this.opContext, codeSystem, supplements);
 
     // Perform the lookup
-    const result = await this.doLookup(csProvider, code, params);
+    const result = await this.doLookup(csProvider, code, txp);
     return res.json(result);
-  }
-
-  /**
-   * Parse parameters from request (query params, form body, or Parameters resource)
-   * @param {express.Request} req - Express request
-   * @returns {Object} Parsed parameters
-   */
-  parseParameters(req) {
-    const result = {
-      // Single-value parameters
-      code: null,
-      system: null,
-      version: null,
-      date: null,
-      displayLanguage: null,
-      coding: null,
-      // Repeating parameters
-      property: [],
-      useSupplement: []
-    };
-
-    // Check if body is a Parameters resource
-    if (req.body && req.body.resourceType === 'Parameters') {
-      this.parseParametersResource(req.body, result);
-    } else {
-      // Parse from query params or form body
-      const params = req.method === 'POST' ? req.body : req.query;
-      this.parseSimpleParameters(params, result);
-    }
-
-    return result;
-  }
-
-  /**
-   * Parse parameters from a FHIR Parameters resource
-   * @param {Object} parametersResource - The Parameters resource
-   * @param {Object} result - Result object to populate
-   */
-  parseParametersResource(parametersResource, result) {
-    if (!parametersResource.parameter || !Array.isArray(parametersResource.parameter)) {
-      return;
-    }
-
-    for (const param of parametersResource.parameter) {
-      if (!param.name) continue;
-
-      const name = param.name;
-      const value = this.extractParameterValue(param, name);
-
-      if (value === null || value === undefined) continue;
-
-      switch (name) {
-        case 'code':
-          result.code = value;
-          break;
-        case 'system':
-          result.system = value;
-          break;
-        case 'version':
-          result.version = value;
-          break;
-        case 'date':
-          result.date = value;
-          break;
-        case 'displayLanguage':
-          result.displayLanguage = value;
-          break;
-        case 'coding':
-          if (param.valueCoding) {
-            result.coding = param.valueCoding;
-          } else {
-            this.opContext.log(`Parameter 'coding' should be valueCoding, got different type`);
-          }
-          break;
-        case 'property':
-          result.property.push(value);
-          break;
-        case 'useSupplement':
-          result.useSupplement.push(value);
-          break;
-        default:
-          // Unknown parameter - ignore
-          break;
-      }
-    }
-  }
-
-  /**
-   * Extract value from a parameter, being lenient about types
-   * @param {Object} param - Parameter object from Parameters resource
-   * @param {string} name - Parameter name (for logging)
-   * @returns {*} Extracted value or null
-   */
-  extractParameterValue(param, name) {
-    // Expected types for each parameter
-    const expectedTypes = {
-      code: 'valueCode',
-      system: 'valueUri',
-      version: 'valueString',
-      date: 'valueDateTime',
-      displayLanguage: 'valueCode',
-      property: 'valueCode',
-      useSupplement: 'valueCanonical',
-      coding: "valueCoding"
-    };
-
-    const expectedType = expectedTypes[name];
-
-    // Check for the expected type first
-    if (expectedType && param[expectedType] !== undefined) {
-      return param[expectedType];
-    }
-
-    // Be lenient - accept any primitive value type
-    const valueTypes = [
-      'valueString', 'valueCode', 'valueUri', 'valueCanonical',
-      'valueDateTime', 'valueDate', 'valueBoolean', 'valueInteger',
-      'valueDecimal', 'valueId', 'valueOid', 'valueUuid', 'valueUrl'
-    ];
-
-    for (const valueType of valueTypes) {
-      if (param[valueType] !== undefined) {
-        if (expectedType && valueType !== expectedType) {
-          this.opContext.log(`Parameter '${name}' expected ${expectedType}, got ${valueType}`);
-        }
-        return param[valueType];
-      }
-    }
-
-    return null;
-  }
-
-  /**
-   * Parse simple parameters from query string or form body
-   * @param {Object} params - Query params or form body
-   * @param {Object} result - Result object to populate
-   */
-  parseSimpleParameters(params, result) {
-    if (!params) return;
-
-    // Single-value parameters
-    if (params.code) result.code = params.code;
-    if (params.system) result.system = params.system;
-    if (params.version) result.version = params.version;
-    if (params.date) result.date = params.date;
-    if (params.displayLanguage) result.displayLanguage = params.displayLanguage;
-
-    // Handle repeating parameters (can be string or array)
-    if (params.property) {
-      result.property = Array.isArray(params.property) ? params.property : [params.property];
-    }
-    if (params.useSupplement) {
-      result.useSupplement = Array.isArray(params.useSupplement) ? params.useSupplement : [params.useSupplement];
-    }
   }
 
   /**

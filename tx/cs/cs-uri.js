@@ -154,6 +154,14 @@ class UriServices extends CodeSystemProvider {
     };
   }
 
+  versionAlgorithm() {
+    return null;
+  }
+
+  isNotClosed() {
+    return true;
+  }
+
   // ============================================================================
   // Filtering (not supported for URIs)
   // ============================================================================
@@ -169,6 +177,9 @@ class UriServices extends CodeSystemProvider {
  * Factory for creating URI code system providers
  */
 class UriServicesFactory extends CodeSystemFactoryProvider {
+  constructor(i18n) {
+    super(i18n);
+  }
 
   defaultVersion() {
     return 'n/a';
@@ -182,6 +193,7 @@ class UriServicesFactory extends CodeSystemFactoryProvider {
     return 'n/a';
   }
 
+  // eslint-disable-next-line no-unused-vars
   async buildKnownValueSet(url, version) {
     return null;
   }

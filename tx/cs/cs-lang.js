@@ -33,9 +33,9 @@ class IETFLanguageCodeFilter {
  * Provides validation and lookup for BCP 47 language tags
  */
 class IETFLanguageCodeProvider extends CodeSystemProvider {
-  constructor(opContext, supplements, languageDefinitions) {
+  constructor(opContext, supplements) {
     super(opContext, supplements);
-    this.languageDefinitions = languageDefinitions; // LanguageDefinitions instance
+    this.languageDefinitions = opContext.i18n.languageDefinitions;
   }
 
   // ========== Metadata Methods ==========
@@ -139,27 +139,27 @@ class IETFLanguageCodeProvider extends CodeSystemProvider {
     const designations = [];
     if (ctxt != null) {
       const primaryDisplay = this.languageDefinitions.present(ctxt).trim();
-      displays.addDesignation(true, true, 'en', CodeSystem.makeUseForDisplay(), primaryDisplay);
+      displays.addDesignation(true, 'active', 'en', CodeSystem.makeUseForDisplay(), primaryDisplay);
       if (ctxt.isLangRegion()) {
         const langDisplay = this.languageDefinitions.getDisplayForLang(ctxt.language);
         const regionDisplay = this.languageDefinitions.getDisplayForRegion(ctxt.region);
         const regionVariant = `${langDisplay} (${regionDisplay})`;
         const regionVariant2 = `${langDisplay} (Region=${regionDisplay})`;
-        displays.addDesignation(false, true, 'en', CodeSystem.makeUseForDisplay(), regionVariant);
-        displays.addDesignation(false, true, 'en', CodeSystem.makeUseForDisplay(), regionVariant2);
+        displays.addDesignation(false, 'active', 'en', CodeSystem.makeUseForDisplay(), regionVariant);
+        displays.addDesignation(false, 'active', 'en', CodeSystem.makeUseForDisplay(), regionVariant2);
       }
       // add alternative displays if available
       const displayCount = this.languageDefinitions.displayCount(ctxt);
       for (let i = 0; i < displayCount; i++) {
         const altDisplay = this.languageDefinitions.present(ctxt, i).trim();
         if (altDisplay && altDisplay !== primaryDisplay) {
-          displays.addDesignation(false, true, 'en', CodeSystem.makeUseForDisplay(), altDisplay);
+          displays.addDesignation(false, 'active', 'en', CodeSystem.makeUseForDisplay(), altDisplay);
           // Add region variants for alternatives too
           if (ctxt.language.isLangRegion()) {
             const langDisplay = this.languageDefinitions.getDisplayForLang(ctxt.language, i);
             const regionDisplay = this.languageDefinitions.getDisplayForRegion(ctxt.region);
             const altRegionVariant = `${langDisplay} (${regionDisplay})`;
-            displays.addDesignation(false, true, 'en', CodeSystem.makeUseForDisplay(), altRegionVariant);
+            displays.addDesignation(false, 'active', 'en', CodeSystem.makeUseForDisplay(), altRegionVariant);
           }
         }
       }
@@ -394,15 +394,21 @@ class IETFLanguageCodeProvider extends CodeSystemProvider {
     return 'not-subsumed'; // No subsumption in language codes
   }
 
+  versionAlgorithm() {
+    return null;
+  }
+
+  isNotClosed() {
+    return true;
+  }
 }
 
 /**
  * Factory for creating IETF Language CodeSystem providers
  */
 class IETFLanguageCodeFactory extends CodeSystemFactoryProvider  {
-  constructor(languageDefinitions) {
-    super();
-    this.languageDefinitions = languageDefinitions;
+  constructor(i18n) {
+    super(i18n);
     this.uses = 0;
   }
 
@@ -418,13 +424,9 @@ class IETFLanguageCodeFactory extends CodeSystemFactoryProvider  {
     return null; // No specific version for BCP 47. Could be date?
   }
 
-  async buildKnownValueSet(url, version) {
-    return null;
-  }
-
   build(opContext, supplements) {
     this.recordUse();
-    return new IETFLanguageCodeProvider(opContext, supplements, this.languageDefinitions);
+    return new IETFLanguageCodeProvider(opContext, supplements);
   }
 
   useCount() {
@@ -436,6 +438,7 @@ class IETFLanguageCodeFactory extends CodeSystemFactoryProvider  {
 
   }
 
+  // eslint-disable-next-line no-unused-vars
   async buildKnownValueSet(url, version) {
     return null;
   }

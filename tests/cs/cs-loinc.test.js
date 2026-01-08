@@ -435,14 +435,16 @@ describe('LOINC Provider', () => {
   const testDbPath = path.resolve(__dirname, '../../data/loinc-testing.db');
   let factory;
   let provider;
+  let opContext;
 
   beforeAll(async () => {
     // Verify test database exists (should be created by import tests)
     expect(fs.existsSync(testDbPath)).toBe(true);
 
     // Create factory and provider
-    factory = new LoincServicesFactory(testDbPath);
-    provider = await factory.build(new OperationContext('en'), []);
+    opContext = new OperationContext('en', await TestUtilities.loadTranslations(await TestUtilities.loadLanguageDefinitions()));
+    factory = new LoincServicesFactory(opContext.i18n, testDbPath);
+    provider = await factory.build(opContext, []);
   });
 
   afterAll(() => {
@@ -590,7 +592,7 @@ describe('LOINC Provider', () => {
     });
 
     test('should reject unsupported filters', async () => {
-      expect(await provider.doesFilter('unsupported', 'equal', 'value')).toBe(false);
+      expect(await provider.doesFilter('unsupported', '=', 'value')).toBe(false);
       expect(await provider.doesFilter('COMPONENT', 'unsupported-op', 'value')).toBe(false);
     });
   });
@@ -715,7 +717,7 @@ describe('LOINC Provider', () => {
         await provider.filter(
           filterContext,
           'CLASSTYPE',
-          'equal',
+          '=',
           testCase.value
         );
 
@@ -765,7 +767,7 @@ describe('LOINC Provider', () => {
         await provider.filter(
           filterContext,
           'STATUS',
-          'equal',
+          '=',
           testCase.value
         );
         const filters = await provider.executeFilters(filterContext);
@@ -786,7 +788,7 @@ describe('LOINC Provider', () => {
         await provider.filter(
           filterContext,
           'copyright',
-          'equal',
+          '=',
           testCase.value
         );
         const filters = await provider.executeFilters(filterContext);
@@ -929,7 +931,7 @@ describe('LOINC Provider', () => {
       const filterContext = await provider.getPrepContext(true);
 
       await expect(
-        provider.filter(filterContext, 'unsupported', 'equal', 'value')
+        provider.filter(filterContext, 'unsupported', '=', 'value')
       ).rejects.toThrow('not supported');
     });
 

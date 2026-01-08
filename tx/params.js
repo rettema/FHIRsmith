@@ -1,15 +1,17 @@
-const {Languages} = require("../library/languages");
-const {validate} = require("node-cron");
-const {validateParameter, validateResource, strToBool, getValuePrimitive} = require("../library/utilities");
+const {Languages, LanguageDefinitions} = require("../library/languages");
+const { validateResource, strToBool, getValuePrimitive, validateParameter, Utilities} = require("../library/utilities");
+const {Issue} = require("./library/operation-outcome");
+const {I18nSupport} = require("../library/i18nsupport");
 
 class VersionRule {
   system;
   version;
   mode;
 
-  constructor(system, version, mode = null) {
+  constructor(system, version, vs, mode = null) {
     this.system = system;
     this.version = version;
+    this.vs = vs;
     this.mode = mode;
   }
   asString() {
@@ -18,9 +20,9 @@ class VersionRule {
 
   asParam() {
     switch (this.mode) {
-      case 'default': return "system-version" + '=' + this.system + '|' + this.version;
-      case 'override': return "force-system-version" + '=' + this.system + '|' + this.version;
-      case 'check': return "check-system-version" + '=' + this.system + '|' + this.version;
+      case 'default': return (this.vs ? "default-valueset-version": "system-version") + '=' + this.system + '|' + this.version;
+      case 'override': return (this.vs ? "force-valueset-version": "force-system-version") + '=' + this.system + '|' + this.version;
+      case 'check': return (this.vs ? "check-valueset-version": "check-system-version") + '=' + this.system + '|' + this.version;
       default: throw new Error("Unsupported mode '" + this.mode + "'");
     }
   }
@@ -28,11 +30,21 @@ class VersionRule {
 }
 
 class TxParameters {
-  constructor(languages) {
+  count = -1;
+  limit = -1;
+  offset = -1;
+  validating = false;
+
+  constructor(languages, i18n, validating) {
+    validateParameter(languages, 'languages', LanguageDefinitions);
+    validateParameter(i18n, 'i18n', I18nSupport);
+
+    this.languageDefinitions = languages;
+    this.i18n = i18n;
+    this.validating = validating;
     this.FVersionRules = [];
     this.FProperties = [];
     this.FDesignations = [];
-    this.FLanguages = languages;
     this.FGenerateNarrative = true;
 
     this.FHTTPLanguages = null;
@@ -78,24 +90,36 @@ class TxParameters {
       switch (p.name) {
         // Version rules
         case 'system-version': {
-          this.seeVersionRule(getValuePrimitive(p), 'default');
+          this.seeVersionRule(getValuePrimitive(p), false,'default');
           break;
         }
         case 'check-system-version': {
-          this.seeVersionRule(getValuePrimitive(p), 'check');
+          this.seeVersionRule(getValuePrimitive(p), false, 'check');
           break;
         }
         case 'force-system-version': {
-          this.seeVersionRule(getValuePrimitive(p), 'override');
+          this.seeVersionRule(getValuePrimitive(p), false, 'override');
           break;
         }
         case 'default-valueset-version': {
-          this.getValueSetVersionRules().push(getValuePrimitive(p));
+          this.seeVersionRule(getValuePrimitive(p), true, 'default');
+          break;
+        }
+        case 'force-valueset-version': {
+          this.seeVersionRule().push(getValuePrimitive(p), true, 'override');
+          break;
+        }
+        case 'check-valueset-version': {
+          this.seeVersionRule().push(getValuePrimitive(p), true, 'check');
           break;
         }
 
         case 'displayLanguage': {
-          this.DisplayLanguages = Languages.fromAcceptLanguage(getValuePrimitive(p));
+          try {
+            this.DisplayLanguages = Languages.fromAcceptLanguage(getValuePrimitive(p), this.languageDefinitions, !this.validating);
+          } catch (error) {
+            throw new Issue("error", "processing", null, 'INVALID_DISPLAY_NAME', this.i18n.translate('INVALID_DISPLAY_NAME', this.HTTPLanguages, getValuePrimitive(p))).handleAsOO(400);
+          }
           break;
         }
         case 'designation': {
@@ -113,52 +137,52 @@ class TxParameters {
         case '_incomplete':
         case 'limitedExpansion': {
           let value = getValuePrimitive(p);
-          if (value) this.limitedExpansion = strToBool(value, false);
+          this.limitedExpansion = strToBool(value, false);
           break;
         }
         case 'includeDesignations': {
           let value = getValuePrimitive(p);
-          if (value) this.includeDesignations = strToBool(value, false);
+          this.includeDesignations = strToBool(value, false);
           break;
         }
         case 'includeDefinition': {
           let value = getValuePrimitive(p);
-          if (value) this.includeDefinition = strToBool(value, false);
+          this.includeDefinition = strToBool(value, false);
           break;
         }
         case 'activeOnly': {
           let value = getValuePrimitive(p);
-          if (value) this.activeOnly = strToBool(value, false);
+          this.activeOnly = strToBool(value, false);
           break;
         }
         case 'excludeNested': {
           let value = getValuePrimitive(p);
-          if (value) this.excludeNested = strToBool(value, false);
+          this.excludeNested = strToBool(value, false);
           break;
         }
         case 'excludeNotForUI': {
           let value = getValuePrimitive(p);
-          if (value) this.excludeNotForUI = strToBool(value, false);
+          this.excludeNotForUI = strToBool(value, false);
           break;
         }
         case 'excludePostCoordinated': {
           let value = getValuePrimitive(p);
-          if (value) this.excludePostCoordinated = strToBool(value, false);
+          this.excludePostCoordinated = strToBool(value, false);
           break;
         }
         case 'default-to-latest-version': {
           let value = getValuePrimitive(p);
-          if (value) this.defaultToLatestVersion = strToBool(value, false);
+          this.defaultToLatestVersion = strToBool(value, false);
           break;
         }
         case 'incomplete-ok': {
           let value = getValuePrimitive(p);
-          if (value) this.incompleteOK = strToBool(value, false);
+          this.incompleteOK = strToBool(value, false);
           break;
         }
         case 'diagnostics': {
           let value = getValuePrimitive(p);
-          if (value) this.diagnostics = strToBool(value, false);
+          this.diagnostics = strToBool(value, false);
           break;
         }
         case 'lenient-display-validation': {
@@ -170,19 +194,38 @@ class TxParameters {
           break;
         }
         case 'profile' : {
-          let obj = params.obj('profile');
-          if (obj !== null && (obj.fhirType === 'Parameters' || obj.fhirType === 'ExpansionProfile')) {
-            this.readParams(pp);
+          let value = p.resource;
+          if (value !== null && (value.resourceType === 'Parameters' || value.resourceType === 'ExpansionProfile')) {
+            this.readParams(value);
           }
+        }
+        // eslint-disable-next-line no-fallthrough
+        case 'term': // jQuery support
+        case 'filter' : {
+          this.filter = getValuePrimitive(p);
+          break;
+        }
+        case 'count' : {
+          this.count = Utilities.parseIntOrDefault(getValuePrimitive(p), -1);
+          break;
+        }
+        case 'offset' : {
+          this.offset = Utilities.parseIntOrDefault(getValuePrimitive(p), -1);
+          break;
+        }
+
+        case 'limit' : {
+          this.limit = Utilities.parseIntOrDefault(getValuePrimitive(p), -1);
+          break;
         }
       }
     }
 
     if (!this.hasHTTPLanguages && this.hasParam(params, "__Content-Language")) {
-      this.HTTPLanguages = Languages.fromAcceptLanguage(this.paramstr(params, "__Content-Language"));
+      this.HTTPLanguages = Languages.fromAcceptLanguage(this.paramstr(params, "__Content-Language"), this.languageDefinitions, !this.validating);
     }
     if (!this.hasHTTPLanguages && this.hasParam(params, "__Accept-Language")) {
-      this.HTTPLanguages = Languages.fromAcceptLanguage(this.paramstr(params, "__Accept-Language"));
+      this.HTTPLanguages = Languages.fromAcceptLanguage(this.paramstr(params, "__Accept-Language"), this.languageDefinitions, !this.validating);
     }
   }
 
@@ -354,8 +397,8 @@ class TxParameters {
 
   seeParameter(name, value, overwrite) {
     if (value !== null) {
-      if (name === 'displayLanguage' && (!this.hasHTTPLanguages || overwrite)) {
-        this.DisplayLanguages = Languages.fromAcceptLanguage(getValuePrimitive(value))
+      if (name === 'displayLanguage' && (!this.FDisplayLanguages || overwrite)) {
+        this.DisplayLanguages = Languages.fromAcceptLanguage(getValuePrimitive(value), this.languageDefinitions, !this.validating)
       }
 
       if (name === 'designation') {
@@ -383,10 +426,10 @@ class TxParameters {
     return result;
   }
 
-  seeVersionRule(url, mode) {
-    let sl = url.split('|');
+  seeVersionRule(url, vs, mode) {
+    let sl = url ? url.split('|') : [];
     if (sl.length === 2) {
-      this.versionRules.push(new VersionRule(sl[0], sl[1], mode));
+      this.versionRules.push(new VersionRule(sl[0], sl[1], vs, mode));
     } else {
       throw new Error('Unable to understand ' + mode + ' system version "' + url + '"');
     }
@@ -494,18 +537,7 @@ class TxParameters {
     for (let t of this.FVersionRules) {
       s = s + t.asString() + '|';
     }
-    return HashStringToCode32(s).toString();
-  }
-
-  hasValueSetVersionRules() {
-    return this.FValueSetVersionRules !== null;
-  }
-
-  getValueSetVersionRules() {
-    if (this.FValueSetVersionRules === null) {
-      this.FValueSetVersionRules = [];
-    }
-    return this.FValueSetVersionRules;
+    return crypto.createHash('sha256').update('hello').digest(s);
   }
 
   link() {
@@ -513,13 +545,13 @@ class TxParameters {
   }
 
   clone() {
-    let result = new TFHIRTxOperationParams(null);
+    let result = new TxParameters();
     result.assign(this);
     return result;
   }
 
   assign(other) {
-    this.FLanguages = other.FLanguages;
+    this.languageDefinitions = other.languageDefinitions;
     if (other.FVersionRules !== null) {
       this.FVersionRules = [...other.FVersionRules];
     }

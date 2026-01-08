@@ -50,11 +50,13 @@ describe('UniiDataMigrator', () => {
 describe('UniiServices', () => {
   let factory;
   let provider;
+  let opContext;
 
   beforeEach(async () => {
-    factory = new UniiServicesFactory('./data/unii-testing.db');
+    opContext = new OperationContext('en', await TestUtilities.loadTranslations(await TestUtilities.loadLanguageDefinitions()));
+    factory = new UniiServicesFactory(opContext.i18n, './data/unii-testing.db');
     await factory.load();
-    provider = factory.build(new OperationContext(Languages.fromAcceptLanguage('en')), []);
+    provider = factory.build(opContext, []);
   });
 
   afterEach(() => {
@@ -281,13 +283,13 @@ describe('UniiServices', () => {
 
   describe('Factory Functionality', () => {
     test('should track usage count', () => {
-      const factory = new UniiServicesFactory('./data/unii-testing.db');
+      const factory = new UniiServicesFactory(opContext.i18n, './data/unii-testing.db');
       expect(factory.useCount()).toBe(0);
 
-      const provider1 = factory.build(new OperationContext("en"), []);
+      const provider1 = factory.build(opContext, []);
       expect(factory.useCount()).toBe(1);
 
-      const provider2 = factory.build(new OperationContext("en"), []);
+      const provider2 = factory.build(opContext, []);
       expect(factory.useCount()).toBe(2);
 
       provider1.close();
@@ -295,14 +297,14 @@ describe('UniiServices', () => {
     });
 
     test('should return unknown for default version', () => {
-      const factory = new UniiServicesFactory('./data/unii-testing.db');
+      const factory = new UniiServicesFactory(opContext.i18n, './data/unii-testing.db');
       expect(factory.defaultVersion()).toBe('unknown');
     });
 
     test('should build working providers', () => {
-      const factory = new UniiServicesFactory('./data/unii-testing.db');
-      const provider1 = factory.build(new OperationContext('en'), []);
-      const provider2 = factory.build(new OperationContext('en'), []);
+      const factory = new UniiServicesFactory(opContext.i18n, './data/unii-testing.db');
+      const provider1 = factory.build(opContext, []);
+      const provider2 = factory.build(opContext, []);
 
       expect(provider1).toBeTruthy();
       expect(provider2).toBeTruthy();
@@ -313,7 +315,7 @@ describe('UniiServices', () => {
     });
 
     test('should increment uses on recordUse', () => {
-      const factory = new UniiServicesFactory('./data/unii-testing.db');
+      const factory = new UniiServicesFactory(opContext.i18n, './data/unii-testing.db');
       expect(factory.useCount()).toBe(0);
 
       factory.recordUse();
@@ -427,8 +429,8 @@ describe('UniiServices', () => {
     });
 
     test('should properly close database connections', () => {
-      const provider1 = factory.build(new OperationContext('en'), []);
-      const provider2 = factory.build(new OperationContext('en'), []);
+      const provider1 = factory.build(opContext, []);
+      const provider2 = factory.build(opContext, []);
 
       expect(() => {
         provider1.close();

@@ -124,7 +124,7 @@ class MimeTypeServices extends CodeSystemProvider {
     if (ctxt != null) {
       const display = await this.display(ctxt);
       if (display) {
-        displays.addDesignation(true, true, 'en', CodeSystem.makeUseForDisplay(), display);
+        !displays.addDesignation(true, 'active', 'en', CodeSystem.makeUseForDisplay(), display);
       }
       this._listSupplementDesignations(ctxt.code, displays);
     }
@@ -175,11 +175,16 @@ class MimeTypeServices extends CodeSystemProvider {
     await this.#ensureContext(parent);
     return { context: null, message: 'Subsumption not supported for MIME types' };
   }
+
+  versionAlgorithm() {
+    return null;
+  }
+
 }
 
 class MimeTypeServicesFactory extends CodeSystemFactoryProvider {
-  constructor() {
-    super();
+  constructor(i18n) {
+    super(i18n);
     this.uses = 0;
   }
 
@@ -195,6 +200,7 @@ class MimeTypeServicesFactory extends CodeSystemFactoryProvider {
     return null;
   }
 
+  // eslint-disable-next-line no-unused-vars
   async buildKnownValueSet(url, version) {
     return null;
   }

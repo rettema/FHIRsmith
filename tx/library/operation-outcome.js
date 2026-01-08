@@ -8,6 +8,7 @@ class Issue extends Error {
   issue;
   statusCode;
   isSetForhandleAsOO;
+  diagnostics;
 
   constructor (level, cause, path, msgId, message, issue = null, statusCode = 500) {
     super(message);
@@ -36,6 +37,9 @@ class Issue extends Error {
     if (this.msgId) {
       res.extension = [{ url: "http://hl7.org/fhir/StructureDefinition/operationoutcome-message-id", valueString: this.msgId }];
     }
+    if (this.diagnostics) {
+      res.diagnostics = this.diagnostics;
+    }
     return res;
   }
 
@@ -47,6 +51,20 @@ class Issue extends Error {
 
   isHandleAsOO() {
     return this.isSetForhandleAsOO;
+  }
+
+  setFinished() {
+    this.finished = true;
+    return this;
+  }
+  setUnknownSystem(s) {
+    this.unknownSystem = s;
+    return this;
+  }
+
+  withDiagnostics(diagnostics) {
+    this.diagnostics = diagnostics;
+    return this;
   }
 }
 
@@ -84,6 +102,15 @@ class OperationOutcome {
       }
     }
     return false;
+  }
+
+  listMissedErrors(list) {
+    for (let iss of this.jsonObj.issue || []) {
+      if (iss.severity === 'error' && iss.details && iss.details.text && !list.find(msg => msg === iss.details.text )) {
+        return list.push(iss.details.text);
+      }
+    }
+
   }
 }
 

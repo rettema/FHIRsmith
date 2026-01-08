@@ -1,4 +1,4 @@
-const { CodeSystemProvider, FilterExecutionContext } = require('./cs-api');
+const { CodeSystemProvider, FilterExecutionContext, CodeSystemFactoryProvider} = require('./cs-api');
 const assert = require('assert');
 const { CodeSystem } = require("../library/codesystem");
 
@@ -98,7 +98,7 @@ class AreaCodeServices extends CodeSystemProvider {
   async designations(code, displays) {
     const ctxt = await this.#ensureContext(code);
     if (ctxt != null) {
-      displays.addDesignation(true, true, 'en', CodeSystem.makeUseForDisplay(), ctxt.display);
+      displays.addDesignation(true, 'active', 'en', CodeSystem.makeUseForDisplay(), ctxt.display);
       this._listSupplementDesignations(ctxt, displays);
     }
   }
@@ -260,10 +260,16 @@ class AreaCodeServices extends CodeSystemProvider {
     await this.#ensureContext(codeB);
     return 'not-subsumed'; // No subsumption relationships
   }
+
+
+  versionAlgorithm() {
+    return null;
+  }
 }
 
-class AreaCodeFactoryProvider {
-  constructor() {
+class AreaCodeFactoryProvider extends CodeSystemFactoryProvider {
+  constructor(i18n) {
+    super(i18n);
     this.uses = 0;
     this.codes = null;
     this.codeMap = null;
@@ -295,6 +301,7 @@ class AreaCodeFactoryProvider {
     this.uses++;
   }
 
+  // eslint-disable-next-line no-unused-vars
   async buildKnownValueSet(url, version) {
     return null;
   }

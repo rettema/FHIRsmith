@@ -133,7 +133,7 @@ class PackageValueSetProvider extends AbstractValueSetProvider {
 
       const hasSearchParams = Object.keys(params).length > 0;
 
-      for (const [key, vs] of this.valueSetMap) {
+      for (const vs of this.valueSetMap.values()) {
         const json = vs.jsonObj || vs;
 
         // Only process each ValueSet once (use URL to deduplicate)

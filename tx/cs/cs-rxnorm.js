@@ -169,11 +169,11 @@ class RxNormServices extends CodeSystemProvider {
 
     if (ctxt) {
       // Add main display
-      displays.addDesignation(true, true, 'en-US', CodeSystem.makeUseForDisplay(), ctxt.display);
+      displays.addDesignation(true, 'active', 'en-US', CodeSystem.makeUseForDisplay(), ctxt.display);
 
       // Add other displays
       for (const other of ctxt.others) {
-        displays.addDesignation(false, true, 'en-US', null, other);
+        displays.addDesignation(false, 'active', 'en-US', null, other);
       }
 
       // Add supplement designations
@@ -642,11 +642,15 @@ class RxNormServices extends CodeSystemProvider {
 
     params.parameter.push(property);
   }
+
+  versionAlgorithm() {
+    return 'date';
+  }
 }
 
 class RxNormTypeServicesFactory extends CodeSystemFactoryProvider {
-  constructor(dbPath, isNCI = false) {
-    super();
+  constructor(i18n, dbPath, isNCI = false) {
+    super(i18n);
     this.dbPath = dbPath;
     this.isNCI = isNCI;
     this._loaded = false;
@@ -661,6 +665,7 @@ class RxNormTypeServicesFactory extends CodeSystemFactoryProvider {
     return this._sharedData.version;
   }
 
+  // eslint-disable-next-line no-unused-vars
   async buildKnownValueSet(url, version) {
     return null;
   }
@@ -767,15 +772,15 @@ class RxNormTypeServicesFactory extends CodeSystemFactoryProvider {
 
 // Specific RxNorm implementation
 class RxNormServicesFactory extends RxNormTypeServicesFactory {
-  constructor(dbPath) {
-    super(dbPath, false);
+  constructor(languageDefinitions, dbPath) {
+    super(languageDefinitions, dbPath, false);
   }
 }
 
 // NCI Meta implementation
 class NCIServicesFactory extends RxNormTypeServicesFactory {
-  constructor(dbPath) {
-    super(dbPath, true);
+  constructor(languageDefinitions, dbPath) {
+    super(languageDefinitions, dbPath, true);
   }
 }
 

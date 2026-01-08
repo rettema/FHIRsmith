@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const rimraf = require('rimraf');
 const DraftTaskProcessor = require('../../publisher/task-draft');
+const {testOrSkip} = require("../test-utilities");
 
 describe('DraftTaskProcessor Integration Tests', () => {
   let processor;
@@ -78,7 +79,7 @@ describe('DraftTaskProcessor Integration Tests', () => {
   });
 
   describe('Publisher Download', () => {
-    it('should download the latest FHIR IG Publisher', async () => {
+    testOrSkip('should download the latest FHIR IG Publisher', async () => {
       const testDir = path.join(testWorkspaceRoot, 'download-test');
       const taskId = 1;
 
@@ -105,7 +106,7 @@ describe('DraftTaskProcessor Integration Tests', () => {
   });
 
   describe('Repository Cloning', () => {
-    it('should clone a real GitHub repository', async () => {
+    testOrSkip('should clone a real GitHub repository', async () => {
       // ADAPT THIS TO A REAL, SMALL REPOSITORY FOR TESTING
       const testTask = {
         id: 2,
@@ -141,7 +142,7 @@ describe('DraftTaskProcessor Integration Tests', () => {
   });
 
   describe('Full Draft Build Process', () => {
-    it('should complete a full draft build for a simple FHIR IG', async () => {
+    testOrSkip('should complete a full draft build for a simple FHIR IG', async () => {
       // ADAPT THIS TO A REAL, SIMPLE FHIR IG REPOSITORY
       const testTask = {
         id: 3,
@@ -219,7 +220,7 @@ describe('DraftTaskProcessor Integration Tests', () => {
   });
 
   describe('Error Handling', () => {
-    it('should handle invalid repository gracefully', async () => {
+    testOrSkip('should handle invalid repository gracefully', async () => {
       const invalidTask = {
         id: 4,
         npm_package_id: 'invalid.package',
@@ -248,7 +249,7 @@ describe('DraftTaskProcessor Integration Tests', () => {
   });
 
   describe('Directory Management', () => {
-    it('should create and clean directories properly', async () => {
+    testOrSkip('should create and clean directories properly', async () => {
       const testDir = path.join(testWorkspaceRoot, 'directory-test');
 
       // Create a directory with some content
@@ -274,7 +275,7 @@ describe('DraftTaskProcessor Integration Tests', () => {
 
 // Helper function to run a quick validation test
 describe('Environment Validation', () => {
-  it('should have required tools available', async () => {
+  testOrSkip('should have required tools available', async () => {
     const { spawn } = require('child_process');
 
     // Check Java

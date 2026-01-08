@@ -105,12 +105,12 @@ class UniiServices extends CodeSystemProvider {
     if (ctxt != null) {
       // Add main display
       if (ctxt.display) {
-        displays.addDesignation(true, true, 'en', CodeSystem.makeUseForDisplay(), ctxt.display.trim());
+        displays.addDesignation(true, 'active', 'en', CodeSystem.makeUseForDisplay(), ctxt.display.trim());
       }
       // Add other descriptions
       ctxt.others.forEach(other => {
         if (other && other.trim()) {
-          displays.addDesignation(false, true, 'en', CodeSystem.makeUseForDisplay(), other.trim());
+          displays.addDesignation(false, 'active', 'en', CodeSystem.makeUseForDisplay(), other.trim());
         }
       });
       this._listSupplementDesignations(ctxt.code, displays);
@@ -192,11 +192,14 @@ class UniiServices extends CodeSystemProvider {
     });
   }
 
+  versionAlgorithm() {
+    return 'date';
+  }
 }
 
 class UniiServicesFactory extends CodeSystemFactoryProvider {
-  constructor(dbPath) {
-    super();
+  constructor(i18n, dbPath) {
+    super(i18n);
     this.dbPath = dbPath;
     this.uses = 0;
     this._version = null;
@@ -235,6 +238,7 @@ class UniiServicesFactory extends CodeSystemFactoryProvider {
     return new UniiServices(opContext, supplements, new sqlite3.Database(this.dbPath), this._version);
   }
 
+  // eslint-disable-next-line no-unused-vars
   async buildKnownValueSet(url, version) {
     return null;
   }

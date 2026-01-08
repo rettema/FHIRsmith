@@ -489,6 +489,7 @@ describe('SNOMED CT Expression Parser (Standalone Tests)', () => {
 describe('SNOMED CT Subset Validation', () => {
   let factory;
   let provider;
+  let opContext;
 
   // Parse the subset data from the attached file
   const subsetData = parseSubsetData();
@@ -497,8 +498,9 @@ describe('SNOMED CT Subset Validation', () => {
     const cacheFilePath = globalCacheFilePath || findAvailableCacheFile();
 
     // Create factory and provider
-    factory = new SnomedServicesFactory(cacheFilePath);
-    provider = await factory.build(new OperationContext('en'), []);
+    opContext = new OperationContext('en', await TestUtilities.loadTranslations(await TestUtilities.loadLanguageDefinitions()));
+    factory = new SnomedServicesFactory(opContext.i18n, cacheFilePath);
+    provider = await factory.build(opContext, []);
   });
 
   afterAll(() => {

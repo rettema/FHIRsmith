@@ -210,7 +210,7 @@ class CPTServices extends CodeSystemProvider {
     } else if (ctxt instanceof CPTConcept) {
       for (const d of ctxt.designations) {
         const isDisplay = d.kind === 'display';
-        displays.addDesignation(isDisplay, true,'en', isDisplay ? CodeSystem.makeUseForDisplay() : null, d.value);
+        displays.addDesignation(isDisplay, 'active','en', isDisplay ? CodeSystem.makeUseForDisplay() : null, d.value);
       }
 
       // Add supplement designations
@@ -573,11 +573,16 @@ class CPTServices extends CodeSystemProvider {
     await this.#ensureContext(codeB);
     return 'not-subsumed';
   }
+
+
+  versionAlgorithm() {
+    return 'date';
+  }
 }
 
 class CPTServicesFactory extends CodeSystemFactoryProvider {
-  constructor(dbPath) {
-    super();
+  constructor(i18n, dbPath) {
+    super(i18n);
     this.dbPath = dbPath;
     this.uses = 0;
     this._loaded = false;
@@ -593,6 +598,7 @@ class CPTServicesFactory extends CodeSystemFactoryProvider {
     return this._sharedData._version;
   }
 
+  // eslint-disable-next-line no-unused-vars
   async buildKnownValueSet(url, version) {
     return null;
   }
@@ -701,7 +707,7 @@ class CPTServicesFactory extends CodeSystemFactoryProvider {
           for (const row of rows) {
             const concept = this._sharedData.conceptMap.get(row.code);
             if (concept) {
-              concept.addDesignation(row.type, row.value);
+              !concept.addDesignation(row.type, row.value);
             }
           }
           resolve();
@@ -748,6 +754,10 @@ class CPTServicesFactory extends CodeSystemFactoryProvider {
     } catch (e) {
       return `Database error: ${e.message}`;
     }
+  }
+
+  isNotClosed() {
+    return true;
   }
 }
 

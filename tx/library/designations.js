@@ -1,5 +1,4 @@
 const { LanguagePartType, Languages, Language, LanguageDefinitions} = require('../../library/languages');
-const { TypeHelper } = require('../type-helpers');
 const {validateParameter, validateOptionalParameter, validateArrayParameter} = require("../../library/utilities");
 
 /**
@@ -11,22 +10,31 @@ const DisplayCheckingStyle = {
   NORMALISED: 'normalised'
 };
 
+const allowedDesignationExtensions = [
+  'http://hl7.org/fhir/StructureDefinition/coding-sctdescid',
+  'http://hl7.org/fhir/StructureDefinition/rendering-style',
+  'http://hl7.org/fhir/StructureDefinition/rendering-xhtml',
+  'http://hl7.org/fhir/StructureDefinition/structuredefinition-standards-status',
+  'http://hl7.org/fhir/StructureDefinition/codesystem-alternate'
+];
 /**
  * Text search filter with stemming support
  */
 class SearchFilterText {
   constructor(filter) {
-    validateParameter(filter, 'filter', String);
+    validateOptionalParameter(filter, 'filter', String);
 
-    this.filter = filter.toLowerCase();
+    this.filter = filter ? filter.toLowerCase() : null;
     this.stems = [];
-    this._process();
+    if (filter) {
+      this._process();
+    }
   }
 
   /**
    * Check if filter is empty
    */
-  get null() {
+  get isNull() {
     return this.stems.length === 0;
   }
 
@@ -75,11 +83,11 @@ class SearchFilterText {
   passesDesignations(cds) {
     validateOptionalParameter(cds, 'cds', Designations);
 
-    if (!cds) return false;
-
-    if (this.null) {
-      return cds.designations.some(cd => cd.value && cd.value);
+    if (this.isNull) {
+      return true;
     }
+
+    if (!cds) return false;
 
     for (const cd of cds.designations) {
       if (cd.value && this.passes(cd.value)) {
@@ -209,8 +217,8 @@ const DisplayDifference = {
  */
 const DesignationUse = {
   DISPLAY: {
-    system: 'http://terminology.hl7.org/CodeSystem/designation-use',
-    code: 'display'
+    system: 'http://terminology.hl7.org/CodeSystem/hl7TermMaintInfra', // http://terminology.hl7.org/CodeSystem/designation-use',
+    code: 'preferredForLanguage' // 'display'
   },
   FSN: {
     system: 'http://snomed.info/sct',
@@ -230,14 +238,14 @@ const DesignationUse = {
  * Individual concept designation with language, use, and value
  */
 class Designation {
-  isActive;
+  status;
   language;
   use; // Coding {system, version, code, display} - well be DesignationUse.DISPLAY if is display
   value; // string
   extensions = []; // extensions on the designation
 
   constructor() {
-    this.active = false;
+    this.status = null;
     this.language = null;
     this.use = null;
     this.value = null;
@@ -315,6 +323,33 @@ class Designation {
     return this.use && this.use.system == DesignationUse.PREFERRED.system &&
       this.use.code == DesignationUse.PREFERRED.code;
   }
+
+  isActive() {
+    let inactive = ["withdrawn", "inactive"].includes(this.status);
+    return !inactive;
+  }
+
+  asObject() {
+    let obj = {}
+    if (this.language) {
+      obj.language = this.language.code;
+    }
+    if (this.use) {
+      obj.use = this.use;
+    }
+    if (this.value) {
+      obj.value = this.value;
+    }
+    for (let ext of this.extensions || []) {
+      if (allowedDesignationExtensions.includes(ext.url)) {
+        if (!obj.extension) {
+          obj.extension = [];
+        }
+        obj.extension.push(ext);
+      }
+    }
+    return obj;
+  }
 }
 
 /**
@@ -341,10 +376,10 @@ class Designations {
   /**
    * Add a designation with string parameters
    */
-  addDesignation(isDisplay, active, lang, use, display, extensions = []) {
-    validateParameter(active, "active", Boolean);
+  addDesignation(isDisplay, status, lang, use, display, extensions = []) {
+    validateParameter(status, "status", String);
     validateParameter(isDisplay, "isDisplay", Boolean);
-    validateParameter(lang, "lang", String);
+    validateOptionalParameter(lang, "lang", String);
     validateOptionalParameter(use, "use", Object);
     validateParameter(display, "display", String);
     validateArrayParameter(extensions, "extensions", Object);
@@ -352,7 +387,7 @@ class Designations {
     const designation = new Designation();
     designation.language = this.languageDefinitions.parse(lang);
     designation.value = display;
-    designation.active = active;
+    designation.status = status;
 
     if (isDisplay) {
       designation.use = {
@@ -372,15 +407,15 @@ class Designations {
   /**
    * Add designations from an array of displays
    */
-  addDesignationsFromArray(active, isDisplay, lang, use, displays) {
-    validateParameter(active, "active", Boolean);
+  addDesignationsFromArray(status, isDisplay, lang, use, displays) {
+    validateParameter(status, "status", String);
     validateParameter(isDisplay, "isDisplay", Boolean);
     validateParameter(lang, "lang", String);
     validateArrayParameter(displays, "displays", String, false);
 
     if (displays) {
       for (const display of displays) {
-        this.addDesignation(active, isDisplay, lang, use, display);
+        this.addDesignation(isDisplay, status, lang, use, display);
       }
     }
   }
@@ -388,18 +423,19 @@ class Designations {
   /**
    * Add designation from FHIR CodeSystem concept designation
    */
-  addDesignationFromConcept(context, baseLanguage = null) {
-    validateOptionalParameter(context, 'context', Object);
-    if (!context) return;
-
-    if (context.display) {
-      this.addDesignation(true, true, baseLanguage, null, context.display)
-    }
-    if (context.designation && Array.isArray(context.designation)) {
-      for (const d of context.designation) {
-        this.addDesignation(false, true, d.language, d.use, d.value, d.extension);
-      }
-    }
+  addDesignationFromConcept(concept, baseLanguage = null) {
+    validateOptionalParameter(concept, 'concept', Object);
+    if (!concept) return;
+    this.addDesignation(false, "unknown", concept.language, concept.use, concept.value, concept.extension);
+    //
+    // if (context.display) {
+    //   this.addDesignation(true, true, baseLanguage, null, context.display)
+    // }
+    // if (context.designation && Array.isArray(context.designation)) {
+    //   for (const d of context.designation) {
+    //     this.addDesignation(false, "unknown", d.language, d.use, d.value, d.extension);
+    //   }
+    // }
   }
 
   /**
@@ -416,7 +452,7 @@ class Designations {
 
     for (const cd of this.designations) {
       if (this._langsMatch(langList, cd.language, LangMatchType.LANG, defLang) &&
-        (!active || cd.active) &&
+        (!active || cd.isActive()) &&
         cd.value &&
         this._stringMatches(value, cd.value, mode, cd.language)) {
         result.found = true;
@@ -427,7 +463,7 @@ class Designations {
     if (mode === DisplayCheckingStyle.EXACT) {
       for (const cd of this.designations) {
         if (this._langsMatch(langList, cd.language, LangMatchType.LANG, defLang) &&
-          (!active || cd.active) &&
+          (!active || cd.isActive()) &&
           cd.value &&
           this._stringMatches(value, cd.value, DisplayCheckingStyle.CASE_INSENSITIVE, cd.language)) {
           result.difference = DisplayDifference.Case;
@@ -439,7 +475,7 @@ class Designations {
     if (mode !== DisplayCheckingStyle.NORMALISED) {
       for (const cd of this.designations) {
         if (this._langsMatch(langList, cd.language, LangMatchType.LANG, defLang) &&
-          (!active || cd.active) &&
+          (!active || cd.isActive()) &&
           cd.value &&
           this._stringMatches(value, cd.value, DisplayCheckingStyle.NORMALISED, cd.language)) {
           result.difference = DisplayDifference.Normalized;
@@ -681,12 +717,12 @@ class Designations {
   }
 
   /**
-   * Get count of designations
+   * Get count of all designations
+   * @returns {number}
    */
   get count() {
     return this.designations.length;
   }
-
   // Private helper methods
 
   /**
@@ -831,7 +867,7 @@ class Designations {
     const seen = new Set();
 
     for (const d of this.designations) {
-      if (!d.isActive || !d.isUseADisplay() || !d.value) continue;
+      if (!d.isActive() || !d.isUseADisplay() || !d.value) continue;
       if (seen.has(d.value)) continue;
 
       // Check language match
@@ -856,10 +892,10 @@ class Designations {
    * @param {string} display - Display text to find
    * @returns {string} Status string or empty
    */
-  inactiveStatus(display) {
+  status(display) {
     for (const d of this.designations) {
-      if (d.value === display && !d.isActive) {
-        return 'inactive';
+      if (d.value === display) {
+        return this.status;
       }
     }
     return '';
@@ -880,14 +916,6 @@ class Designations {
    */
   all() {
     return [...this.designations];
-  }
-
-  /**
-   * Get count of all designations
-   * @returns {number}
-   */
-  get count() {
-    return this.designations.length;
   }
 
   /**
@@ -925,6 +953,7 @@ module.exports = {
   DesignationUse,
   SearchFilterText,
   DisplayCheckingStyle,
+  DisplayCompareSensitivity,
   DisplayDifference,
   LangMatchType
 };

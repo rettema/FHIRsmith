@@ -16,10 +16,12 @@ const {
 const { UcumService } = require('../../tx/library/ucum-service');
 const { Languages, Language } = require('../../library/languages');
 const {OperationContext} = require("../../tx/operation-context");
+const {TestUtilities} = require("../test-utilities");
 
 describe('UCUM Provider Integration Tests', () => {
   let ucumService;
   let provider;
+  let opContext;
 
   beforeAll(async () => {
     // Initialize real UCUM service
@@ -27,10 +29,9 @@ describe('UCUM Provider Integration Tests', () => {
     ucumService = new UcumService();
     ucumService.init(ucumEssenceXml);
 
-    const languages = new Languages();
-    languages.add(new Language('en'));
-    const factory = new UcumCodeSystemFactory(ucumService);
-    provider = factory.build(new OperationContext(languages), null);
+    opContext = new OperationContext('en', await TestUtilities.loadTranslations());
+    const factory = new UcumCodeSystemFactory(opContext.i18n, ucumService);
+    provider = factory.build(opContext, null);
   });
 
   describe('Medical Laboratory Integration', () => {

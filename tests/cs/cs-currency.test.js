@@ -7,11 +7,13 @@ const {TestUtilities} = require("../test-utilities");
 describe('Iso4217Services', () => {
   let factory;
   let provider;
+  let opContext;
 
   beforeEach(async () => {
-    factory = new Iso4217FactoryProvider();
+    opContext = new OperationContext('en', await TestUtilities.loadTranslations());
+    factory = new Iso4217FactoryProvider(opContext.i18n);
     await factory.load();
-    provider = factory.build(new OperationContext(Languages.fromAcceptLanguage('en')), []);
+    provider = factory.build(opContext, []);
   });
 
   describe('Basic Functionality', () => {
@@ -465,7 +467,7 @@ describe('Iso4217Services', () => {
 
   describe('Factory Functionality', () => {
     test('should track usage count', () => {
-      const factory = new Iso4217FactoryProvider();
+      const factory = new Iso4217FactoryProvider(opContext.i18n);
       expect(factory.useCount()).toBe(0);
 
       factory.build(new OperationContext(Languages.fromAcceptLanguage('en')), []);
@@ -489,7 +491,7 @@ describe('Iso4217Services', () => {
     });
 
     test('should increment uses on recordUse', () => {
-      const factory = new Iso4217FactoryProvider();
+      const factory = new Iso4217FactoryProvider(opContext.i18n);
       expect(factory.useCount()).toBe(0);
 
       factory.recordUse();

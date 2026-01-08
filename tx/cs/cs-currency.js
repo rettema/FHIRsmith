@@ -1,4 +1,4 @@
-const { CodeSystemProvider, FilterExecutionContext } = require('./cs-api');
+const { CodeSystemProvider, FilterExecutionContext, CodeSystemFactoryProvider} = require('./cs-api');
 const assert = require('assert');
 const { CodeSystem } = require("../library/codesystem");
 
@@ -105,7 +105,7 @@ class Iso4217Services extends CodeSystemProvider {
     
     const ctxt = await this.#ensureContext(code);
     if (ctxt != null) {
-      displays.addDesignation(true, true, 'en', CodeSystem.makeUseForDisplay(), ctxt.display);
+      displays.addDesignation(true, 'active', 'en', CodeSystem.makeUseForDisplay(), ctxt.display);
       this._listSupplementDesignations(ctxt.code, displays);
     }
   }
@@ -274,10 +274,16 @@ class Iso4217Services extends CodeSystemProvider {
     await this.#ensureContext(parent);
     return { context: null, message: 'Subsumption not supported for ISO 4217' };
   }
+
+
+  versionAlgorithm() {
+    return null;
+  }
 }
 
-class Iso4217FactoryProvider {
-  constructor() {
+class Iso4217FactoryProvider extends CodeSystemFactoryProvider {
+  constructor(i18n) {
+    super(i18n);
     this.uses = 0;
     this.codes = null;
     this.codeMap = null;
@@ -305,6 +311,7 @@ class Iso4217FactoryProvider {
     return this.uses;
   }
 
+  // eslint-disable-next-line no-unused-vars
   async buildKnownValueSet(url, version) {
     return null;
   }

@@ -22,11 +22,12 @@ class DescriptionCacheEntry {
 }
 
 class LoincProviderContext {
-  constructor(key, kind, code, desc) {
+  constructor(key, kind, code, desc, status) {
     this.key = key;
     this.kind = kind;
     this.code = code;
     this.desc = desc;
+    this.status = status;
     this.displays = []; // Array of DescriptionCacheEntry
     this.children = null; // Will be Set of keys if this has children
   }
@@ -107,7 +108,7 @@ class LoincServices extends CodeSystemProvider {
     this.root = sharedData.root;
     this.firstCodeKey = sharedData.firstCodeKey;
     this.relationships = sharedData.relationships;
-    this.properties = sharedData.properties;
+    this.propertyList = sharedData.propertyList;
     this.statusKeys = sharedData.statusKeys;
     this.statusCodes = sharedData.statusCodes;
   }
@@ -219,7 +220,12 @@ class LoincServices extends CodeSystemProvider {
 
   async isInactive(context) {
     await this.#ensureContext(context);
-    return false; // Handle via status if needed
+    return context.status == 'DISCOURAGED'; // Handle via status if needed
+  }
+
+  async getStatus(context) {
+    await this.#ensureContext(context);
+    return context.status == 'NotStated' ? null : context.status; // Handle via status if needed
   }
 
   async isDeprecated(context) {
@@ -232,7 +238,7 @@ class LoincServices extends CodeSystemProvider {
     const ctxt = await this.#ensureContext(context);
     if (ctxt) {
       // Add main display
-      displays.addDesignation(true, true, 'en-US', CodeSystem.makeUseForDisplay(), ctxt.desc);
+      displays.addDesignation(true, 'active', 'en-US', CodeSystem.makeUseForDisplay(), ctxt.desc);
 
       // Add cached designations
       if (ctxt.displays.length === 0) {
@@ -241,7 +247,7 @@ class LoincServices extends CodeSystemProvider {
 
       for (const entry of ctxt.displays) {
         const use = entry.display ? CodeSystem.makeUseForDisplay() : null;
-        displays.addDesignation(false, true, entry.lang, use, entry.value);
+        displays.addDesignation(false, 'active', entry.lang, use, entry.value);
       }
 
       // Add supplement designations
@@ -351,7 +357,7 @@ class LoincServices extends CodeSystemProvider {
           reject(err);
         } else if (row) {
           const statusDesc = this.statusCodes.get(row.StatusKey.toString());
-          if (statusDesc) {
+          if (row.StatusKey && statusDesc) {
             this.#addProperty(params, 'property', 'STATUS', statusDesc);
           }
           resolve();
@@ -551,7 +557,7 @@ class LoincServices extends CodeSystemProvider {
     }
 
     // Property filters
-    if (this.properties.has(prop) && ['=', 'in', 'exists', 'regex'].includes(op)) {
+    if (this.propertyList.has(prop) && ['=', 'in', 'exists', 'regex'].includes(op)) {
       return true;
     }
 
@@ -724,7 +730,7 @@ class LoincServices extends CodeSystemProvider {
       }
     }
     // Property equal filter (with CLASSTYPE handling)
-    else if (this.properties.has(prop) && op === '=') {
+    else if (this.propertyList.has(prop) && op === '=') {
       let actualValue = value;
       if (prop === 'CLASSTYPE' && ['1', '2', '3', '4'].includes(value)) {
         const classTypes = {
@@ -736,55 +742,55 @@ class LoincServices extends CodeSystemProvider {
         actualValue = classTypes[value];
       }
       sql = `SELECT CodeKey as Key FROM Properties, PropertyValues
-           WHERE Properties.PropertyTypeKey = ${this.properties.get(prop)}
+           WHERE Properties.PropertyTypeKey = ${this.propertyList.get(prop)}
            AND Properties.PropertyValueKey = PropertyValues.PropertyValueKey
            AND PropertyValues.Value = '${this.#sqlWrapString(actualValue)}' COLLATE NOCASE
            ORDER BY CodeKey ASC`;
       lsql = `SELECT COUNT(CodeKey) FROM Properties, PropertyValues 
-            WHERE Properties.PropertyTypeKey = ${this.properties.get(prop)} 
+            WHERE Properties.PropertyTypeKey = ${this.propertyList.get(prop)} 
             AND Properties.PropertyValueKey = PropertyValues.PropertyValueKey 
             AND PropertyValues.Value = '${this.#sqlWrapString(actualValue)}' COLLATE NOCASE 
             AND CodeKey = `;
     }
     // Property 'in' filter
-    else if (this.properties.has(prop) && op === 'in') {
+    else if (this.propertyList.has(prop) && op === 'in') {
       const codes = this.#commaListOfCodes(value);
       sql = `SELECT CodeKey as Key FROM Properties, PropertyValues
-           WHERE Properties.PropertyTypeKey = ${this.properties.get(prop)}
+           WHERE Properties.PropertyTypeKey = ${this.propertyList.get(prop)}
            AND Properties.PropertyValueKey = PropertyValues.PropertyValueKey
            AND PropertyValues.Value IN (${codes}) COLLATE NOCASE
            ORDER BY CodeKey ASC`;
       lsql = `SELECT COUNT(CodeKey) FROM Properties, PropertyValues 
-            WHERE Properties.PropertyTypeKey = ${this.properties.get(prop)} 
+            WHERE Properties.PropertyTypeKey = ${this.propertyList.get(prop)} 
             AND Properties.PropertyValueKey = PropertyValues.PropertyValueKey 
             AND PropertyValues.Value IN (${codes}) COLLATE NOCASE 
             AND CodeKey = `;
     }
     // Property 'exists' filter
-    else if (this.properties.has(prop) && op === 'exists') {
+    else if (this.propertyList.has(prop) && op === 'exists') {
       sql = `SELECT DISTINCT CodeKey as Key FROM Properties
-           WHERE Properties.PropertyTypeKey = ${this.properties.get(prop)}
+           WHERE Properties.PropertyTypeKey = ${this.propertyList.get(prop)}
            ORDER BY CodeKey ASC`;
       lsql = `SELECT COUNT(CodeKey) FROM Properties 
-            WHERE Properties.PropertyTypeKey = ${this.properties.get(prop)} 
+            WHERE Properties.PropertyTypeKey = ${this.propertyList.get(prop)} 
             AND CodeKey = `;
     }
     // Property regex filter
-    else if (this.properties.has(prop) && op === 'regex') {
+    else if (this.propertyList.has(prop) && op === 'regex') {
       const matchingKeys = await this.#findRegexMatches(
         `SELECT PropertyValueKey, Value FROM PropertyValues 
-       WHERE PropertyValueKey IN (SELECT PropertyValueKey FROM Properties WHERE PropertyTypeKey = ${this.properties.get(prop)})`,
+       WHERE PropertyValueKey IN (SELECT PropertyValueKey FROM Properties WHERE PropertyTypeKey = ${this.propertyList.get(prop)})`,
         value,
         'Value',
         'PropertyValueKey'
       );
       if (matchingKeys.length > 0) {
         sql = `SELECT CodeKey as Key FROM Properties
-             WHERE PropertyTypeKey = ${this.properties.get(prop)}
+             WHERE PropertyTypeKey = ${this.propertyList.get(prop)}
              AND PropertyValueKey IN (${matchingKeys.join(',')})
              ORDER BY CodeKey ASC`;
         lsql = `SELECT COUNT(CodeKey) FROM Properties 
-              WHERE PropertyTypeKey = ${this.properties.get(prop)} 
+              WHERE PropertyTypeKey = ${this.propertyList.get(prop)} 
               AND PropertyValueKey IN (${matchingKeys.join(',')}) 
               AND CodeKey = `;
       }
@@ -946,8 +952,6 @@ class LoincServices extends CodeSystemProvider {
   }
 
   async filterLocate(filterContext, set, code) {
-    
-
     const context = this.codes.get(code);
     if (!context) {
       return `Not a valid code: ${code}`;
@@ -961,13 +965,11 @@ class LoincServices extends CodeSystemProvider {
     if (set.hasKey(context.key)) {
       return context;
     } else {
-      return `Code ${code} is not in the specified filter`;
+      return null; // `Code ${code} is not in the specified filter`;
     }
   }
 
   async filterCheck(filterContext, set, concept) {
-    
-
     if (!(concept instanceof LoincProviderContext)) {
       return false;
     }
@@ -989,11 +991,15 @@ class LoincServices extends CodeSystemProvider {
 
     return 'not-subsumed'; // Not implemented yet
   }
+
+  versionAlgorithm() {
+    return 'natural';
+  }
 }
 
 class LoincServicesFactory extends CodeSystemFactoryProvider {
-  constructor(dbPath) {
-    super();
+  constructor(i18n, dbPath) {
+    super(i18n);
     this.dbPath = dbPath;
     this.uses = 0;
     this._loaded = false;
@@ -1026,7 +1032,7 @@ class LoincServicesFactory extends CodeSystemFactoryProvider {
         codes: new Map(),
         codeList: [null],
         relationships: new Map(),
-        properties: new Map(),
+        propertyList: new Map(),
         statusKeys: new Map(),
         statusCodes: new Map(),
         _version: '',
@@ -1036,7 +1042,7 @@ class LoincServicesFactory extends CodeSystemFactoryProvider {
 
       // Load small lookup tables in parallel
       // eslint-disable-next-line no-unused-vars
-      const [langs, statusCodes, relationships, properties, config] = await Promise.all([
+      const [langs, statusCodes, relationships, propertyList, config] = await Promise.all([
         this.#loadLanguages(db),
         this.#loadStatusCodes(db),
         this.#loadRelationshipTypes(db),
@@ -1125,7 +1131,7 @@ class LoincServicesFactory extends CodeSystemFactoryProvider {
           reject(err);
         } else {
           for (const row of rows) {
-            this._sharedData.properties.set(row.Description, row.PropertyTypeKey.toString());
+            this._sharedData.propertyList.set(row.Description, row.PropertyTypeKey.toString());
           }
           resolve();
         }
@@ -1144,7 +1150,7 @@ class LoincServicesFactory extends CodeSystemFactoryProvider {
         this._sharedData.codeList = new Array(maxKey + 1).fill(null);
 
         // Now load all codes
-        db.all('SELECT CodeKey, Code, Type, Description FROM Codes ORDER BY CodeKey ASC', (err, rows) => {
+        db.all('SELECT CodeKey, Code, Type, Codes.Description, StatusCodes.Description as Status FROM Codes, StatusCodes where StatusCodes.StatusKey = Codes.StatusKey order by CodeKey Asc', (err, rows) => {
           if (err) return reject(err);
 
           // Batch process rows
@@ -1153,7 +1159,8 @@ class LoincServicesFactory extends CodeSystemFactoryProvider {
               row.CodeKey,
               row.Type - 1,
               row.Code,
-              row.Description
+              row.Description,
+              row.Status
             );
 
             this._sharedData.codes.set(row.Code, context);

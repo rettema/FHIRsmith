@@ -1,4 +1,3 @@
-const {validateParameter} = require("../../library/utilities");
 
 class Parameters {
   jsonObj;
@@ -11,44 +10,74 @@ class Parameters {
     if (!this.jsonObj.parameter) {
       this.jsonObj.parameter = [];
     }
-    this.jsonObj.parameter.push({ name: name, valueString : value });
+    let p = this.jsonObj.parameter.find(x => x.name === name);
+    if (p) {
+      p.valueString = value;
+    } else {
+      this.jsonObj.parameter.push({name: name, valueString: value});
+    }
   }
 
   addParam(name, valuename, value) {
     if (!this.jsonObj.parameter) {
       this.jsonObj.parameter = [];
     }
-    let v = { name: name };
-    v[valuename] = value;
-    this.jsonObj.parameter.push(v);
+    let p = this.jsonObj.parameter.find(x => x.name === name);
+    if (p) {
+      p[valuename] = value;
+    } else {
+      let v = {name: name};
+      v[valuename] = value;
+      this.jsonObj.parameter.push(v);
+    }
   }
 
   addParamUri(name, value) {
     if (!this.jsonObj.parameter) {
       this.jsonObj.parameter = [];
     }
-    this.jsonObj.parameter.push({ name: name, valueUri : value });
+    let p = this.jsonObj.parameter.find(x => x.name === name);
+    if (p) {
+      p.valueUri = value;
+    } else {
+      this.jsonObj.parameter.push({name: name, valueUri: value});
+    }
   }
 
   addParamCanonical(name, value) {
     if (!this.jsonObj.parameter) {
       this.jsonObj.parameter = [];
     }
-    this.jsonObj.parameter.push({ name: name, valueCanonical : value });
+    let p = this.jsonObj.parameter.find(x => x.name === name);
+    if (p) {
+      p.valueCanonical = value;
+    } else {
+      this.jsonObj.parameter.push({name: name, valueCanonical: value});
+    }
   }
 
   addParamCode(name, value) {
     if (!this.jsonObj.parameter) {
       this.jsonObj.parameter = [];
     }
-    this.jsonObj.parameter.push({ name: name, valueCode : value });
+    let p = this.jsonObj.parameter.find(x => x.name === name);
+    if (p) {
+      p.valueCode = value;
+    } else {
+      this.jsonObj.parameter.push({name: name, valueCode: value});
+    }
   }
 
   addParamBool(name, value) {
     if (!this.jsonObj.parameter) {
       this.jsonObj.parameter = [];
     }
-    this.jsonObj.parameter.push({ name: name, valueBoolean : value });
+    let p = this.jsonObj.parameter.find(x => x.name === name);
+    if (p) {
+      p.valueBoolean = value;
+    } else {
+      this.jsonObj.parameter.push({name: name, valueBoolean: value});
+    }
   }
 
   addParamResource(name, resource) {
@@ -57,6 +86,8 @@ class Parameters {
     }
     this.jsonObj.parameter.push({ name: name, resource : resource });
   }
+
+
 }
 
 module.exports = { Parameters };

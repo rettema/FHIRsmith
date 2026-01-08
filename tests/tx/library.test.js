@@ -36,7 +36,7 @@ describe('Provider Test', () => {
   async function testAllCodeSystemFactories(library) {
     console.log(`\nTesting ${library.codeSystemFactories.size} code system factories...`);
 
-    const opContext = new OperationContext(Languages.fromAcceptLanguage("en"));
+    const opContext = new OperationContext(Languages.fromAcceptLanguage("en"), library.i18n);
     let successCount = 0;
     let failureCount = 0;
     const failures = [];
@@ -67,6 +67,7 @@ describe('Provider Test', () => {
         }
 
       } catch (error) {
+        console.log(error);
         failureCount++;
         failures.push(`${key}: ${error.message}`);
         console.log(`✗ Error creating provider for ${key}: ${error.message}`);

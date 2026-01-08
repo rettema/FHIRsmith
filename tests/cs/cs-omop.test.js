@@ -9,6 +9,7 @@ describe('OMOP Provider', () => {
   const testDbPath = path.resolve(__dirname, '../../tx/data/omop-fragment.db');
   let factory;
   let provider;
+  let opContext;
 
   // Test data structure - will be populated dynamically from the database
   const testData = {
@@ -31,8 +32,9 @@ describe('OMOP Provider', () => {
     expect(fs.existsSync(testDbPath)).toBe(true);
 
     // Create factory and provider
-    factory = new OMOPServicesFactory(testDbPath);
-    provider = await factory.build(new OperationContext('en'), []);
+    opContext = new OperationContext('en', await TestUtilities.loadTranslations());
+    factory = new OMOPServicesFactory(opContext.i18n, testDbPath);
+    provider = await factory.build(opContext, []);
 
     // Populate test data by querying the database
     await populateTestData();
@@ -292,12 +294,12 @@ describe('OMOP Provider', () => {
 
   describe('Filter Support', () => {
     test('should support domain filter', async () => {
-      expect(await provider.doesFilter('domain', 'equal', 'Condition')).toBe(true);
-      expect(await provider.doesFilter('domain', 'equal', 'Drug')).toBe(true);
+      expect(await provider.doesFilter('domain', '=', 'Condition')).toBe(true);
+      expect(await provider.doesFilter('domain', '=', 'Drug')).toBe(true);
     });
 
     test('should reject unsupported filters', async () => {
-      expect(await provider.doesFilter('unsupported', 'equal', 'value')).toBe(false);
+      expect(await provider.doesFilter('unsupported', '=', 'value')).toBe(false);
       expect(await provider.doesFilter('domain', 'regex', 'value')).toBe(false);
     });
   });
@@ -308,7 +310,7 @@ describe('OMOP Provider', () => {
         const testDomain = testData.domains[0];
         const filterContext = await provider.getPrepContext(true);
 
-        await provider.filter(filterContext, 'domain', 'equal', testDomain);
+        await provider.filter(filterContext, 'domain', '=', testDomain);
         const filters = await provider.executeFilters(filterContext);
         const filter = filters[0];
 
@@ -344,7 +346,7 @@ describe('OMOP Provider', () => {
         const filterContext = await provider.getPrepContext(true);
 
         try {
-          await provider.filter(filterContext, 'domain', 'equal', domain);
+          await provider.filter(filterContext, 'domain', '=', domain);
           const filters = await provider.executeFilters(filterContext);
           const filter = filters[0];
 
@@ -368,7 +370,7 @@ describe('OMOP Provider', () => {
 
         if (concept && concept.domain) {
           const filterContext = await provider.getPrepContext(true);
-          await provider.filter(filterContext, 'domain', 'equal', concept.domain);
+          await provider.filter(filterContext, 'domain', '=', concept.domain);
           const filters = await provider.executeFilters(filterContext);
           const filter = filters[0];
 
@@ -385,7 +387,7 @@ describe('OMOP Provider', () => {
     test('should have closed filters', async () => {
       if (testData.domains.length > 0) {
         const filterContext = await provider.getPrepContext(true);
-        await provider.filter(filterContext, 'domain', 'equal', testData.domains[0]);
+        await provider.filter(filterContext, 'domain', '=', testData.domains[0]);
 
         const notClosed = await provider.filtersNotClosed(filterContext);
         expect(notClosed).toBe(false);
@@ -479,7 +481,7 @@ describe('OMOP Provider', () => {
       const filterContext = await provider.getPrepContext(true);
 
       await expect(
-        provider.filter(filterContext, 'unsupported', 'equal', 'value')
+        provider.filter(filterContext, 'unsupported', '=', 'value')
       ).rejects.toThrow('not understood');
     });
 
@@ -534,7 +536,7 @@ describe('OMOP Provider', () => {
 
       for (const domain of testData.domains.slice(0, 3)) {
         const filterContext = await provider.getPrepContext(true);
-        await provider.filter(filterContext, 'domain', 'equal', domain);
+        await provider.filter(filterContext, 'domain', '=', domain);
         const filters = await provider.executeFilters(filterContext);
         const filter = filters[0];
 

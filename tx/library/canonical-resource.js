@@ -54,9 +54,6 @@ class CanonicalResource {
     return this.jsonObj.status;
   }
 
-  get resourceType() {
-    return this.jsonObj.resourceType;
-  }
 
   get versionedUrl() {
     return this.version ? this.url+'|' + this.version : this.url;
@@ -67,7 +64,7 @@ class CanonicalResource {
   }
 
   get fhirType() {
-    return this.resourceType;
+    return this.jsonObj.resourceType;
   }
 
 
@@ -79,6 +76,13 @@ class CanonicalResource {
     return this.fhirVersion;
   }
 
+  versionAlgorithm() {
+    let c = this.jsonObj.versionAlgorithmCoding;
+    if (c) {
+      return c.code;
+    }
+    return this.jsonObj.versionAlgorithmString;
+  }
 }
 
 module.exports = { CanonicalResource };

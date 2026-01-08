@@ -1,15 +1,18 @@
 const { CountryCodeFactoryProvider } = require('../../tx/cs/cs-country');
 const { OperationContext } = require('../../tx/operation-context');
 const {Languages} = require("../../library/languages");
+const {TestUtilities} = require("../test-utilities");
 
 describe('CountryCodeServices', () => {
   let factory;
   let provider;
+  let opContext;
 
   beforeEach(async () => {
-    factory = new CountryCodeFactoryProvider();
+    opContext = new OperationContext('en', await TestUtilities.loadTranslations());
+    factory = new CountryCodeFactoryProvider(opContext.i18n);
     await factory.load();
-    provider = factory.build(new OperationContext(Languages.fromAcceptLanguage('en')), []);
+    provider = factory.build(opContext, []);
   });
 
   describe('Basic Functionality', () => {
@@ -437,13 +440,13 @@ describe('CountryCodeServices', () => {
 
   describe('Factory Functionality', () => {
     test('should track usage count', () => {
-      const factory = new CountryCodeFactoryProvider();
+      const factory = new CountryCodeFactoryProvider(opContext.i18n);
       expect(factory.useCount()).toBe(0);
 
-      factory.build(new OperationContext(Languages.fromAcceptLanguage('en')), []);
+      factory.build(opContext, []);
       expect(factory.useCount()).toBe(1);
 
-      factory.build(new OperationContext(Languages.fromAcceptLanguage('en')), []);
+      factory.build(opContext, []);
       expect(factory.useCount()).toBe(2);
     });
 
@@ -452,8 +455,8 @@ describe('CountryCodeServices', () => {
     });
 
     test('should build working providers', () => {
-      const provider1 = factory.build(new OperationContext(Languages.fromAcceptLanguage('en')), []);
-      const provider2 = factory.build(new OperationContext(Languages.fromAcceptLanguage('en')), []);
+      const provider1 = factory.build(opContext, []);
+      const provider2 = factory.build(opContext, []);
 
       expect(provider1).toBeTruthy();
       expect(provider2).toBeTruthy();

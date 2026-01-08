@@ -1,4 +1,5 @@
-const {getValuePrimitive} = require("../../library/utilities");
+const {getValuePrimitive, Utilities} = require("../../library/utilities");
+const {Issue} = require("./operation-outcome");
 
 const Extensions = {
 
@@ -16,15 +17,37 @@ const Extensions = {
     }
   },
 
-  checkNoImplicitRules(valueSet, place, name) {
-
+  checkNoImplicitRules(resource, place, name) {
+    if (!resource) {
+      return;
+    }
+    if (resource.jsonObj) {
+      resource = resource.jsonObj
+    }
+    if (resource.implicitRules) {
+      throw new Issue("error", "business-rule", null, null, 'Cannot process resource "'+name+'" due to the presence of implicit rules @'+place);
+    }
   },
-  checkNoModifiers(valueSet, prepare1, valueSet1) {
+
+  checkNoModifiers(element, place, name) {
+    if (!element) {
+      return;
+    }
+    if (element.jsonObj) {
+      element = element.jsonObj
+    }
+    if (element.modifierExtension) {
+      throw new Issue("error", "business-rule", null, null, 'Cannot process resource "'+name+'" due to the presence of modifier extensions @'+place);
+    }
     return true;
   },
 
   readString(resource, url) {
-    for (let ext of resource.extension || []) {
+    if (!resource) {
+      return undefined;
+    }
+    const extensions = Array.isArray(resource) ? resource : (resource.extension || []);
+    for (let ext of extensions || []) {
       if (ext.url === url) {
         return getValuePrimitive(ext);
       }
@@ -32,17 +55,52 @@ const Extensions = {
     return null;
   },
 
+  readNumber(resource, url, defaultValue) {
+    if (!resource) {
+      return defaultValue;
+    }
+    const extensions = Array.isArray(resource) ? resource : (resource.extension || []);
+    for (let ext of extensions) {
+      if (ext.url === url) {
+        const value = getValuePrimitive(ext);
+        if (typeof value === 'number') {
+          return value;
+        }
+        if (typeof value === 'string') {
+          const num = parseFloat(value);
+          return isNaN(num) ? defaultValue : num;
+        }
+        return defaultValue;
+      }
+    }
+    return defaultValue;
+  },
+
   readValue(resource, url) {
-    for (let ext of resource.extension || []) {
+    if (!resource) {
+      return undefined;
+    }
+    const extensions = Array.isArray(resource) ? resource : (resource.extension || []);
+    for (let ext of extensions || []) {
       if (ext.url === url) {
         return ext;
       }
     }
     return null;
   },
-
   has(object, url) {
-    return (object.extension || []).find(ex => ex.url === url);
+    if (!object) {
+      return undefined;
+    }
+    const extensions = Array.isArray(object) ? object : (object.extension || []);
+    return extensions.find(ex => ex.url === url);
+  },
+
+  addBoolean(exp, url, b) {
+    if (!exp.extension) {
+      exp.extension = [];
+    }
+    exp.extension.push({ url : url, valueBoolean : b });
   }
 }
 

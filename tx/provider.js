@@ -5,7 +5,6 @@ const {OperationContext, TerminologyError} = require("./operation-context");
 const {validateParameter, validateOptionalParameter, validateArrayParameter} = require("../library/utilities");
 const path = require("path");
 const {PackageContentLoader} = require("../library/package-manager");
-const {ListCodeSystemProvider} = require("./cs/cs-provider-list");
 const {PackageValueSetProvider} = require("./vs/vs-package");
 const ValueSet = require("./library/valueset");
 
@@ -21,6 +20,8 @@ const ValueSet = require("./library/valueset");
  *
  */
 class Provider {
+  i18n;
+
   /**
    * {Map<String, CodeSystemFactoryProvider>} A list of code system factories that contains all the preloaded native code systems
    */
@@ -126,7 +127,7 @@ class Provider {
 
   getCodeSystemById(opContext, id) {
     // Search through codeSystems map for matching id
-    for (const [key, cs] of this.codeSystems) {
+    for (const cs of this.codeSystems.values()) {
       if (opContext) opContext.deadCheck('getCodeSystemById');
       if (cs.jsonObj.id === id) {
         return cs;

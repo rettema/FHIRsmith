@@ -135,6 +135,7 @@ describe('Expand Worker', () => {
               name: 'valueSet',
               resource: {
                 resourceType: 'ValueSet',
+                url: 'http://hl7.org/fhir/ValueSet/test/something',
                 status: 'active',
                 compose: {
                   include: [{
@@ -160,6 +161,7 @@ describe('Expand Worker', () => {
         .set('Content-Type', 'application/json')
         .send({
           resourceType: 'ValueSet',
+          url: 'http://hl7.org/fhir/ValueSet/test/something',
           status: 'active',
           compose: {
             include: [{

@@ -7,7 +7,7 @@ const { OperationContext } = require('../../tx/operation-context');
 const {Designations} = require("../../tx/library/designations");
 const {Languages, LanguageDefinitions} = require("../../library/languages");
 const {I18nSupport} = require("../../library/i18nsupport");
-const {TestUtilities} = require("../test-utilities");
+const {TestUtilities, testOrSkip} = require("../test-utilities");
 
 describe('RxNorm Import', () => {
   const sourceDir = path.resolve(__dirname, '../../tx/data/rxnorm');
@@ -73,11 +73,11 @@ describe('RxNorm Import', () => {
   });
 
   describe('Prerequisites', () => {
-    test('source directory exists', () => {
+    testOrSkip('source directory exists', () => {
       expect(fs.existsSync(sourceDir)).toBe(true);
     });
 
-    test('required RRF files exist', () => {
+    testOrSkip('required RRF files exist', () => {
       const requiredFiles = ['RXNCONSO.RRF', 'RXNREL.RRF', 'RXNSTY.RRF'];
 
       for (const file of requiredFiles) {
@@ -89,14 +89,14 @@ describe('RxNorm Import', () => {
   });
 
   describe('Import Results', () => {
-    test('database was created successfully', () => {
+    testOrSkip('database was created successfully', () => {
       expect(fs.existsSync(testDbPath)).toBe(true);
 
       const stats = fs.statSync(testDbPath);
       expect(stats.size).toBeGreaterThan(1024 * 1024); // At least 1MB
     });
 
-    test('import completed within reasonable time', () => {
+    testOrSkip('import completed within reasonable time', () => {
       const durationMinutes = importDuration / 60;
 
       // Should complete in under 8 minutes for subset with stems
@@ -105,7 +105,7 @@ describe('RxNorm Import', () => {
       console.log(`Import performance: ${importDuration.toFixed(1)} seconds (${durationMinutes.toFixed(2)} minutes)`);
     });
 
-    test('database contains expected record counts', () => {
+    testOrSkip('database contains expected record counts', () => {
       expect(dbCounts.RXNCONSO).toBe(expectedCounts.RXNCONSO);
       expect(dbCounts.RXNREL).toBe(expectedCounts.RXNREL);
       expect(dbCounts.RXNSTY).toBe(expectedCounts.RXNSTY);
@@ -119,7 +119,7 @@ describe('RxNorm Import', () => {
       console.log('Database counts:', dbCounts);
     });
 
-    test('database has proper schema structure', () => {
+    testOrSkip('database has proper schema structure', () => {
       // Check required tables exist
       const expectedTables = ['RXNCONSO', 'RXNREL', 'RXNSTY', 'RXNSAB', 'RXNCUI', 'RXNATOMARCHIVE', 'RXNSTEMS'];
       for (const table of expectedTables) {
@@ -136,7 +136,7 @@ describe('RxNorm Import', () => {
       console.log('Tables found:', dbSchema.tables);
     });
 
-    test('database contains valid RxNorm data', () => {
+    testOrSkip('database contains valid RxNorm data', () => {
       // Verify we have RXNORM concepts
       expect(sampleData.rxnormConcepts).toBeGreaterThan(0);
 
@@ -152,7 +152,7 @@ describe('RxNorm Import', () => {
       console.log('Data integrity check:', sampleData);
     });
 
-    test('database has representative term types', () => {
+    testOrSkip('database has representative term types', () => {
       expect(sampleData.termTypes.length).toBeGreaterThan(5);
       expect(sampleData.termTypes).toContain('IN');  // Should have Ingredient
       expect(sampleData.termTypes).toContain('BN');  // Should have Brand Name
@@ -160,7 +160,7 @@ describe('RxNorm Import', () => {
       console.log('Term types found:', sampleData.termTypes);
     });
 
-    test('database has representative sources', () => {
+    testOrSkip('database has representative sources', () => {
       expect(sampleData.sources.length).toBeGreaterThan(0);
       expect(sampleData.sources).toContain('RXNORM');
 
@@ -179,17 +179,16 @@ describe('RxNorm Provider', () => {
   const testDbPath = path.resolve(__dirname, '../../data/rxnorm-testing.db');
   let factory;
   let provider;
-  let languageDefinitions;
+  let opContext;
 
   beforeAll(async () => {
     // Verify test database exists (should be created by import tests)
     expect(fs.existsSync(testDbPath)).toBe(true);
 
-    languageDefinitions = await TestUtilities.loadLanguageDefinitions();
-    let i18n = await TestUtilities.loadTranslations(languageDefinitions);
     // Create factory and provider
-    factory = new RxNormServicesFactory(testDbPath);
-    provider = await factory.build(new OperationContext('en', i18n), []);
+    opContext = new OperationContext('en', await TestUtilities.loadTranslations(await TestUtilities.loadLanguageDefinitions()));
+    factory = new RxNormServicesFactory(opContext.i18n, testDbPath);
+    provider = await factory.build(opContext, []);
   });
 
   afterAll(() => {
@@ -199,46 +198,46 @@ describe('RxNorm Provider', () => {
   });
 
   describe('Factory and Basic Setup', () => {
-    test('should create factory and provider', () => {
+    testOrSkip('should create factory and provider', () => {
       expect(factory).toBeDefined();
       expect(provider).toBeDefined();
       expect(provider).toBeInstanceOf(RxNormServices);
     });
 
-    test('should have correct system URI', () => {
+    testOrSkip('should have correct system URI', () => {
       expect(provider.system()).toBe('http://www.nlm.nih.gov/research/umls/rxnorm');
     });
 
-    test('should have description', () => {
+    testOrSkip('should have description', () => {
       expect(provider.description()).toBe('RxNorm');
     });
 
-    test('should return version', async () => {
+    testOrSkip('should return version', async () => {
       const version = await provider.version();
       expect(version).toBeDefined();
       expect(typeof version).toBe('string');
       console.log(`✓ RxNorm version: ${version}`);
     });
 
-    test('should return total count', async () => {
+    testOrSkip('should return total count', async () => {
       const count = await provider.totalCount();
       expect(count).toBeGreaterThan(0);
       expect(typeof count).toBe('number');
       console.log(`✓ Total RxNorm concepts: ${count}`);
     });
 
-    test('should have parents', () => {
+    testOrSkip('should have parents', () => {
       expect(provider.hasParents()).toBe(true);
     });
 
-    test('should get SAB and code field correctly', () => {
+    testOrSkip('should get SAB and code field correctly', () => {
       expect(provider.getSAB()).toBe('RXNORM');
       expect(provider.getCodeField()).toBe('RXCUI');
     });
   });
 
   describe('Code Lookup', () => {
-    test('should locate known RxNorm codes', async () => {
+    testOrSkip('should locate known RxNorm codes', async () => {
       const testCodes = expectedResults.basic.knownCodes;
 
       for (const code of testCodes) {
@@ -254,7 +253,7 @@ describe('RxNorm Provider', () => {
       }
     });
 
-    test('should find codes by name', async () => {
+    testOrSkip('should find codes by name', async () => {
       // This tests if any of the known drug names exist in our subset
       const testNames = expectedResults.basic.knownNames;
       let foundAny = false;
@@ -277,13 +276,13 @@ describe('RxNorm Provider', () => {
       }
     });
 
-    test('should return null for non-existent code', async () => {
+    testOrSkip('should return null for non-existent code', async () => {
       const result = await provider.locate('99999999');
       expect(result.context).toBeNull();
       expect(result.message).toContain('not found');
     });
 
-    test('should get display for codes', async () => {
+    testOrSkip('should get display for codes', async () => {
       // Find first available code in database
       const sampleCode = await getFirstAvailableCode(testDbPath);
       if (sampleCode) {
@@ -295,7 +294,7 @@ describe('RxNorm Provider', () => {
       }
     });
 
-    test('should return correct code for context', async () => {
+    testOrSkip('should return correct code for context', async () => {
       const sampleCode = await getFirstAvailableCode(testDbPath);
       if (sampleCode) {
         const result = await provider.locate(sampleCode);
@@ -306,7 +305,7 @@ describe('RxNorm Provider', () => {
   });
 
   describe('Code Properties and Methods', () => {
-    test('should return false for abstract concepts', async () => {
+    testOrSkip('should return false for abstract concepts', async () => {
       const sampleCode = await getFirstAvailableCode(testDbPath);
       if (sampleCode) {
         const result = await provider.locate(sampleCode);
@@ -315,7 +314,7 @@ describe('RxNorm Provider', () => {
       }
     });
 
-    test('should check inactive status', async () => {
+    testOrSkip('should check inactive status', async () => {
       const sampleCode = await getFirstAvailableCode(testDbPath);
       if (sampleCode) {
         const result = await provider.locate(sampleCode);
@@ -324,7 +323,7 @@ describe('RxNorm Provider', () => {
       }
     });
 
-    test('should return null for definition', async () => {
+    testOrSkip('should return null for definition', async () => {
       const sampleCode = await getFirstAvailableCode(testDbPath);
       if (sampleCode) {
         const result = await provider.locate(sampleCode);
@@ -333,7 +332,7 @@ describe('RxNorm Provider', () => {
       }
     });
 
-    test('should handle archived codes', async () => {
+    testOrSkip('should handle archived codes', async () => {
       const archivedCode = await getArchivedCode(testDbPath);
       if (archivedCode) {
         const result = await provider.locate(archivedCode);
@@ -350,7 +349,7 @@ describe('RxNorm Provider', () => {
   });
 
   describe('Designations', () => {
-    test('should return designations for codes', async () => {
+    testOrSkip('should return designations for codes', async () => {
       const sampleCode = await getFirstAvailableCode(testDbPath);
       if (sampleCode) {
         let displays = new Designations(languageDefinitions);
@@ -368,7 +367,7 @@ describe('RxNorm Provider', () => {
   });
 
   describe('Filter Support', () => {
-    test('should support TTY filters', async () => {
+    testOrSkip('should support TTY filters', async () => {
       const ttyTests = expectedResults.filters.TTY;
 
       for (const testCase of ttyTests) {
@@ -382,7 +381,7 @@ describe('RxNorm Provider', () => {
       }
     });
 
-    test('should support STY filters', async () => {
+    testOrSkip('should support STY filters', async () => {
       const styTests = expectedResults.filters.STY;
 
       for (const testCase of styTests) {
@@ -396,7 +395,7 @@ describe('RxNorm Provider', () => {
       }
     });
 
-    test('should support SAB filters', async () => {
+    testOrSkip('should support SAB filters', async () => {
       const sabTests = expectedResults.filters.SAB;
 
       for (const testCase of sabTests) {
@@ -410,7 +409,7 @@ describe('RxNorm Provider', () => {
       }
     });
 
-    test('should support relationship filters', async () => {
+    testOrSkip('should support relationship filters', async () => {
       const relTests = expectedResults.filters.relationships;
 
       for (const testCase of relTests) {
@@ -424,14 +423,14 @@ describe('RxNorm Provider', () => {
       }
     });
 
-    test('should reject unsupported filters', async () => {
+    testOrSkip('should reject unsupported filters', async () => {
       expect(await provider.doesFilter('unsupported', 'equal', 'value')).toBe(false);
       expect(await provider.doesFilter('TTY', 'unsupported-op', 'value')).toBe(false);
     });
   });
 
   describe('TTY Filters', () => {
-    test('should filter by term type (TTY)', async () => {
+    testOrSkip('should filter by term type (TTY)', async () => {
       const testCases = expectedResults.filters.TTY;
 
       for (const testCase of testCases) {
@@ -470,7 +469,7 @@ describe('RxNorm Provider', () => {
   });
 
   describe('SAB Filters', () => {
-    test('should filter by source (SAB)', async () => {
+    testOrSkip('should filter by source (SAB)', async () => {
       const testCases = expectedResults.filters.SAB;
 
       for (const testCase of testCases) {
@@ -493,7 +492,7 @@ describe('RxNorm Provider', () => {
   });
 
   describe('STY Filters', () => {
-    test('should filter by semantic type (STY)', async () => {
+    testOrSkip('should filter by semantic type (STY)', async () => {
       const testCases = expectedResults.filters.STY;
 
       for (const testCase of testCases) {
@@ -516,7 +515,7 @@ describe('RxNorm Provider', () => {
   });
 
   describe('Text Search', () => {
-    test('should perform text search using stems', async () => {
+    testOrSkip('should perform text search using stems', async () => {
       const testTerms = expectedResults.textSearch.testTerms;
 
       for (const testTerm of testTerms) {
@@ -546,7 +545,7 @@ describe('RxNorm Provider', () => {
   });
 
   describe('Filter Operations', () => {
-    test('should locate codes within filters', async () => {
+    testOrSkip('should locate codes within filters', async () => {
       // Use SAB filter as it's most likely to have results
       const filterContext = await provider.getPrepContext(false);
       await provider.filter(filterContext, 'SAB', 'equal', 'RXNORM');
@@ -570,7 +569,7 @@ describe('RxNorm Provider', () => {
       }
     });
 
-    test('should check if concepts are in filters', async () => {
+    testOrSkip('should check if concepts are in filters', async () => {
       const filterContext = await provider.getPrepContext(true);
       await provider.filter(filterContext, 'SAB', 'equal', 'RXNORM');
       const filters = await provider.executeFilters(filterContext);
@@ -589,7 +588,7 @@ describe('RxNorm Provider', () => {
   });
 
   describe('Extended Lookup', () => {
-    test('should extend lookup with designations', async () => {
+    testOrSkip('should extend lookup with designations', async () => {
       const sampleCode = await getFirstAvailableCode(testDbPath);
       if (sampleCode) {
         const params = { parameter: [] };
@@ -608,7 +607,7 @@ describe('RxNorm Provider', () => {
   });
 
   describe('Iterator Support', () => {
-    test('should iterate codes', async () => {
+    testOrSkip('should iterate codes', async () => {
       const iterator = await provider.iterator(null);
       expect(iterator).toBeDefined();
 
@@ -631,7 +630,7 @@ describe('RxNorm Provider', () => {
 
   describe('Error Handling', () => {
 
-    test('should handle unsupported filters', async () => {
+    testOrSkip('should handle unsupported filters', async () => {
       const filterContext = await provider.getPrepContext(true);
 
       await expect(
@@ -639,7 +638,7 @@ describe('RxNorm Provider', () => {
       ).rejects.toThrow();
     });
 
-    test('should handle extend lookup with invalid context', async () => {
+    testOrSkip('should handle extend lookup with invalid context', async () => {
       const params = { parameter: [] };
 
       await expect(
@@ -649,7 +648,7 @@ describe('RxNorm Provider', () => {
   });
 
   describe('Data Validation', () => {
-    test('should have expected term types in database', async () => {
+    testOrSkip('should have expected term types in database', async () => {
       const termTypes = await getTermTypes(testDbPath);
       const expectedTTYs = expectedResults.termTypes.expected;
 
@@ -662,7 +661,7 @@ describe('RxNorm Provider', () => {
       console.log(`✓ Found ${foundExpected.length}/${expectedTTYs.length} expected term types`);
     });
 
-    test('should have expected sources in database', async () => {
+    testOrSkip('should have expected sources in database', async () => {
       const sources = await getSources(testDbPath);
       const expectedSources = expectedResults.sources.expected;
 
@@ -673,13 +672,13 @@ describe('RxNorm Provider', () => {
       console.log(`✓ Found ${foundExpected.length}/${expectedSources.length} expected sources`);
     });
 
-    test('should have relationships in database', async () => {
+    testOrSkip('should have relationships in database', async () => {
       const relationships = await getRelationshipTypes(testDbPath);
       console.log('Available relationship types:', relationships);
       expect(relationships.length).toBeGreaterThan(0);
     });
 
-    test('should have semantic types in database', async () => {
+    testOrSkip('should have semantic types in database', async () => {
       const semanticTypes = await getSemanticTypes(testDbPath);
       console.log('Available semantic types:', semanticTypes.slice(0, 10)); // Show first 10
       expect(semanticTypes.length).toBeGreaterThan(0);

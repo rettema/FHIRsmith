@@ -10,7 +10,7 @@ describe('CPT Provider', () => {
   const testDbPath = path.resolve(__dirname, '../../tx/data/cpt-fragment.db');
   let factory;
   let provider;
-  let langList = new Languages();
+  let opContext;
 
   // Test data from the fragment database
   const testData = {
@@ -63,8 +63,9 @@ describe('CPT Provider', () => {
     expect(fs.existsSync(testDbPath)).toBe(true);
 
     // Create factory and provider
-    factory = new CPTServicesFactory(testDbPath);
-    provider = await factory.build(new OperationContext('en'), []);
+    opContext = new OperationContext('en', await TestUtilities.loadTranslations());
+    factory = new CPTServicesFactory(opContext.i18n, testDbPath);
+    provider = await factory.build(opContext, []);
   });
 
   afterAll(() => {
@@ -300,22 +301,22 @@ describe('CPT Provider', () => {
 
   describe('Filter Support', () => {
     test('should support modifier filter', async () => {
-      expect(await provider.doesFilter('modifier', 'equal', 'true')).toBe(true);
-      expect(await provider.doesFilter('modifier', 'equal', 'false')).toBe(true);
+      expect(await provider.doesFilter('modifier', '=', 'true')).toBe(true);
+      expect(await provider.doesFilter('modifier', '=', 'false')).toBe(true);
     });
 
     test('should support modified filter', async () => {
-      expect(await provider.doesFilter('modified', 'equal', 'true')).toBe(true);
-      expect(await provider.doesFilter('modified', 'equal', 'false')).toBe(true);
+      expect(await provider.doesFilter('modified', '=', 'true')).toBe(true);
+      expect(await provider.doesFilter('modified', '=', 'false')).toBe(true);
     });
 
     test('should support kind filter', async () => {
-      expect(await provider.doesFilter('kind', 'equal', 'code')).toBe(true);
-      expect(await provider.doesFilter('kind', 'equal', 'cat-2')).toBe(true);
+      expect(await provider.doesFilter('kind', '=', 'code')).toBe(true);
+      expect(await provider.doesFilter('kind', '=', 'cat-2')).toBe(true);
     });
 
     test('should reject unsupported filters', async () => {
-      expect(await provider.doesFilter('unsupported', 'equal', 'value')).toBe(false);
+      expect(await provider.doesFilter('unsupported', '=', 'value')).toBe(false);
       expect(await provider.doesFilter('modifier', 'regex', 'value')).toBe(false);
     });
   });
@@ -323,7 +324,7 @@ describe('CPT Provider', () => {
   describe('Modifier Filters', () => {
     test('should filter modifier=true', async () => {
       const filterContext = await provider.getPrepContext(true);
-      await provider.filter(filterContext, 'modifier', 'equal', 'true');
+      await provider.filter(filterContext, 'modifier', '=', 'true');
       const filters = await provider.executeFilters(filterContext);
       const filter = filters[0];
 
@@ -342,7 +343,7 @@ describe('CPT Provider', () => {
 
     test('should filter modifier=false', async () => {
       const filterContext = await provider.getPrepContext(true);
-      await provider.filter(filterContext, 'modifier', 'equal', 'false');
+      await provider.filter(filterContext, 'modifier', '=', 'false');
       const filters = await provider.executeFilters(filterContext);
       const filter = filters[0];
 
@@ -363,7 +364,7 @@ describe('CPT Provider', () => {
   describe('Kind Filters', () => {
     test('should filter by kind=code', async () => {
       const filterContext = await provider.getPrepContext(true);
-      await provider.filter(filterContext, 'kind', 'equal', 'code');
+      await provider.filter(filterContext, 'kind', '=', 'code');
       const filters = await provider.executeFilters(filterContext);
       const filter = filters[0];
 
@@ -382,7 +383,7 @@ describe('CPT Provider', () => {
 
     test('should filter by kind=cat-2', async () => {
       const filterContext = await provider.getPrepContext(true);
-      await provider.filter(filterContext, 'kind', 'equal', 'cat-2');
+      await provider.filter(filterContext, 'kind', '=', 'cat-2');
       const filters = await provider.executeFilters(filterContext);
       const filter = filters[0];
 
@@ -399,7 +400,7 @@ describe('CPT Provider', () => {
 
     test('should filter by kind=general', async () => {
       const filterContext = await provider.getPrepContext(true);
-      await provider.filter(filterContext, 'kind', 'equal', 'general');
+      await provider.filter(filterContext, 'kind', '=', 'general');
       const filters = await provider.executeFilters(filterContext);
       const filter = filters[0];
 
@@ -418,7 +419,7 @@ describe('CPT Provider', () => {
   describe('Modified Filter', () => {
     test('should filter modified=false (all codes)', async () => {
       const filterContext = await provider.getPrepContext(true);
-      await provider.filter(filterContext, 'modified', 'equal', 'false');
+      await provider.filter(filterContext, 'modified', '=', 'false');
       const filters = await provider.executeFilters(filterContext);
       const filter = filters[0];
 
@@ -430,7 +431,7 @@ describe('CPT Provider', () => {
 
     test('should filter modified=true (empty)', async () => {
       const filterContext = await provider.getPrepContext(true);
-      await provider.filter(filterContext, 'modified', 'equal', 'true');
+      await provider.filter(filterContext, 'modified', '=', 'true');
       const filters = await provider.executeFilters(filterContext);
       const filter = filters[0];
 
@@ -448,7 +449,7 @@ describe('CPT Provider', () => {
   describe('Filter Operations', () => {
     test('should locate codes within filters', async () => {
       const filterContext = await provider.getPrepContext(false);
-      await provider.filter(filterContext, 'modifier', 'equal', 'true');
+      await provider.filter(filterContext, 'modifier', '=', 'true');
       const filters = await provider.executeFilters(filterContext);
       const filter = filters[0];
 
@@ -462,7 +463,7 @@ describe('CPT Provider', () => {
 
     test('should check if concepts are in filters', async () => {
       const filterContext = await provider.getPrepContext(true);
-      await provider.filter(filterContext, 'modifier', 'equal', 'false');
+      await provider.filter(filterContext, 'modifier', '=', 'false');
       const filters = await provider.executeFilters(filterContext);
       const filter = filters[0];
 
@@ -479,7 +480,7 @@ describe('CPT Provider', () => {
 
     test('should handle expressions in filters', async () => {
       const filterContext = await provider.getPrepContext(true);
-      await provider.filter(filterContext, 'modified', 'equal', 'true');
+      await provider.filter(filterContext, 'modified', '=', 'true');
       const filters = await provider.executeFilters(filterContext);
       const filter = filters[0];
 
@@ -529,7 +530,7 @@ describe('CPT Provider', () => {
       const filterContext = await provider.getPrepContext(true);
 
       await expect(
-        provider.filter(filterContext, 'unsupported', 'equal', 'value')
+        provider.filter(filterContext, 'unsupported', '=', 'value')
       ).rejects.toThrow('not supported');
     });
 
@@ -575,7 +576,7 @@ describe('CPT Provider', () => {
   describe('Performance and Cleanup', () => {
     test('should handle filter cleanup', async () => {
       const filterContext = await provider.getPrepContext(true);
-      await provider.filter(filterContext, 'modifier', 'equal', 'true');
+      await provider.filter(filterContext, 'modifier', '=', 'true');
       await provider.executeFilters(filterContext);
 
       // Should not throw

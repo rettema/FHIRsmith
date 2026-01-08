@@ -15,14 +15,18 @@
 const { SnomedServicesFactory } = require('../../tx/cs/cs-snomed');
 const {ECLTokenType, ECLLexer, ECLValidator, ECLNodeType} = require("../../tx/sct/ecl");
 const {join} = require("node:path");
+const {OperationContext} = require("../../tx/operation-context");
+const {TestUtilities} = require("../test-utilities");
 
 describe('ECL Validator Test Suite', () => {
   let eclValidator;
   let snomedServices;
+  let opContext;
 
   beforeAll(async () => {
     // Load test SNOMED data
-    const factory = new SnomedServicesFactory(join(__dirname, '../../data/snomed-testing.cache'));
+    opContext = new OperationContext('en', await TestUtilities.loadTranslations());
+    const factory = new SnomedServicesFactory(opContext.i18n, join(__dirname, '../../data/snomed-testing.cache'));
     await factory.load();
     snomedServices = factory.snomedServices;
     eclValidator = new ECLValidator(snomedServices);

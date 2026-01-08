@@ -768,6 +768,7 @@ class CodeSystem extends CanonicalResource {
   caseInsensitive() {
     return this.jsonObj.caseSensitive == undefined || this.jsonObj.caseSensitive == false;
   }
+
 }
 
 module.exports = { CodeSystem, CodeSystemContentMode };

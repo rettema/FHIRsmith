@@ -7,8 +7,15 @@ const {
 
 const fs = require('fs');
 const path = require('path');
+const {TestUtilities} = require("../test-utilities");
 
 describe('Language Class', () => {
+  let languageDefinitions;
+
+  beforeEach(async () => {
+    this.languageDefinitions = await TestUtilities.loadLanguageDefinitions();
+  });
+
   describe('Construction and Defaults', () => {
     test('should default to nothing when no code provided', () => {
       const lang = new Language();
@@ -164,7 +171,7 @@ describe('Language Class', () => {
 describe('Languages Class', () => {
   describe('Accept-Language Header Parsing', () => {
     test('should parse simple Accept-Language header', () => {
-      const languages = Languages.fromAcceptLanguage('en-US,en;q=0.9');
+      const languages = Languages.fromAcceptLanguage('en-US,en;q=0.9', this.languageDefinitions);
       expect(languages.length).toBe(2);
       expect(languages.get(0).code).toBe('en-US');
       expect(languages.get(0).quality).toBe(1.0);
@@ -173,7 +180,7 @@ describe('Languages Class', () => {
     });
 
     test('should parse complex Accept-Language header', () => {
-      const languages = Languages.fromAcceptLanguage('fr-CA,fr;q=0.9,en-US;q=0.8,en;q=0.7');
+      const languages = Languages.fromAcceptLanguage('fr-CA,fr;q=0.9,en-US;q=0.8,en;q=0.7', this.languageDefinitions);
       expect(languages.length).toBe(4);
       expect(languages.get(0).code).toBe('fr-CA');
       expect(languages.get(1).code).toBe('fr');
@@ -182,27 +189,27 @@ describe('Languages Class', () => {
     });
 
     test('should sort by quality values', () => {
-      const languages = Languages.fromAcceptLanguage('en;q=0.5,fr;q=0.9,es;q=0.7');
+      const languages = Languages.fromAcceptLanguage('en;q=0.5,fr;q=0.9,es;q=0.7', this.languageDefinitions);
       expect(languages.get(0).code).toBe('fr'); // q=0.9
       expect(languages.get(1).code).toBe('es'); // q=0.7
       expect(languages.get(2).code).toBe('en'); // q=0.5
     });
 
     test('should not add en-US if English already present', () => {
-      const languages = Languages.fromAcceptLanguage('en-GB,fr-CA');
+      const languages = Languages.fromAcceptLanguage('en-GB,fr-CA', this.languageDefinitions);
       const enLanguages = Array.from(languages).filter(l => l.language === 'en');
       expect(enLanguages.length).toBe(1);
       expect(enLanguages[0].code).toBe('en-GB');
     });
 
     test('should handle empty Accept-Language header', () => {
-      const languages = Languages.fromAcceptLanguage('');
+      const languages = Languages.fromAcceptLanguage('', this.languageDefinitions);
       expect(languages.length).toBe(1);
       expect(languages.get(0).language).toBe('en');
     });
 
     test('should handle malformed quality values', () => {
-      const languages = Languages.fromAcceptLanguage('en;q=invalid,fr;q=0.8');
+      const languages = Languages.fromAcceptLanguage('en;q=invalid,fr;q=0.8', this.languageDefinitions);
       expect(languages.get(0).quality).toBe(1.0); // en gets default quality
       expect(languages.get(1).quality).toBe(0.8); // fr comes first due to valid q
     });
@@ -210,7 +217,7 @@ describe('Languages Class', () => {
 
   describe('Language Iteration and Access', () => {
     test('should be iterable', () => {
-      const languages = Languages.fromAcceptLanguage('en-US,fr-CA');
+      const languages = Languages.fromAcceptLanguage('en-US,fr-CA', this.languageDefinitions);
       const codes = [];
       for (const lang of languages) {
         codes.push(lang.code);
@@ -219,47 +226,47 @@ describe('Languages Class', () => {
     });
 
     test('should provide array-like access', () => {
-      const languages = Languages.fromAcceptLanguage('en-US,fr-CA');
+      const languages = Languages.fromAcceptLanguage('en-US,fr-CA', this.languageDefinitions);
       expect(languages.get(0).code).toBe('en-US');
       expect(languages.get(1).code).toBe('fr-CA');
       expect(languages.length).toBe(2);
     });
 
     test('should get primary language', () => {
-      const languages = Languages.fromAcceptLanguage('fr-CA,en-US');
+      const languages = Languages.fromAcceptLanguage('fr-CA,en-US', this.languageDefinitions);
       expect(languages.getPrimary().code).toBe('fr-CA');
     });
 
     test('should return en-US as primary for empty languages', () => {
-      const languages = new Languages();
+      const languages = new Languages(this.languageDefinitions);
       expect(languages.getPrimary().language).toBe('en');
     });
   });
 
   describe('Language Matching', () => {
     test('should find best match', () => {
-      const languages = Languages.fromAcceptLanguage('en-US,fr-CA,es-ES');
+      const languages = Languages.fromAcceptLanguage('en-US,fr-CA,es-ES', this.languageDefinitions);
       const target = new Language('fr-CA');
       const match = languages.findBestMatch(target);
       expect(match.code).toBe('fr-CA');
     });
 
     test('should find partial match at language level', () => {
-      const languages = Languages.fromAcceptLanguage('en-US,fr-CA');
+      const languages = Languages.fromAcceptLanguage('en-US,fr-CA', this.languageDefinitions);
       const target = new Language('en-GB');
       const match = languages.findBestMatch(target, LanguagePartType.LANGUAGE);
       expect(match.code).toBe('en-US');
     });
 
     test('should return null if no match found', () => {
-      const languages = Languages.fromAcceptLanguage('en-US,fr-CA');
+      const languages = Languages.fromAcceptLanguage('en-US,fr-CA', this.languageDefinitions);
       const target = new Language('zh-CN');
       const match = languages.findBestMatch(target);
       expect(match).toBeNull();
     });
 
     test('should check if any language matches', () => {
-      const languages = Languages.fromAcceptLanguage('en-US,fr-CA');
+      const languages = Languages.fromAcceptLanguage('en-US,fr-CA', this.languageDefinitions);
       const target1 = new Language('en-GB');
       const target2 = new Language('zh-CN');
       
@@ -479,7 +486,7 @@ describe('Language System Integration Tests', () => {
   });
 
   test('should work together for Accept-Language processing', () => {
-    const languages = Languages.fromAcceptLanguage('es-MX;q=0.9,en-US;q=0.8,fr-CA;q=0.7');
+    const languages = Languages.fromAcceptLanguage('es-MX;q=0.9,en-US;q=0.8,fr-CA;q=0.7', this.languageDefinitions);
     
     // Test that all languages are parsed correctly
     expect(languages.length).toBe(3);
@@ -495,7 +502,7 @@ describe('Language System Integration Tests', () => {
   });
 
   test('should handle language fallback chains', () => {
-    const languages = Languages.fromAcceptLanguage('en-CA,en-US,en');
+    const languages = Languages.fromAcceptLanguage('en-CA,en-US,en', this.languageDefinitions);
     const target = new Language('en-GB');
     
     // Should match en-CA first at language level
@@ -504,7 +511,7 @@ describe('Language System Integration Tests', () => {
   });
 
   test('should validate and present complex language tags', () => {
-    const complexLanguages = Languages.fromAcceptLanguage('es-MX,fr-CA');
+    const complexLanguages = Languages.fromAcceptLanguage('es-MX,fr-CA', this.languageDefinitions);
     
     for (const lang of complexLanguages) {
       const validated = definitions.parse(lang.code);
@@ -518,15 +525,15 @@ describe('Language System Integration Tests', () => {
 
   test('should handle edge cases gracefully', () => {
     // Empty Accept-Language
-    const emptyLangs = Languages.fromAcceptLanguage('');
+    const emptyLangs = Languages.fromAcceptLanguage('', this.languageDefinitions);
     expect(emptyLangs.length).toBeGreaterThan(0);
     
     // Invalid language in Accept-Language
-    const invalidLangs = Languages.fromAcceptLanguage('invalid-XX,en-US');
+    const invalidLangs = Languages.fromAcceptLanguage('invalid-XX,en-US', null);
     expect(invalidLangs.length).toBe(2); // Still processes valid ones
     
     // Malformed header
-    const malformedLangs = Languages.fromAcceptLanguage('en-US;;;q=0.8,fr');
+    const malformedLangs = Languages.fromAcceptLanguage('en-US;;;q=0.8,fr', this.languageDefinitions);
     expect(malformedLangs.length).toBeGreaterThan(0);
   });
 });

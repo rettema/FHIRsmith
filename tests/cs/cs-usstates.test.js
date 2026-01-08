@@ -7,11 +7,13 @@ const {TestUtilities} = require("../test-utilities");
 describe('USStateServices', () => {
   let factory;
   let provider;
+  let opContext;
 
   beforeEach(async () => {
-    factory = new USStateFactoryProvider();
+    opContext = new OperationContext('en', await TestUtilities.loadTranslations());
+    factory = new USStateFactoryProvider(opContext.i18n);
     await factory.load();
-    provider = factory.build(new OperationContext(Languages.fromAcceptLanguage('en')), []);
+    provider = factory.build(opContext, []);
   });
 
   describe('Basic Functionality', () => {
@@ -185,7 +187,7 @@ describe('USStateServices', () => {
 
   describe('Factory Functionality', () => {
     test('should track usage count', () => {
-      const factory = new USStateFactoryProvider();
+      const factory = new USStateFactoryProvider(opContext.i18n);
       expect(factory.useCount()).toBe(0);
 
       factory.build(new OperationContext(Languages.fromAcceptLanguage('en')), []);
@@ -209,7 +211,7 @@ describe('USStateServices', () => {
     });
 
     test('should increment uses on recordUse', () => {
-      const factory = new USStateFactoryProvider();
+      const factory = new USStateFactoryProvider(opContext.i18n);
       expect(factory.useCount()).toBe(0);
 
       factory.recordUse();

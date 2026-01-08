@@ -3,7 +3,7 @@
  * Port of the Java VersionUtilities class for FHIR version handling
  */
 
-const { Utilities, validateParameter} = require('./utilities');
+const { Utilities, validateParameter, validateOptionalParameter} = require('./utilities');
 
 // Enums
 const VersionPrecision = {
@@ -51,8 +51,8 @@ class SemverParser {
         const parts = mainVersion.split('.');
 
         // For semver, we need at least major.minor, but no more than major.minor.patch
-        if (parts.length < 2) {
-            result.error = 'Version must have at least major.minor';
+        if (parts.length < 1) {
+            result.error = 'Version must have at least major';
             return result;
         }
         if (parts.length > 3) {
@@ -855,6 +855,172 @@ class VersionUtilities {
             default:
                 return version;
         }
+    }
+
+    static versionMatchesByAlgorithm(criteria, candidate, versionAlgorithm) {
+        validateOptionalParameter(criteria, "criteria", String);
+        validateOptionalParameter(candidate, "candidate", String);
+        validateOptionalParameter(versionAlgorithm, "versionAlgorithm", String);
+
+        if (!versionAlgorithm) {
+            versionAlgorithm = this.guessVersionFormat(candidate);
+        }
+        if (!criteria || !candidate) {
+            return false;
+        }
+        switch (versionAlgorithm) {
+            case 'semver' : return VersionUtilities.versionMatches(criteria, candidate);
+            case 'integer' : return false;
+            default: return candidate.startsWith(criteria);
+        }
+    }
+
+    /**
+     * Guess the version format algorithm from a version string
+     * @param {string} v - Version string
+     * @returns {string} One of VersionAlgorithm values
+     */
+    static guessVersionFormat(v) {
+        if (!v || v.length === 0) {
+            return null;
+        }
+
+        const isDigit = (c) => c >= '0' && c <= '9';
+        const isLetter = (c) => (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
+
+        const isValidDatePart = (part, minVal, maxVal) => {
+            if (!part || part.length === 0 || part.length > 4) return false;
+            for (const c of part) {
+                if (!isDigit(c)) return false;
+            }
+            const val = parseInt(part, 10);
+            return !isNaN(val) && val >= minVal && val <= maxVal;
+        };
+
+        const checkDateFormat = () => {
+            // Look for YYYY-MM-DD format
+            if (v.length >= 4 && dashCount > 0) {
+                const dashPos1 = v.indexOf('-');
+                if (dashPos1 === 4) { // Year should be 4 digits
+                    const yearPart = v.substring(0, 4);
+                    if (isValidDatePart(yearPart, 1000, 9999)) {
+                        if (v.length === 4) { // Just YYYY
+                            return true;
+                        } else if (dashPos1 === v.length - 1) { // YYYY- (partial)
+                            return true;
+                        } else {
+                            const dashPos2 = v.indexOf('-', dashPos1 + 1);
+                            if (dashPos2 === -1) {
+                                // YYYY-MM format
+                                const monthPart = v.substring(6);
+                                return isValidDatePart(monthPart, 1, 12);
+                            } else if (dashPos2 === dashPos1 + 3) { // YYYY-MM-DD
+                                const monthPart = v.substring(5, 7);
+                                const dayPart = v.substring(8);
+                                return isValidDatePart(monthPart, 1, 12) && isValidDatePart(dayPart, 1, 31);
+                            }
+                        }
+                    }
+                }
+            }
+            // Check YYYYMMDD format
+            else if (dashCount === 0 && v.length >= 4 && v.length <= 8) {
+                // All digits for date format
+                for (const c of v) {
+                    if (!isDigit(c)) return false;
+                }
+
+                if (v.length === 4) { // YYYY
+                    return isValidDatePart(v, 1000, 9999);
+                } else if (v.length === 6) { // YYYYMM
+                    const yearPart = v.substring(0, 4);
+                    const monthPart = v.substring(4, 6);
+                    return isValidDatePart(yearPart, 1000, 9999) && isValidDatePart(monthPart, 1, 12);
+                } else if (v.length === 8) { // YYYYMMDD
+                    const yearPart = v.substring(0, 4);
+                    const monthPart = v.substring(4, 6);
+                    const dayPart = v.substring(6, 8);
+                    return isValidDatePart(yearPart, 1000, 9999) &&
+                      isValidDatePart(monthPart, 1, 12) &&
+                      isValidDatePart(dayPart, 1, 31);
+                }
+            }
+            return false;
+        };
+
+        const checkSemverFormat = () => {
+            // Must have exactly 2 dots for basic semver (major.minor.patch)
+            if (dotCount !== 2) return false;
+
+            // Split by dots and validate each part
+            const parts = v.split('.');
+            if (parts.length !== 3) return false;
+
+            for (const part of parts) {
+                if (part.length === 0) return false;
+
+                // Allow wildcards
+                if (['*', 'x', 'X'].includes(part)) continue;
+
+                // Each part should be numeric
+                for (const c of part) {
+                    if (!isDigit(c)) return false;
+                }
+            }
+
+            return true;
+        };
+
+        // Initialize counters
+        let dotCount = 0;
+        let dashCount = 0;
+        let digitCount = 0;
+        let letterCount = 0;
+        let hasDigits = false;
+        let hasLetters = false;
+        let hasDots = false;
+
+        // Count character types
+        for (const c of v) {
+            if (isDigit(c)) {
+                digitCount++;
+                hasDigits = true;
+            } else if (isLetter(c)) {
+                letterCount++;
+                hasLetters = true;
+            } else if (c === '.') {
+                dotCount++;
+                hasDots = true;
+            } else if (c === '-') {
+                dashCount++;
+            }
+        }
+
+        // Check for plain integer first (simplest case)
+        if (digitCount === v.length && v.length > 0) {
+            return 'integer';
+        }
+
+        // Check for date format
+        if (checkDateFormat()) {
+            return 'date';
+        }
+
+        // Check for semver format
+        if (checkSemverFormat()) {
+            return 'semver';
+        }
+
+        // Check for natural version (contains digits and has some version-like structure)
+        if (hasDigits && ((hasDots && dotCount <= 4) ||
+          (hasLetters && letterCount <= digitCount * 2))) {
+            // Basic heuristic: looks like it could be a natural version
+            // Contains digits, maybe some dots, maybe some letters but not too many
+            return 'natural';
+        }
+
+        // Default case
+        return null;
     }
 }
 

@@ -16,11 +16,11 @@ class OMOPConcept {
 }
 
 class OMOPFilter extends FilterExecutionContext {
-  constructor(db, sql, prepared = false) {
+  constructor(db, sql, value = null) {
     super();
     this.db = db;
     this.sql = sql;
-    this.prepared = prepared;
+    this.value = value;
     this.rows = [];
     this.cursor = 0;
     this.executed = false;
@@ -48,9 +48,9 @@ class OMOPFilter extends FilterExecutionContext {
     });
   }
 
-  async executeForLocate(code) {
+  async executeForLocate(params) {
     return new Promise((resolve, reject) => {
-      this.db.get(this.sql, [code], (err, row) => {
+      this.db.get(this.sql, params, (err, row) => {
         if (err) {
           reject(err);
         } else {
@@ -66,8 +66,11 @@ class OMOPFilter extends FilterExecutionContext {
 }
 
 class OMOPPrep extends FilterExecutionContext {
-  constructor() {
+  iterate;
+
+  constructor(iterate) {
     super();
+    this.iterate = iterate;
   }
 }
 
@@ -208,16 +211,16 @@ class OMOPServices extends CodeSystemProvider {
 
     if (ctxt) {
       // Add main display
-      displays.addDesignation(true, true, 'en', CodeSystem.makeUseForDisplay(), ctxt.display);
+      displays.addDesignation(true, 'active', 'en', CodeSystem.makeUseForDisplay(), ctxt.display);
 
       // Add synonyms
       const synonyms = await this.#getSynonyms(ctxt.code);
       for (const synonym of synonyms) {
-        displays.addDesignation(false, true, synonym.language, null, synonym.value);
+        displays.addDesignation(false, 'active', synonym.language, null, synonym.value);
       }
 
       // Add supplement designations
-      this._listSupplementDesignations(ctxt.code, displays);
+      this._listSupplementDesignations(String(ctxt.code), displays);
     }
   }
 
@@ -488,7 +491,7 @@ class OMOPServices extends CodeSystemProvider {
     
 
     if (prop === 'domain' && op === '=') {
-      const sql = `
+      let sql = `
           SELECT concept_id, concept_name, domain_id
           FROM Concepts
           WHERE standard_concept = 'S'
@@ -499,8 +502,14 @@ class OMOPServices extends CodeSystemProvider {
           )
       `;
 
-      const filter = new OMOPFilter(this.db, sql);
-      await filter.execute([value]);
+      let filter;
+      if (filterContext.iterate) {
+        filter = new OMOPFilter(this.db, sql, value);
+        await filter.execute([value]);
+      } else {
+        sql = sql + ' and concept_id = ?';
+        filter = new OMOPFilter(this.db, sql, value);
+      }
       filterContext.filters.push(filter);
     } else {
       throw new Error(`Filter "${prop} ${op} ${value}" not understood for OMOP`);
@@ -508,23 +517,18 @@ class OMOPServices extends CodeSystemProvider {
   }
 
   async executeFilters(filterContext) {
-    
     return filterContext.filters;
   }
 
   async filterSize(filterContext, set) {
-    
     return set.rows.length;
   }
 
   async filterMore(filterContext, set) {
-    
     return set.cursor < set.rows.length;
   }
 
   async filterConcept(filterContext, set) {
-    
-
     if (set.cursor >= set.rows.length) {
       return null;
     }
@@ -543,16 +547,14 @@ class OMOPServices extends CodeSystemProvider {
   }
 
   async filterLocate(filterContext, set, code) {
-    
-
-    if (!set.prepared) {
+    if (filterContext.iterate) {
       return `Filter not configured for locate operations`;
     }
 
-    const row = await set.executeForLocate(code);
+    const row = await set.executeForLocate([set.value, code]);
     if (row && row.concept_id.toString() === code) {
       return new OMOPConcept(
-        row.concept_id,
+        String(row.concept_id),
         row.concept_name,
         row.domain_id,
         '',
@@ -711,11 +713,15 @@ class OMOPServices extends CodeSystemProvider {
       });
     });
   }
+
+  versionAlgorithm() {
+    return 'date';
+  }
 }
 
 class OMOPServicesFactory extends CodeSystemFactoryProvider {
-  constructor(dbPath) {
-    super();
+  constructor(i18n, dbPath) {
+    super(i18n);
     this.dbPath = dbPath;
     this.uses = 0;
     this._loaded = false;
@@ -736,6 +742,23 @@ class OMOPServicesFactory extends CodeSystemFactoryProvider {
     }
     if (version && version != this.version()) {
       return null;
+    }
+    if (url == 'https://fhir-terminology.ohdsi.org') {
+      return {
+        resourceType: 'ValueSet',
+        url: url,
+        status: 'active',
+        version: this.version(),
+        name: 'OMOP',
+        description: 'OMOP value set',
+        date: new Date().toISOString(),
+        experimental: false,
+        compose: {
+          include: [{
+            system: this.system()
+          }]
+        }
+      }
     }
     const domain = url.substring(44);
     return {
@@ -758,6 +781,8 @@ class OMOPServicesFactory extends CodeSystemFactoryProvider {
         }]
       }
     };
+
+
   }
 
   async #ensureLoaded() {

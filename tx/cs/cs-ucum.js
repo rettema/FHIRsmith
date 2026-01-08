@@ -182,7 +182,7 @@ class UcumCodeSystemProvider extends CodeSystemProvider {
 
     // Primary display (analysis)
     const analysis = this.ucumService.analyse(ctxt.code);
-    displays.addDesignation(true, true, 'en', CodeSystem.makeUseForDisplay(), analysis);
+    displays.addDesignation(true, 'active', 'en', CodeSystem.makeUseForDisplay(), analysis);
 
     // Common unit display if available
     if (this.commonUnitList) {
@@ -190,7 +190,7 @@ class UcumCodeSystemProvider extends CodeSystemProvider {
         if (concept.code === ctxt.code && concept.display) {
           const display = concept.display.trim();
           if (display !== analysis) {
-            displays.addDesignation(false, true, 'en', CodeSystem.makeUseForDisplay(), display);
+            displays.addDesignation(false, 'active', 'en', CodeSystem.makeUseForDisplay(), display);
           }
         }
       }
@@ -433,14 +433,22 @@ class UcumCodeSystemProvider extends CodeSystemProvider {
     }
   }
 
+  versionAlgorithm() {
+    return 'natural';
+  }
+
+
+  isNotClosed() {
+    return true;
+  }
 }
 
 /**
  * Factory for creating UCUM CodeSystem providers
  */
 class UcumCodeSystemFactory extends CodeSystemFactoryProvider {
-  constructor(ucumService, commonUnits = null) {
-    super();
+  constructor(i18n, ucumService, commonUnits = null) {
+    super(i18n);
     assert(ucumService != null && ucumService instanceof UcumService, 'ucumService must be a UcumService');
     assert(!commonUnits || commonUnits instanceof ValueSet, 'if provided, commonUnits must be a ValueSet');
     this.ucumService = ucumService;
@@ -456,6 +464,7 @@ class UcumCodeSystemFactory extends CodeSystemFactoryProvider {
     return this.ucumService.ucumIdentification().getVersion();
   }
 
+  // eslint-disable-next-line no-unused-vars
   async buildKnownValueSet(url, version) {
     return null;
   }

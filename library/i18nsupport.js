@@ -1,12 +1,16 @@
 const path = require("path");
 const fs = require("fs");
 const { getProperties } = require("properties-file");
+const {validateParameter} = require("./utilities");
+const {LanguageDefinitions} = require("./languages");
 
 /**
  * Internationalization support for loading Java properties files
  */
 class I18nSupport {
   constructor(translationsPath, languageDefinitions) {
+    validateParameter(translationsPath, "translationsPath", String);
+    validateParameter(languageDefinitions, "languageDefinitions", LanguageDefinitions);
     this.translationsPath = translationsPath;
     this.languageDefinitions = languageDefinitions;
     this.bundles = new Map(); // Cache for loaded message bundles by language code
@@ -111,7 +115,7 @@ class I18nSupport {
     const allParameters = [count.toString(), ...parameters];
 
     // Substitute parameters {0}, {1}, etc.
-    return this._substituteParameters(message, allParameters);
+    return this._substituteParameters(message, allParameters).replaceAll("''", "'");
   }
 
   /**

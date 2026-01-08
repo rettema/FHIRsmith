@@ -8,10 +8,12 @@ const {TestUtilities} = require("../test-utilities");
 describe('MimeTypeServices', () => {
   let factory;
   let provider;
+  let opContext;
 
-  beforeEach(() => {
-    factory = new MimeTypeServicesFactory();
-    provider = factory.build(new OperationContext(Languages.fromAcceptLanguage('en')), []);
+  beforeEach(async () => {
+    opContext = new OperationContext('en', await TestUtilities.loadTranslations());
+    factory = new MimeTypeServicesFactory(opContext.i18n);
+    provider = factory.build(opContext, []);
   });
 
   describe('Basic Functionality', () => {
@@ -194,13 +196,13 @@ describe('MimeTypeServices', () => {
 
   describe('Factory Functionality', () => {
     test('should track usage count', () => {
-      const factory = new MimeTypeServicesFactory();
+      const factory = new MimeTypeServicesFactory(opContext.i18n);
       expect(factory.useCount()).toBe(0);
 
-      factory.build(new OperationContext('en'), []);
+      factory.build(opContext, []);
       expect(factory.useCount()).toBe(1);
 
-      factory.build(new OperationContext('en'), []);
+      factory.build(opContext, []);
       expect(factory.useCount()).toBe(2);
     });
 
@@ -209,8 +211,8 @@ describe('MimeTypeServices', () => {
     });
 
     test('should build working providers', () => {
-      const provider1 = factory.build(new OperationContext('en'), []);
-      const provider2 = factory.build(new OperationContext('en'), []);
+      const provider1 = factory.build(opContext, []);
+      const provider2 = factory.build(opContext, []);
 
       expect(provider1).toBeTruthy();
       expect(provider2).toBeTruthy();
@@ -218,7 +220,7 @@ describe('MimeTypeServices', () => {
     });
 
     test('should increment uses on recordUse', () => {
-      const factory = new MimeTypeServicesFactory();
+      const factory = new MimeTypeServicesFactory(opContext.i18n);
       expect(factory.useCount()).toBe(0);
 
       factory.recordUse();

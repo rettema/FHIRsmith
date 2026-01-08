@@ -2,8 +2,9 @@ const { TerminologyError } = require('../operation-context');
 const { CodeSystem } = require('../library/codesystem');
 const ValueSet = require('../library/valueset');
 const {VersionUtilities} = require("../../library/version-utilities");
-const {Utilities} = require("../library/ucum-types");
 const {getValuePrimitive} = require("../../library/utilities");
+const {Issue} = require("../library/operation-outcome");
+const {Languages} = require("../../library/languages");
 
 /**
  * Custom error for terminology setup issues
@@ -20,7 +21,7 @@ class TerminologySetupError extends Error {
  */
 class TerminologyWorker {
   additionalResources = []; // Resources provided via tx-resource parameter or cache
-
+  foundParameters = [];
   /**
    * @param {OperationContext} opContext - Operation context
    * @param {Logger} log - Provider for code systems and resources
@@ -92,7 +93,7 @@ class TerminologyWorker {
       this.deadCheck('findInAdditionalResources');
 
       if (url && ((resource.url === url) || (resource.vurl === url)) &&
-        (!version || version === resource.version)) {
+        (!version || VersionUtilities.versionMatchesByAlgorithm(version, resource.version, resource.versionAlgorithm()))) {
 
         if (resource.resourceType !== resourceType) {
           if (error) {
@@ -123,16 +124,20 @@ class TerminologyWorker {
    * Find and load a code system provider
    * @param {string} url - Code system URL
    * @param {string} version - Code system version (optional)
-   * @param {OperationParameters} params - Operation parameters
+   * @param {TxParameters} params - Operation parameters
    * @param {Array<string>} kinds - Allowed content modes
-   * @param {boolean} nullOk - Whether null result is acceptable
+   * @param {OperationOutcome} op - Op for errors
+   * * @param {boolean} nullOk - Whether null result is acceptable
    * @returns {CodeSystemProvider|null} Code system provider or null
    */
-  async findCodeSystem(url, version = '', params, kinds = ['complete'], nullOk = false) {
+  async findCodeSystem(url, version = '', params, kinds = ['complete'], op, nullOk = false, checkVer = false, noVParams = false) {
     if (!url) {
       return null;
     }
 
+    if (!noVParams) {
+      version = this.determineVersionBase(url, version, params);
+    }
     let codeSystemResource = null;
     let provider = null;
     const supplements = this.loadSupplements(url, version);
@@ -159,14 +164,19 @@ class TerminologyWorker {
 
     if (!provider && !nullOk) {
       if (!version) {
-        throw new TerminologySetupError(`Unable to provide support for code system ${url}`);
+        throw new Issue("error", "not-found", null, "UNKNOWN_CODESYSTEM_EXP", this.i18n.translate("UNKNOWN_CODESYSTEM_EXP", params.FHTTPLanguages, [url]), "not-found", 400);
       } else {
         const versions = await this.listVersions(url);
         if (versions.length === 0) {
-          throw new TerminologySetupError(`Unable to provide support for code system ${url} version ${version}`);
+          throw new Issue("error", "not-found", null, "UNKNOWN_CODESYSTEM_VERSION_EXP_NONE", this.i18n.translate("UNKNOWN_CODESYSTEM_VERSION_EXP_NONE", params.FHTTPLanguages, [url, version]), "not-found", 400);
         } else {
-          throw new TerminologySetupError(`Unable to provide support for code system ${url} version ${version} (known versions = ${versions.join(', ')})`);
+          throw new Issue("error", "not-found", null, "UNKNOWN_CODESYSTEM_VERSION_EXP", this.i18n.translate("UNKNOWN_CODESYSTEM_VERSION_EXP", params.FHTTPLanguages, [url, version, versions.join(', ')]), "not-found", 400);
         }
+      }
+    }
+    if (provider) {
+      if (checkVer) {
+        this.checkVersion(url, provider.version(), params, provider.versionAlgorithm(), op);
       }
     }
 
@@ -211,18 +221,18 @@ class TerminologyWorker {
     // list all known provided displays
     // todo: supplements
     for (let ccd of c.designations || []) {
-      displays.addDesignation(ccd);
+      displays.addDesignationFromConcept(ccd);
     }
   }
 
   listDisplaysFromIncludeConcept(displays, c, vs) {
     if (c.display && c.display !== '') {
       displays.baseLang = this.FLanguages.parse(vs.language);
-      displays.addDesignation(true, true, '', '', c.displayElement);
+      displays.addDesignation(true, "active", '', '', c.displayElement);
     }
     for (let cd of c.designations || []) {
       // see https://chat.fhir.org/#narrow/stream/179202-terminology/topic/ValueSet.20designations.20and.20languages
-      displays.addDesignation(cd);
+      displays.addDesignationFromConcept(cd);
     }
   }
 
@@ -267,7 +277,7 @@ class TerminologyWorker {
           } else {
             // Version specified, check if it matches the tail of supplements URL
             const supplementsVersion = supplementsUrl.substring(`${url}|`.length);
-            if (supplementsVersion === version) {
+            if (supplementsVersion === version || VersionUtilities.versionMatches(supplementsVersion, version)) {
               supplements.push(cs);
             }
           }
@@ -351,23 +361,10 @@ class TerminologyWorker {
       return url;
     }
 
-    // Check for system-version parameters that might pin this ValueSet
-    // Format: system-version=url|version or valueset-version=url|version
-    const vsVersions = this.params.getAll ? this.params.getAll('valueset-version') : [];
-
-    for (const vsv of vsVersions) {
-      if (vsv && vsv.startsWith(url + '|')) {
-        return vsv; // Return the pinned version
-      }
-      if (vsv && vsv.includes('|')) {
-        const parts = vsv.split('|');
-        if (parts[0] === url) {
-          return vsv;
-        }
-      }
-    }
-
-    return url;
+    let baseUrl = url.includes("|") ? url.substring(0, url.indexOf("|")) : url;
+    let version = url.includes("|") ? url.substring(url.indexOf("|") + 1) : null;
+    version = this.determineVersionBase(url, version, this.params);
+    return version ? baseUrl+"|"+version : url;
   }
 
   /**
@@ -414,10 +411,9 @@ class TerminologyWorker {
     if (vurl) {
       this.opContext.seeContext(vurl);
     }
-
     // Check for expansion parameter extensions on compose
-    if (vs.compose && vs.compose.extension) {
-      for (const ext of vs.compose.extension) {
+    if (vs.jsonObj.compose && vs.jsonObj.compose.extension) {
+      for (const ext of vs.jsonObj.compose.extension) {
         if (ext.url === 'http://hl7.org/fhir/StructureDefinition/valueset-expansion-parameter' ||
           ext.url === 'http://hl7.org/fhir/tools/StructureDefinition/valueset-expansion-parameter') {
           // Get name and value from nested extensions
@@ -426,47 +422,91 @@ class TerminologyWorker {
 
           if (nameExt && valueExt) {
             const name = nameExt.valueString || nameExt.valueCode;
-
             if (name) {
-              this._addExtensionParameter(params, name, valueExt);
+              this.params.seeParameter(name, valueExt, false);
             }
           }
         }
       }
     }
+    if (!params.FHTTPLanguages && vs.jsonObj.language) {
+      params.HTTPLanguages = Languages.fromAcceptLanguage(vs.jsonObj.language, this.languages, !this.isValidating());
+    }
+  }
+
+  isValidating() {
+    return false;
+  }
+
+  // ========== Parameter Handling ==========
+
+  /**
+   * Build a Parameters resource from the request
+   * Handles GET query params, POST form body, and POST Parameters resource
+   * @param {express.Request} req
+   * @returns {Object} Parameters resource
+   */
+  buildParameters(req) {
+    // If POST with Parameters resource, use directly
+    if (req.method === 'POST' && req.body && req.body.resourceType === 'Parameters') {
+      return req.body;
+    }
+
+    // Convert query params or form body to Parameters
+    const source = req.method === 'POST' ? {...req.query, ...req.body} : req.query;
+    const params = {
+      resourceType: 'Parameters',
+      parameter: []
+    };
+
+    for (const [name, value] of Object.entries(source)) {
+      if (value === undefined || value === null) continue;
+
+      if (Array.isArray(value)) {
+        // Repeating parameter
+        for (const v of value) {
+          params.parameter.push({name, valueString: String(v)});
+        }
+      } else if (typeof value === 'object') {
+        // Could be a resource or complex type - check resourceType
+        if (value.resourceType) {
+          params.parameter.push({name, resource: value});
+        } else {
+          // Assume it's a complex type like Coding or CodeableConcept
+          params.parameter.push(this.buildComplexParameter(name, value));
+        }
+      } else {
+        params.parameter.push({name, valueString: String(value)});
+      }
+    }
+
+    return params;
   }
 
   /**
-   * Add a parameter from an extension value if not already present
-   * @private
+   * Build a parameter for complex types
    */
-  _addExtensionParameter(params, name, valueExt) {
-    if (!params) return;
-    if (!params.parameter) {
-      params.parameter = [];
+  buildComplexParameter(name, value) {
+    // Detect type based on structure
+    if (value.system !== undefined || value.code !== undefined || value.display !== undefined) {
+      return {name, valueCoding: value};
     }
-
-    // Don't override existing parameters
-    if (params.parameter.find(p => p.name === name)) {
-      return;
+    if (value.coding !== undefined || value.text !== undefined) {
+      return {name, valueCodeableConcept: value};
     }
-
-    // Find and copy the value[x] property
-    const valueTypes = [
-      'valueString', 'valueCode', 'valueUri', 'valueCanonical', 'valueUrl',
-      'valueBoolean', 'valueInteger', 'valueDecimal',
-      'valueDateTime', 'valueDate', 'valueTime',
-      'valueCoding', 'valueCodeableConcept'
-    ];
-
-    for (const vt of valueTypes) {
-      if (valueExt[vt] !== undefined) {
-        params.parameter.push({ name, [vt]: valueExt[vt] });
-        return;
-      }
-    }
+    // Fallback - stringify
+    return {name, valueString: JSON.stringify(value)};
   }
 
+
+  addHttpParams(req, params) {
+    if (req.headers && req.headers['accept-language']) {
+      params.parameter.push({name: '__Accept-Language', valueCode: req.headers['accept-language']});
+    }
+    if (req.headers && req.headers['content-language']) {
+      params.parameter.push({name: '__Content-Language', valueCode: req.headers['content-language']});
+    }
+  }
 
   // ========== Additional Resources Handling ==========
 
@@ -711,7 +751,7 @@ class TerminologyWorker {
 
     return result;
   }
-  determineVersionBase(url, version, params, va) {
+  determineVersionBase(url, version, params) {
     if (params === null) {
       return version;
     }
@@ -719,41 +759,35 @@ class TerminologyWorker {
     let list = params.rulesForSystem(url);
     let b = false;
     for (let t of list) {
-      if (t.FMode === 'override') {
+      if (t.mode === 'override') {
         if (!b) {
           result = t.version;
-          this.FFoundParameters.push(t.asParam);
+          this.foundParameters.push(t.asParam());
           b = true;
         } else if (result !== t.version) {
-          throw new ETerminologyError(
-            this.FI18n.translate('SYSTEM_VERSION_MULTIPLE_OVERRIDE', params.FHTTPLanguages, [url, result, t.version]),
-            itException, oicVersionError, 'SYSTEM_VERSION_MULTIPLE_OVERRIDE'
-          );
+          throw new Issue("error", "exception", null, 'SYSTEM_VERSION_MULTIPLE_OVERRIDE', this.FI18n.translate('SYSTEM_VERSION_MULTIPLE_OVERRIDE', params.FHTTPLanguages, [url, result, t.version]), 'version-error');
         }
       }
     }
-    if (result === '') {
+    if (!result) {
       b = false;
       for (let t of list) {
-        if (t.FMode === 'default') {
+        if (t.mode === 'default') {
           if (!b) {
             result = t.version;
-            this.FFoundParameters.push(t.asParam);
+            this.foundParameters.push(t.asParam());
             b = true;
           } else if (version !== t.version) {
-            throw new ETerminologyError(
-              this.FI18n.translate('SYSTEM_VERSION_MULTIPLE_DEFAULT', params.FHTTPLanguages, [url, result, t.version]),
-              itException, oicVersionError, 'SYSTEM_VERSION_MULTIPLE_DEFAULT'
-            );
+            throw new Issue("error", "exception", null, 'SYSTEM_VERSION_MULTIPLE_DEFAULT', this.FI18n.translate('SYSTEM_VERSION_MULTIPLE_DEFAULT', params.FHTTPLanguages, [url, result, t.version]), 'version-error');
           }
         }
       }
     }
     for (let t of list) {
-      if (t.FMode === 'check') {
-        if (result === '') {
+      if (t.mode === 'check') {
+        if (!result) {
           result = t.version;
-          this.FFoundParameters.push(t.asParam);
+          this.foundParameters.push(t.asParam());
         }
         // if we decide to allow check to guide the selection.
         // waiting for discussion
@@ -765,6 +799,35 @@ class TerminologyWorker {
     return result;
   }
 
+  checkVersion(url, version, params, versionAlgorithm, op) {
+    if (params) {
+      let list = params.rulesForSystem(url);
+      for (let t of list) {
+        if (t.mode === 'check') {
+          if (!VersionUtilities.versionMatchesByAlgorithm(t.version, version, versionAlgorithm)) {
+            let issue = new Issue("error", "exception", null, 'VALUESET_VERSION_CHECK', this.i18n.translate('VALUESET_VERSION_CHECK', params.FHTTPLanguages, [url, version, t.version]), 'version-error', 400);
+            if (op) {
+              op.addIssue(issue);
+            } else {
+              throw issue;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  makeVurl(resource) {
+    let result = resource.vurl;
+    if (!result && resource.url) {
+      if (resource.version) {
+        result =  resource.url+"|"+resource.version;
+      } else {
+        result =  resource.url;
+      }
+    }
+    return result;
+  }
 }
 
 /**
@@ -791,6 +854,7 @@ class CodeSystemInformationProvider extends TerminologyWorker {
       coding.version,
       profile,
       ['complete', 'fragment'],
+      null,
       false
     );
 
@@ -873,6 +937,9 @@ class CodeSystemInformationProvider extends TerminologyWorker {
       defaultToLatestVersion: true
     };
   }
+
+  // Note: findParameter, getStringParam, getResourceParam, getCodingParam,
+  // and getCodeableConceptParam are inherited from TerminologyWorker base class
 
 }
 

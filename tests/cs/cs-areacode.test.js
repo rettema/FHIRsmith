@@ -1,15 +1,18 @@
 const { OperationContext } = require('../../tx/operation-context');
 const { AreaCodeFactoryProvider } = require('../../tx/cs/cs-areacode');
 const { Languages } = require('../../library/languages');
+const {TestUtilities} = require("../test-utilities");
 
 describe('AreaCodeServices', () => {
   let factory;
   let provider;
+  let opContext;
 
   beforeEach(async () => {
-    factory = new AreaCodeFactoryProvider();
+    opContext = new OperationContext('en', await TestUtilities.loadTranslations());
+    factory = new AreaCodeFactoryProvider(opContext.i18n);
     await factory.load();
-    provider = factory.build(new OperationContext(Languages.fromAcceptLanguage('en')),[]);
+    provider = factory.build(opContext,[]);
   });
 
   describe('Basic Functionality', () => {
@@ -306,7 +309,7 @@ describe('AreaCodeServices', () => {
 
   describe('Factory Functionality', () => {
     test('should track usage count', () => {
-      const factory = new AreaCodeFactoryProvider();
+      const factory = new AreaCodeFactoryProvider(opContext.i18n);
       expect(factory.useCount()).toBe(0);
 
       factory.build(new OperationContext(Languages.fromAcceptLanguage('en')), null, []);

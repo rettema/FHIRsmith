@@ -25,11 +25,9 @@ const {PackageValueSetProvider} = require("./vs/vs-package");
 const {IETFLanguageCodeFactory} = require("./cs/cs-lang");
 const {LanguageDefinitions} = require("../library/languages");
 const {VersionUtilities} = require("../library/version-utilities");
-const { FhirCodeSystemProvider} = require("./cs/cs-cs");
-const {OperationContext, TerminologyError} = require("./operation-context");
-const {validateParameter, validateOptionalParameter, validateArrayParameter} = require("../library/utilities");
 const {ListCodeSystemProvider} = require("./cs/cs-provider-list");
 const { Provider } = require("./provider");
+const {I18nSupport} = require("../library/i18nsupport");
 
 /**
  * This class holds all the loaded content ready for processing
@@ -128,6 +126,9 @@ class Library {
 
   async load() {
     this.startTime = Date.now();
+    this.languageDefinitions = await LanguageDefinitions.fromFile(path.join(__dirname, '../tx/data/lang.dat'));
+    this.i18n = new I18nSupport(path.join(__dirname, '../translations'), this.languageDefinitions);
+    await this.i18n.load();
 
     // Read and parse YAML configuration
     const yamlPath = this.configFile ? this.configFile :  path.join(__dirname, '..', 'tx', 'tx.fhir.org.yml');
@@ -245,45 +246,43 @@ class Library {
     }
     switch (details) {
       case "country" : {
-        const cc = new CountryCodeFactoryProvider();
+        const cc = new CountryCodeFactoryProvider(this.i18n);
         await cc.load();
         this.registerProvider('internal', cc);
         break;
       }
       case "lang" : {
-        const langDefs = path.join(__dirname, '../tx/data/lang.dat');
-        const definitions = await LanguageDefinitions.fromFile(langDefs);
-        const langs = new IETFLanguageCodeFactory(definitions);
+        const langs = new IETFLanguageCodeFactory(this.i18n);
         await langs.load();
         this.registerProvider('internal', langs);
         break;
       }
       case "currency" : {
-        const curr = new Iso4217FactoryProvider();
+        const curr = new Iso4217FactoryProvider(this.i18n);
         await curr.load();
         this.registerProvider('internal', curr);
         break;
       }
       case "areacode" : {
-        const ac = new AreaCodeFactoryProvider();
+        const ac = new AreaCodeFactoryProvider(this.i18n);
         await ac.load();
         this.registerProvider('internal', ac);
         break;
       }
       case "mimetypes" : {
-        const mime = new MimeTypeServicesFactory();
+        const mime = new MimeTypeServicesFactory(this.i18n);
         await mime.load();
         this.registerProvider('internal', mime);
         break;
       }
       case "usstates" : {
-        const uss = new USStateFactoryProvider();
+        const uss = new USStateFactoryProvider(this.i18n);
         await uss.load();
         this.registerProvider('internal', uss);
         break;
       }
       case "hgvs" : {
-        const hgvs = new HGVSServicesFactory();
+        const hgvs = new HGVSServicesFactory(this.i18n);
         await hgvs.load();
         this.registerProvider('internal', hgvs);
         break;
@@ -303,7 +302,7 @@ class Library {
     const ucumService = new UcumService();
     await ucumService.init(ucumEssenceXml);
 
-    const ucum = new UcumCodeSystemFactory(ucumService);
+    const ucum = new UcumCodeSystemFactory(this.i18n, ucumService);
     await ucum.load();
     this.registerProvider(source, ucum, isDefault);
   }
@@ -314,7 +313,7 @@ class Library {
       return;
     }
 
-    const loinc = new LoincServicesFactory(loincFN);
+    const loinc = new LoincServicesFactory(this.i18n, loincFN);
     await loinc.load();
     this.registerProvider(loincFN, loinc, isDefault);
   }
@@ -324,7 +323,7 @@ class Library {
     if (mode === "fetch" || mode === "npm") {
       return;
     }
-    const rxn = new RxNormServicesFactory(rxNormFN);
+    const rxn = new RxNormServicesFactory(this.i18n, rxNormFN);
     await rxn.load();
     this.registerProvider(rxNormFN, rxn, isDefault);
   }
@@ -334,7 +333,7 @@ class Library {
     if (mode === "fetch" || mode === "npm") {
       return;
     }
-    const ndc = new NdcServicesFactory(ndcFN);
+    const ndc = new NdcServicesFactory(this.i18n, ndcFN);
     await ndc.load();
     this.registerProvider(ndcFN, ndc, isDefault);
   }
@@ -344,7 +343,7 @@ class Library {
     if (mode === "fetch" || mode === "npm") {
       return;
     }
-    const unii = new UniiServicesFactory(uniFN);
+    const unii = new UniiServicesFactory(this.i18n, uniFN);
     await unii.load();
     this.registerProvider(uniFN, unii, isDefault);
   }
@@ -354,7 +353,7 @@ class Library {
     if (mode === "fetch" || mode === "npm") {
       return;
     }
-    const sct = new SnomedServicesFactory(sctFN);
+    const sct = new SnomedServicesFactory(this.i18n, sctFN);
     await sct.load();
     this.registerProvider(sctFN, sct, isDefault);
   }
@@ -364,7 +363,7 @@ class Library {
     if (mode === "fetch" || mode === "npm") {
       return;
     }
-    const cpt = new CPTServicesFactory(cptFN);
+    const cpt = new CPTServicesFactory(this.i18n, cptFN);
     await cpt.load();
     this.registerProvider(cptFN, cpt, isDefault);
   }
@@ -374,7 +373,7 @@ class Library {
     if (mode === "fetch" || mode === "npm") {
       return;
     }
-    const omop = new OMOPServicesFactory(omopFN);
+    const omop = new OMOPServicesFactory(this.i18n, omopFN);
     await omop.load();
     this.registerProvider(omopFN, omop, isDefault);
   }
@@ -528,6 +527,7 @@ class Library {
   async cloneWithFhirVersion(fhirVersion, context) {
     // Create new provider instance
     const provider = new Provider();
+    provider.i18n = this.i18n;
     provider.codeSystemFactories = new Map(this.codeSystemFactories); // all of them
     provider.codeSystems = new Map();
     provider.valueSetProviders = [];

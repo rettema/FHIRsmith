@@ -1,5 +1,6 @@
 const fs = require('fs');
 const os = require('os');
+const {validateParameter, validateOptionalParameter, Utilities} = require("./utilities");
 
 /**
  * Language part types for matching depth
@@ -59,7 +60,7 @@ class LanguageVariant extends LanguageEntry {}
  * Individual language representation based on BCP 47
  */
 class Language {
-  constructor(code = '') {
+  constructor(code = '', languageDefinitions = null) {
     this.code = code;
     this.language = '';
     this.extLang = [];
@@ -71,7 +72,7 @@ class Language {
     this.quality = 1.0; // For Accept-Language header quality values
 
     if (this.code) {
-      this._parse();
+      this._parse(languageDefinitions);
     }
   }
 
@@ -109,7 +110,7 @@ class Language {
   /**
    * Parse the language code according to BCP 47
    */
-  _parse() {
+  _parse(languageDefinitions) {
     if (!this.code) return;
 
     const parts = this.code.split('-');
@@ -118,6 +119,9 @@ class Language {
     // Language (required)
     if (index < parts.length) {
       this.language = parts[index];
+      if (this.language != '*' && languageDefinitions && !languageDefinitions.languages.has(this.language)) {
+        throw new Error("The language '"+this.language+"' in the code '"+this.language+"' is not valid");
+      }
       index++;
     }
 
@@ -125,6 +129,9 @@ class Language {
     for (let i = 0; i < 3 && index < parts.length; i++) {
       const part = parts[index];
       if (part.length === 3 && /^[a-zA-Z]{3}$/.test(part)) {
+        if (languageDefinitions && !languageDefinitions.extLanguages.has(part)) {
+          throw new Error("The extLanguage '"+part+"' in the code '"+code+"' is not valid");
+        }
         this.extLang.push(part.toLowerCase());
         index++;
       } else {
@@ -136,6 +143,9 @@ class Language {
     if (index < parts.length) {
       const part = parts[index];
       if (part.length === 4 && /^[a-zA-Z]{4}$/.test(part)) {
+        if (languageDefinitions && !languageDefinitions.scripts.has(part)) {
+          throw new Error("The script '"+part+"' in the code '"+code+"' is not valid");
+        }
         this.script = part.charAt(0).toUpperCase() + part.slice(1).toLowerCase();
         index++;
       }
@@ -146,6 +156,9 @@ class Language {
       const part = parts[index];
       if ((part.length === 2 && /^[a-zA-Z]{2}$/.test(part)) ||
         (part.length === 3 && /^[0-9]{3}$/.test(part))) {
+        if (languageDefinitions && !languageDefinitions.regions.has(part)) {
+          throw new Error("The region '"+part+"' in the code '"+code+"' is not valid");
+        }
         this.region = part.toUpperCase();
         index++;
       }
@@ -313,7 +326,7 @@ class Language {
   }
 
   asString() {
-    if (this.quality && this.quality != 1) {
+    if (this.quality != undefined && this.quality != 1) {
       return this.code+"; q="+this.quality;
     } else {
       return this.code;
@@ -325,7 +338,11 @@ class Language {
  * Collection of languages with preference ordering
  */
 class Languages {
-  constructor() {
+  definitions;
+
+  constructor(definitions) {
+    validateOptionalParameter(definitions, "definitions", LanguageDefinitions);
+    this.definitions = definitions;
     this.languages = [];
 
   }
@@ -334,8 +351,9 @@ class Languages {
    * Parse Accept-Language header
    * Format: "en-US,en;q=0.9,fr;q=0.8"
    */
-  static fromAcceptLanguage(acceptLanguageHeader) {
-    const languages = new Languages();
+  static fromAcceptLanguage(acceptLanguageHeader, languageDefinitions, addWildcard) {
+    const languages = new Languages(languageDefinitions);
+    let wc = false;
 
     if (!acceptLanguageHeader) {
       languages.add(Language.fromSystemDefault());
@@ -347,13 +365,20 @@ class Languages {
 
     for (const entry of entries) {
       const [langCode, qValue] = entry.split(';');
-      const quality = qValue ? parseFloat(qValue.split('=')[1]) || 1.0 : 1.0;
+      const quality = qValue ? Utilities.parseFloatOrDefault(qValue.split('=')[1], 1.0) : 1.0;
 
-      const lang = new Language(langCode.trim());
+      let lc = langCode.trim();
+      wc = wc || lc == '*';
+      const lang = new Language(lc, languageDefinitions);
       lang.quality = quality;
       parsed.push(lang);
     }
-
+    if (addWildcard && !wc) {
+      const lang = new Language('*', languageDefinitions);
+      lang.quality = 0.01;
+      lang.implicit = true;
+      parsed.push(lang);
+    }
     // Sort by quality (descending)
     parsed.sort((a, b) => b.quality - a.quality);
 
@@ -447,7 +472,7 @@ class Languages {
   asString(incWildcard) {
     const parts = [];
     for (const lang of this.languages) {
-      if (incWildcard || lang.code !== '*') {
+      if ((incWildcard || lang.code !== '*') && !lang.implicit) {
         parts.push(lang.asString());
       }
     }
