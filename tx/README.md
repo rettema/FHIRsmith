@@ -2,6 +2,17 @@
 
 The TX module provides FHIR terminology services for CodeSystem, ValueSet, and ConceptMap resources. It supports multiple endpoints at different FHIR versions, all backed by a shared terminology library.
 
+## Todo
+
+* check the HTML interface 
+* add more tests for the code system providers - filters, extended lookup, designations and languages 
+* more refactoring in validate.js and expand.js 
+* full batch support 
+* check R4 and R3 support 
+* check vsac support 
+* get tx tests running in pipelines 
+
+
 ## Overview
 
 Unlike other modules in this server that mount at a single path (e.g., `/shl`, `/packages`), the TX module registers multiple endpoints directly at the root level. Each endpoint is configured with its own path, FHIR version, and optional context string.
