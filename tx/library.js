@@ -59,6 +59,8 @@ class Library {
    */
   conceptMapProviders;
 
+  contentSources = [];
+
   baseUrl = null;
   cacheFolder = null;
   startTime = Date.now();
@@ -73,6 +75,10 @@ class Library {
     }
     const ver = factory.version() ?? "";
     this.codeSystemFactories.set(factory.system()+"|"+ver, factory);
+    const verMin = factory.getPartialVersion();
+    if (verMin) {
+      this.codeSystemFactories.set(factory.system()+"|"+verMin, factory);
+    }
   }
 
 
@@ -394,11 +400,14 @@ class Library {
     const contentLoader = new PackageContentLoader(fullPackagePath);
     await contentLoader.initialize();
 
+    this.contentSources.push(contentLoader.id()+"#"+contentLoader.version());
+
     let cp = new ListCodeSystemProvider();
     const resources = await contentLoader.getResourcesByType("CodeSystem");
     let csc = 0;
     for (const resource of resources) {
       const cs = new CodeSystem(await contentLoader.loadFile(resource, contentLoader.fhirVersion()));
+      cs.sourcePackage = contentLoader.pid();
       cp.codeSystems.set(cs.url, cs);
       cp.codeSystems.set(cs.vurl, cs);
       csc++;
@@ -542,6 +551,17 @@ class Library {
     provider.codeSystems = new Map();
     provider.valueSetProviders = [];
     provider.conceptMapProviders = [];
+    if (VersionUtilities.isR5Ver(fhirVersion)) {
+      provider.fhirVersion = 5;
+    } else if (VersionUtilities.isR4Ver(fhirVersion)) {
+      provider.fhirVersion = 4;
+    } else if (VersionUtilities.isR3Ver(fhirVersion)) {
+      provider.fhirVersion = 3;
+    } else {
+      provider.fhirVersion = 6;
+    }
+
+
 
     // Load FHIR core packages first
     const fhirPackages = this.#getFhirPackagesForVersion(fhirVersion);
@@ -571,6 +591,7 @@ class Library {
     provider.lastTime = this.lastTime;
     provider.lastMemory = this.lastMemory;
     provider.totalDownloaded = this.totalDownloaded;
+    provider.contentSources = this.contentSources;
 
 
     // Now add the existing value set providers after the FHIR core packages

@@ -56,6 +56,14 @@ class AbstractValueSetProvider {
   }
 
   /**
+   *
+   * @returns {number} total number of value sets
+   */
+  vsCount() {
+    return 0;
+  }
+
+  /**
    * Validates search parameters
    * @param {Array<{name: string, value: string}>} searchParams - Search parameters to validate
    * @protected

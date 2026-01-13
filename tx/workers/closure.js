@@ -12,10 +12,10 @@ class ClosureWorker {
    * @param {express.Response} res - Express response
    * @param {Object} log - Logger instance
    */
-  static handle(req, res, log) {
+  static handle(req, res) {
     const params = req.method === 'POST' ? req.body : req.query;
 
-    log.debug('ConceptMap $closure with params:', params);
+    this.log.debug('ConceptMap $closure with params:', params);
 
     // TODO: Implement closure logic using provider
     res.status(501).json({

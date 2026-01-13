@@ -12,9 +12,6 @@ const { TxParameters } = require('../params');
 const { Parameters } = require('../library/parameters');
 const { Issue, OperationOutcome } = require('../library/operation-outcome');
 const {ConceptMap} = require("../library/conceptmap");
-const {CodeSystemProvider} = require("../cs/cs-api");
-
-const DEBUG_LOGGING = true;
 
 class TranslateWorker extends TerminologyWorker {
   /**
@@ -46,10 +43,7 @@ class TranslateWorker extends TerminologyWorker {
     try {
       await this.handleTypeLevelTranslate(req, res);
     } catch (error) {
-      this.log.error(`Error in ConceptMap $translate: ${error.message}`);
-      if (DEBUG_LOGGING) {
-        console.log('ConceptMap $translate error:', error);
-      }
+      this.log.error(error);
       if (error instanceof Issue) {
         const oo = new OperationOutcome();
         oo.addIssue(error);
@@ -71,10 +65,7 @@ class TranslateWorker extends TerminologyWorker {
     try {
       await this.handleInstanceLevelTranslate(req, res);
     } catch (error) {
-      this.log.error(`Error in ConceptMap $translate: ${error.message}`);
-      if (DEBUG_LOGGING) {
-        console.log('ConceptMap $translate error:', error);
-      }
+      this.log.error(error);
       if (error instanceof Issue) {
         const oo = new OperationOutcome();
         oo.addIssue(error);
@@ -432,6 +423,7 @@ class TranslateWorker extends TerminologyWorker {
     };
   }
 
+  // eslint-disable-next-line no-unused-vars
   isOkTarget(cm, vs) {
     // if cm.target != null then
     //   result := cm.target.url = vs.url
@@ -440,24 +432,24 @@ class TranslateWorker extends TerminologyWorker {
     // todo: or it might be ok to use this value set if it's a subset of the specified one?
   }
 
-  isOkSourceWithValueSet(cm, vs, coding) {
-    let result = { found: false, group: null, match: null };
-
-    if (true /* (vs == null) || ((cm.source != null) && (cm.source.url === vs.url)) */) {
-      for (const g of cm.groups || []) {
-        for (const em of g.elements || []) {
-          if ((g.source === coding.system) && (em.code === coding.code)) {
-            result = {
-              found: true,
-              group: g,
-              match: em
-            };
-          }
-        }
-      }
-    }
-    return result;
-  }
+  // isOkSourceWithValueSet(cm, vs, coding) {
+  //   let result = { found: false, group: null, match: null };
+  //
+  //   if (true /* (vs == null) || ((cm.source != null) && (cm.source.url === vs.url)) */) {
+  //     for (const g of cm.groups || []) {
+  //       for (const em of g.elements || []) {
+  //         if ((g.source === coding.system) && (em.code === coding.code)) {
+  //           result = {
+  //             found: true,
+  //             group: g,
+  //             match: em
+  //           };
+  //         }
+  //       }
+  //     }
+  //   }
+  //   return result;
+  // }
 
 
   findConceptMap(cm) {

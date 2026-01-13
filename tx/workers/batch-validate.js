@@ -73,10 +73,15 @@ class BatchValidateWorker extends TerminologyWorker {
 
           let worker = new ValidateWorker(this.opContext.copy(), this.log, this.provider, this.languages, this.i18n);
           try {
-            const p = await worker.handleValueSetInner(op.jsonObj);
+            let p;
+            if (this.hasValueSet(op.jsonObj.parameter)) {
+              p = await worker.handleValueSetInner(op.jsonObj);
+            } else {
+              p = await worker.handleCodeSystemInner(op.jsonObj);
+            }
             output.push({name: "validation", resource : p});
           } catch (error) {
-            console.log(error);
+            this.log.error(error);
             if (error instanceof Issue) {
               let op = new OperationOutcome();
               op.addIssue(error);
@@ -88,9 +93,10 @@ class BatchValidateWorker extends TerminologyWorker {
         }
       }
       let result = { resourceType : "Parameters", parameter: output}
+      req.logInfo = `${output.length} validations`;
       return res.json(result);
     } catch (error) {
-      console.log(error);
+      this.log.error(error);
       return res.status(error.statusCode || 500).json(this.operationOutcome(
         'error', error.issueCode || 'exception', error.message));
     }
@@ -113,6 +119,9 @@ class BatchValidateWorker extends TerminologyWorker {
     };
   }
 
+  hasValueSet(parameter) {
+    return parameter.find(p => p.name == 'url' || p.name == 'valueSet');
+  }
 }
 
 module.exports = {

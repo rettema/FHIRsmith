@@ -11,6 +11,8 @@ const INDEXED_COLUMNS = ['id', 'url', 'version', 'date', 'description', 'name', 
  * Handles SQLite operations for indexing and searching ValueSets
  */
 class ValueSetDatabase {
+  vsCount;
+
   /**
    * @param {string} dbPath - Path to the SQLite database file
    */
@@ -328,7 +330,7 @@ class ValueSetDatabase {
    * Load all ValueSets from the database
    * @returns {Promise<Map<string, Object>>} Map of all ValueSets keyed by various combinations
    */
-  async loadAllValueSets() {
+  async loadAllValueSets(source) {
     return new Promise((resolve, reject) => {
       const db = new sqlite3.Database(this.dbPath, sqlite3.OPEN_READONLY, (err) => {
         if (err) {
@@ -344,10 +346,12 @@ class ValueSetDatabase {
           }
 
           try {
+            this.vsCount = rows.length;
             const valueSetMap = new Map();
 
             for (const row of rows) {
               const valueSet = new ValueSet(JSON.parse(row.content));
+              valueSet.sourcePackage = source;
 
               // Store by URL and id alone
               valueSetMap.set(row.url, valueSet);
@@ -632,8 +636,8 @@ class ValueSetDatabase {
 
       switch (name.toLowerCase()) {
         case 'url':
-          conditions.push('v.url LIKE ?');
-          params.push(`%${value}%`);
+          conditions.push('v.url = ?');
+          params.push(value);
           break;
 
         case 'version':
@@ -685,8 +689,8 @@ class ValueSetDatabase {
 
         case 'system':
           joins.add('JOIN valueset_systems vs ON v.id = vs.valueset_id');
-          conditions.push('vs.system LIKE ?');
-          params.push(`%${value}%`);
+          conditions.push('vs.system = ?');
+          params.push(value);
           break;
 
         default:
@@ -726,6 +730,7 @@ class ValueSetDatabase {
   assignIds(ids) {
     // nothing - we don't do any assigning.
   }
+
 }
 
 module.exports = {

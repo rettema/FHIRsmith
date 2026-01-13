@@ -12,9 +12,6 @@ const { FhirCodeSystemProvider } = require('../cs/cs-cs');
 const {TxParameters} = require("../params");
 const {Parameters} = require("../library/parameters");
 const {Issue, OperationOutcome} = require("../library/operation-outcome");
-
-const DEBUG_LOGGING = true;
-
 class SubsumesWorker extends TerminologyWorker {
   /**
    * @param {OperationContext} opContext - Operation context
@@ -45,11 +42,8 @@ class SubsumesWorker extends TerminologyWorker {
     try {
       await this.handleTypeLevelSubsumes(req, res);
     } catch (error) {
-      this.log.error(`Error in CodeSystem $validate-code: ${error.message}`);
-      if (DEBUG_LOGGING) {
-        console.log('CodeSystem $validate-code error:', error);
-        console.log(error);
-      }
+      req.logInfo = "error "+(error.msgId || error.className);
+      this.log.error(error);
       if (error instanceof Issue) {
         let oo = new OperationOutcome();
         oo.addIssue(error);
@@ -71,11 +65,7 @@ class SubsumesWorker extends TerminologyWorker {
     try {
       await this.handleInstanceLevelSubsumes(req, res);
     } catch (error) {
-      this.log.error(`Error in CodeSystem $validate-code: ${error.message}`);
-      if (DEBUG_LOGGING) {
-        console.log('CodeSystem $validate-code error:', error);
-        console.log(error);
-      }
+      this.log.error(error);
       if (error instanceof Issue) {
         let oo = new OperationOutcome();
         oo.addIssue(error);
@@ -119,6 +109,7 @@ class SubsumesWorker extends TerminologyWorker {
       }
       // Get the code system provider from the coding's system
       csProvider = await this.findCodeSystem(codingA.system, codingA.version || '', txp, ['complete'], null, false);
+      this.seeSourceProvider(csProvider, codingA.system);
     } else if (params.has('codeA') && params.has('codeB')) {
       // Using codeA, codeB - system is required
       if (!params.has('system')) {
@@ -126,6 +117,7 @@ class SubsumesWorker extends TerminologyWorker {
       }
 
       csProvider = await this.findCodeSystem(params.get('system'), params.get('version') || '', txp, ['complete'], null, false);
+      this.seeSourceProvider(csProvider, params.get('system'));
       // Create codings from the codes
       codingA = {
         system: csProvider.system(),
@@ -144,6 +136,7 @@ class SubsumesWorker extends TerminologyWorker {
 
     // Perform the subsumes check
     const result = await this.doSubsumes(csProvider, codingA, codingB);
+    req.logInfo = this.usedSources.join("|")+txp.logInfo();
     return res.status(200).json(result);
   }
 
@@ -203,6 +196,7 @@ class SubsumesWorker extends TerminologyWorker {
 
     // Perform the subsumes check
     const result = await this.doSubsumes(csProvider, codingA, codingB);
+    req.logInfo = this.usedSources.join("|")+txp.logInfo();
     return res.json(result);
   }
   /**

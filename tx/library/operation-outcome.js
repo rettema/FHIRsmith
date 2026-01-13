@@ -5,19 +5,20 @@ class Issue extends Error {
   cause;
   path;
   msgId;
-  issue;
+  issueCode;
   statusCode;
   isSetForhandleAsOO;
   diagnostics;
+  issues = [];
 
-  constructor (level, cause, path, msgId, message, issue = null, statusCode = 500) {
+  constructor (level, cause, path, msgId, message, issueCode = null, statusCode = 500) {
     super(message);
     this.level = level;
     this.cause = cause;
     this.path = path;
     this.message = message;
     this.msgId = msgId;
-    this.issue = issue;
+    this.issueCode = issueCode;
     this.statusCode = statusCode;
   }
 
@@ -31,8 +32,8 @@ class Issue extends Error {
       location: [ this.path ],
       expression: [ this.path ]
     }
-    if (this.issue) {
-      res.details.coding = [{ system: "http://hl7.org/fhir/tools/CodeSystem/tx-issue-type", code : this.issue }];
+    if (this.issueCode) {
+      res.details.coding = [{ system: "http://hl7.org/fhir/tools/CodeSystem/tx-issue-type", code : this.issueCode }];
     }
     if (this.msgId) {
       res.extension = [{ url: "http://hl7.org/fhir/StructureDefinition/operationoutcome-message-id", valueString: this.msgId }];
@@ -59,6 +60,12 @@ class Issue extends Error {
   }
   setUnknownSystem(s) {
     this.unknownSystem = s;
+    return this;
+  }
+  addIssue(issue) {
+    if (issue) {
+      this.issues.push(issue);
+    }
     return this;
   }
 
@@ -88,6 +95,9 @@ class OperationOutcome {
       this.jsonObj.issue = [];
     }
     this.jsonObj.issue.push(newIssue.asIssue());
+    for (let extra of newIssue.issues) {
+      this.addIssue(extra, false);
+    }
     return true;
   }
 

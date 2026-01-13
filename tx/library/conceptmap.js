@@ -28,7 +28,7 @@ class ConceptMap extends CanonicalResource {
    * @returns {ValueSet} New ValueSet instance
    */
   static fromJSON(jsonString, version = 'R5') {
-    return new ValueSet(JSON.parse(jsonString), version);
+    return new ConceptMap(JSON.parse(jsonString), version);
   }
 
   /**
@@ -115,7 +115,7 @@ class ConceptMap extends CanonicalResource {
    * @private
    */
   _convertFromR5(r5Obj, targetVersion) {
-    if (targetVersion === 'R5') {
+    if (VersionUtilities.isR5Ver(targetVersion)) {
       return r5Obj; // No conversion needed
     }
 

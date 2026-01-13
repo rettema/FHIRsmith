@@ -862,6 +862,9 @@ class VersionUtilities {
         validateOptionalParameter(candidate, "candidate", String);
         validateOptionalParameter(versionAlgorithm, "versionAlgorithm", String);
 
+        if (criteria == candidate) {
+            return true;
+        }
         if (!versionAlgorithm) {
             versionAlgorithm = this.guessVersionFormat(candidate);
         }
@@ -869,7 +872,7 @@ class VersionUtilities {
             return false;
         }
         switch (versionAlgorithm) {
-            case 'semver' : return VersionUtilities.versionMatches(criteria, candidate);
+            case 'semver' : return VersionUtilities.isSemVerWithWildcards(criteria) && VersionUtilities.isSemVer(candidate) && VersionUtilities.versionMatches(criteria, candidate);
             case 'integer' : return false;
             default: return candidate.startsWith(criteria);
         }

@@ -289,36 +289,6 @@ class Designation {
     return coding.system || '--';
   }
 
-  /**
-   * Check if this designation's use indicates it's a display
-   * @returns {boolean}
-   */
-  isUseADisplay() {
-    if (!this.use) {
-      return true; // No use specified, assume display
-    }
-
-    // Check for standard display use codes
-    if (this.use.system === DesignationUse.DISPLAY.system &&
-      this.use.code === DesignationUse.DISPLAY.code) {
-      return true;
-    }
-
-    // SNOMED preferred term is a display
-    if (this.use.system === DesignationUse.PREFERRED.system &&
-      this.use.code === DesignationUse.PREFERRED.code) {
-      return true;
-    }
-
-    // No use or unknown use - treat as display
-    return !this.use.code;
-  }
-
-  isDisplay() {
-    return this.use && this.use.system == DesignationUse.DISPLAY.system &&
-      this.use.code == DesignationUse.DISPLAY.code;
-  }
-
   isPreferred() {
     return this.use && this.use.system == DesignationUse.PREFERRED.system &&
       this.use.code == DesignationUse.PREFERRED.code;
@@ -423,10 +393,10 @@ class Designations {
   /**
    * Add designation from FHIR CodeSystem concept designation
    */
-  addDesignationFromConcept(concept, baseLanguage = null) {
+  addDesignationFromConcept(concept) {
     validateOptionalParameter(concept, 'concept', Object);
     if (!concept) return;
-    this.addDesignation(false, "unknown", concept.language, concept.use, concept.value, concept.extension);
+    this.addDesignation(false, "unknown", concept.language, concept.use, concept.value.trim(), concept.extension);
     //
     // if (context.display) {
     //   this.addDesignation(true, true, baseLanguage, null, context.display)
@@ -452,9 +422,7 @@ class Designations {
 
     for (const cd of this.designations) {
       if (this._langsMatch(langList, cd.language, LangMatchType.LANG, defLang) &&
-        (!active || cd.isActive()) &&
-        cd.value &&
-        this._stringMatches(value, cd.value, mode, cd.language)) {
+          (!active || cd.isActive()) && cd.value && this._stringMatches(value, cd.value, mode, cd.language)) {
         result.found = true;
         return result;
       }
@@ -499,7 +467,7 @@ class Designations {
 
     // Try full match first
     for (const cd of this.designations) {
-      if ((!displayOnly || cd.base || this._isDisplay(cd)) &&
+      if ((!displayOnly || this.isDisplay(cd)) &&
         this._langsMatch(langList, cd.language, LangMatchType.FULL, defLang) &&
         cd.value) {
         result++;
@@ -509,7 +477,7 @@ class Designations {
     if (result === 0) {
       // Try language-region match
       for (const cd of this.designations) {
-        if ((!displayOnly || cd.base || this._isDisplay(cd)) &&
+        if ((!displayOnly || this.isDisplay(cd)) &&
           this._langsMatch(langList, cd.language, LangMatchType.LANG_REGION, defLang) &&
           cd.value) {
           result++;
@@ -520,7 +488,7 @@ class Designations {
     if (result === 0) {
       // Try language-only match
       for (const cd of this.designations) {
-        if ((!displayOnly || cd.base || this._isDisplay(cd)) &&
+        if ((!displayOnly || this.isDisplay(cd)) &&
           this._langsMatch(langList, cd.language, LangMatchType.LANG, defLang) &&
           cd.value) {
           result++;
@@ -544,7 +512,7 @@ class Designations {
 
     // Collect matching designations
     for (const cd of this.designations) {
-      if ((!displayOnly || cd.base || this._isDisplay(cd)) &&
+      if ((!displayOnly || this.isDisplay(cd)) &&
         this._langsMatch(langList, cd.language, LangMatchType.LANG, null) &&
         cd.value) {
         count++;
@@ -559,7 +527,7 @@ class Designations {
     // If no language-specific matches, get all
     if (count === 0) {
       for (const cd of this.designations) {
-        if ((!displayOnly || cd.base || this._isDisplay(cd)) && cd.value) {
+        if ((!displayOnly || this.isDisplay(cd)) && cd.value) {
           count++;
           if (cd.language) {
             results.push(`'${cd.display}' (${cd.language.code})`);
@@ -595,7 +563,7 @@ class Designations {
     if (!langList || langList.length == 0) {
       // No language list, prefer base designations
       for (const cd of this.designations) {
-        if (this._isDisplay(cd)) {
+        if (this.isDisplay(cd)) {
           return cd;
         }
       }
@@ -614,7 +582,7 @@ class Designations {
 
       for (const matchType of matchTypes) {
         for (const cd of this.designations) {
-          if (this._langMatches(lang, cd.language, matchType) && this._isDisplay(cd)) {
+          if (this._langMatches(lang, cd.language, matchType) && this.isDisplay(cd)) {
             return cd;
           }
         }
@@ -652,7 +620,7 @@ class Designations {
 
     const getDesignationTypePriority = (cd) => {
       if (cd.base) return 3;
-      if (this._isDisplay(cd)) return 2;
+      if (this.isDisplay(cd)) return 2;
       return 1;
     };
 
@@ -728,12 +696,17 @@ class Designations {
   /**
    * Check if designation is a display designation
    */
-  _isDisplay(cd) {
-    return !cd.use ||
-      (cd.use.system === DesignationUse.DISPLAY.system &&
+  isDisplay(cd) {
+    if (!cd.use) {
+      return true;
+    }
+    if ((cd.use.system === DesignationUse.DISPLAY.system &&
         cd.use.code === DesignationUse.DISPLAY.code) ||
       (cd.use.system === DesignationUse.PREFERRED.system &&
-        cd.use.code === DesignationUse.PREFERRED.code);
+        cd.use.code === DesignationUse.PREFERRED.code)) {
+      return true;
+    }
+    return this.source && this.source.isDisplay(cd);
   }
 
   /**
@@ -854,7 +827,7 @@ class Designations {
     if (items.length === 2) return `${items[0]} or ${items[1]}`;
 
     const lastItem = items.pop();
-    return `${items.join(', ')}, or ${lastItem}`;
+    return `${items.join(', ')} or ${lastItem}`;
   }
 
   /**
@@ -867,7 +840,7 @@ class Designations {
     const seen = new Set();
 
     for (const d of this.designations) {
-      if (!d.isActive() || !d.isUseADisplay() || !d.value) continue;
+      if (!d.isActive() || !(this.isDisplay(d)) || !d.value) continue;
       if (seen.has(d.value)) continue;
 
       // Check language match
@@ -895,7 +868,7 @@ class Designations {
   status(display) {
     for (const d of this.designations) {
       if (d.value === display) {
-        return this.status;
+        return d.status;
       }
     }
     return '';

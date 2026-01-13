@@ -333,7 +333,7 @@ class NdcServices extends CodeSystemProvider {
       return { context: productResult, message: null };
     }
 
-    return { context: null, message: `NDC Code '${code}' not found` };
+    return { context: null, message: undefined };
   }
 
   async #locateInPackages(code) {

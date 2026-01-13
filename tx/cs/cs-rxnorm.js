@@ -225,7 +225,7 @@ class RxNormServices extends CodeSystemProvider {
             }
 
             if (archiveRows.length === 0) {
-              resolve({ context: null, message: `${this.isNCI ? 'NCI' : 'RxNorm'} Code '${code}' not found` });
+              resolve({ context: null, message: undefined});
               return;
             }
 

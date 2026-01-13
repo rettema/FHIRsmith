@@ -33,6 +33,7 @@ class PackageValueSetProvider extends AbstractValueSetProvider {
     if (this.initialized) {
       return;
     }
+    await this.packageLoader.initialize();
 
     const dbExists = await this.database.exists();
 
@@ -41,7 +42,7 @@ class PackageValueSetProvider extends AbstractValueSetProvider {
       await this._populateDatabase();
     }
 
-    this.valueSetMap = await this.database.loadAllValueSets();
+    this.valueSetMap = await this.database.loadAllValueSets(this.packageLoader.pid());
     this.initialized = true;
   }
 
@@ -174,6 +175,12 @@ class PackageValueSetProvider extends AbstractValueSetProvider {
               isMatch = false;
               break;
             }
+          } else if (param === 'url') {
+            const propValue = json[param];
+            if (!this._matchValueFull(propValue, searchValue)) {
+              isMatch = false;
+              break;
+            }
           } else {
             // Standard partial text match on property
             const propValue = json[param];
@@ -205,6 +212,17 @@ class PackageValueSetProvider extends AbstractValueSetProvider {
     }
     const strValue = String(propValue).toLowerCase();
     return strValue.includes(searchValue);
+  }
+
+  /**
+   * Check if a value matches the search term (partial, case-insensitive)
+   */
+  _matchValueFull(propValue, searchValue) {
+    if (propValue === undefined || propValue === null) {
+      return false;
+    }
+    const strValue = String(propValue).toLowerCase();
+    return strValue === searchValue;
   }
 
   /**
@@ -304,6 +322,11 @@ class PackageValueSetProvider extends AbstractValueSetProvider {
   assignIds(ids) {
     // nothing - we don't do any assigning.
   }
+
+  vsCount() {
+    return this.database.vsCount;
+  }
+
 }
 
 module.exports = {

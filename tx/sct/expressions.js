@@ -1549,7 +1549,7 @@ class SnomedExpressionServices {
       }
     } catch (error) {
       // If we can't read the concept descriptions, return empty list
-      console.warn(`Warning: Could not read descriptions for concept ${conceptIndex}: ${error.message}`);
+      this.log.warn(`Warning: Could not read descriptions for concept ${conceptIndex}: ${error.message}`);
     }
 
     return designations;
@@ -1633,7 +1633,7 @@ class SnomedExpressionServices {
       return (concept.flags & 1) !== 0;
     } catch (error) {
       // If we can't read the concept, assume it's primitive for safety
-      console.warn(`Warning: Could not check primitive status for concept ${reference}: ${error.message}`);
+      this.log.warn(`Warning: Could not check primitive status for concept ${reference}: ${error.message}`);
       return true;
     }
   }
@@ -1644,7 +1644,7 @@ class SnomedExpressionServices {
       const concept = this.concepts.getConcept(reference);
       return concept.identity.toString();
     } catch (error) {
-      console.warn(`Warning: Could not get concept ID for reference ${reference}: ${error.message}`);
+      this.log.warn(`Warning: Could not get concept ID for reference ${reference}: ${error.message}`);
       return reference.toString(); // Fall back to using the reference itself
     }
   }
@@ -1707,7 +1707,7 @@ class SnomedExpressionServices {
       return descendants.includes(b);
     } catch (error) {
       // If we can't read closure data, fall back to simple equality check
-      console.warn(`Warning: Could not check subsumption for ${a} -> ${b}: ${error.message}`);
+      this.log.warn(`Warning: Could not check subsumption for ${a} -> ${b}: ${error.message}`);
       return false;
     }
   }
@@ -1913,7 +1913,7 @@ class SnomedExpressionServicesExtended extends SnomedExpressionServices {
         } catch (error) {
           // Skip problematic relationships
           if (this.building) {
-            console.warn(`Warning: Could not read relationship ${relIndex}: ${error.message}`);
+            this.log.warn(`Warning: Could not read relationship ${relIndex}: ${error.message}`);
           }
         }
       }
@@ -1921,7 +1921,7 @@ class SnomedExpressionServicesExtended extends SnomedExpressionServices {
       return result;
     } catch (error) {
       if (this.building) {
-        console.warn(`Warning: Could not get defining relationships for concept ${conceptIndex}: ${error.message}`);
+        this.log.warn(`Warning: Could not get defining relationships for concept ${conceptIndex}: ${error.message}`);
       }
       return [];
     }
@@ -1943,7 +1943,7 @@ class SnomedExpressionServicesExtended extends SnomedExpressionServices {
       return parents || [];
     } catch (error) {
       if (this.building) {
-        console.warn(`Warning: Could not get parents for concept ${reference}: ${error.message}`);
+        this.log.warn(`Warning: Could not get parents for concept ${reference}: ${error.message}`);
       }
       return [];
     }
@@ -1962,7 +1962,7 @@ class SnomedExpressionServicesExtended extends SnomedExpressionServices {
     } catch (error) {
       // If we can't read the concept, assume it's primitive for safety
       if (this.building) {
-        console.warn(`Warning: Could not check primitive status for concept ${reference}, assuming primitive: ${error.message}`);
+        this.log.warn(`Warning: Could not check primitive status for concept ${reference}, assuming primitive: ${error.message}`);
       }
       return true;
     }
@@ -2022,7 +2022,7 @@ class SnomedExpressionServicesExtended extends SnomedExpressionServices {
           } catch (error) {
             // Skip problematic relationships but continue
             if (this.building) {
-              console.warn(`Warning: Could not process relationship ${relIndex}: ${error.message}`);
+              this.log.warn(`Warning: Could not process relationship ${relIndex}: ${error.message}`);
             }
           }
         }
@@ -2036,7 +2036,7 @@ class SnomedExpressionServicesExtended extends SnomedExpressionServices {
       }
     } catch (error) {
       if (this.building) {
-        console.warn(`Warning: Could not create defined expression for concept ${reference}: ${error.message}`);
+        this.log.warn(`Warning: Could not create defined expression for concept ${reference}: ${error.message}`);
       }
       // Add as primitive concept as fallback
       if (!exp.hasConcept(reference)) {

@@ -128,29 +128,218 @@ function buildTitle(json) {
   return resourceType;
 }
 
+
+// eslint-disable-next-line no-unused-vars
+function buildSearchForm(req, mode, params) {
+  let html = '';
+
+  // Search form
+  html += '<h3>Search</h3>';
+
+  html += `<form method="get" action="${escapeHtml(req.baseUrl)}/CodeSystem">`;
+  html += '<table class="grid" cellpadding="0" cellspacing="0">';
+  html += '<tr>';
+  html += '<td colspan="2">URL: <input type="text" name="url" size="40"/></td>';
+  html += '<td>Version: <input type="text" name="version"/></td>';
+  html += '</tr>';
+  html += '<tr>';
+  html += '<td title="Searches in name, title, description, publisher">Text: <input type="text" name="text"/></td>';
+  html += '<td>Status: <select name="status" class="form-select"><option value="">(any status)</option>';
+  html += '<option value="draft">draft</option><option value="active">active</option>';
+  html += '<option value="retired">retired</option><option value="unknown">unknown</option></select></td>';
+  html += '<td>Language: <input type="text" name="lang" size="10"/> (ietf code)</td>';
+  html += '</tr>';
+  html += '<tr>';
+  html += '<td colspan="2" title="CodeSystem - for supplements, value sets, and concept maps">System: <input type="text" name="system" size="40"/></td>';
+  html += '<td>CS Content: <select name="content-mode" class="form-select"><option value="">(any content)</option>';
+  html += '<option value="not-present">not-present</option><option value="example">example</option>';
+  html += '<option value="fragment">fragment</option><option value="complete">complete</option>';
+  html += '<option value="supplement">supplement</option></select></td>';
+  html += '</tr>';
+  html += '</table>';
+  html += '<button type="submit" class="btn btn-primary">Search:</button>';
+  html += ' <input type="radio" name="mode" value="cs" selected/> CodeSystems';
+  html += ' <input type="radio" name="mode" value="vs"/> ValueSets';
+  html += ' <input type="radio" name="mode" value="""cm"/> ConceptMaps';
+  html += '</form>';
+
+  return html;
+}
+
+function buildHomePage(req) {
+  const provider = req.txProvider;
+
+  let html = '';
+
+  // ===== Summary Section =====
+  html += '<h3>Server Summary</h3>';
+
+  // Calculate uptime
+  const uptimeMs = Date.now() - provider.startTime;
+  const uptimeSeconds = Math.floor(uptimeMs / 1000);
+  const uptimeDays = Math.floor(uptimeSeconds / 86400);
+  const uptimeHours = Math.floor((uptimeSeconds % 86400) / 3600);
+  const uptimeMinutes = Math.floor((uptimeSeconds % 3600) / 60);
+  const uptimeSecs = uptimeSeconds % 60;
+  let uptimeStr = '';
+  if (uptimeDays > 0) uptimeStr += `${uptimeDays}d `;
+  if (uptimeHours > 0 || uptimeDays > 0) uptimeStr += `${uptimeHours}h `;
+  if (uptimeMinutes > 0 || uptimeHours > 0 || uptimeDays > 0) uptimeStr += `${uptimeMinutes}m `;
+  uptimeStr += `${uptimeSecs}s`;
+
+  // Memory usage
+  const memUsage = process.memoryUsage();
+  const heapUsedMB = (memUsage.heapUsed / 1024 / 1024).toFixed(2);
+  const heapTotalMB = (memUsage.heapTotal / 1024 / 1024).toFixed(2);
+  const rssMB = (memUsage.rss / 1024 / 1024).toFixed(2);
+
+  html += '<table class="grid">';
+  html += '<tr>';
+  html += `<td><strong>FHIR Version:</strong> ${escapeHtml(provider.getFhirVersion())}</td>`;
+  html += `<td><strong>Uptime:</strong> ${escapeHtml(uptimeStr)}</td>`;
+  html += `<td><strong>Request Count:</strong> ${provider.requestCount}</td>`;
+  html += '</tr>';
+  html += '<tr>';
+  html += `<td><strong>Heap Used:</strong> ${heapUsedMB} MB</td>`;
+  html += `<td><strong>Heap Total:</strong> ${heapTotalMB} MB</td>`;
+  html += `<td><strong>Process Memory:</strong> ${rssMB} MB</td>`;
+  html += '</tr>';
+
+  // Count unique code systems
+  const uniqueFactorySystems = new Set();
+  for (const factory of provider.codeSystemFactories.values()) {
+    uniqueFactorySystems.add(factory.system());
+  }
+  const uniqueCodeSystems = new Set();
+  for (const cs of provider.codeSystems.values()) {
+    uniqueCodeSystems.add(cs.url);
+  }
+  html += '<tr>';
+  html += `<td><strong>CodeSystem #:</strong> ${new Set([...uniqueFactorySystems, ...uniqueCodeSystems]).size}</td>`;
+
+  // Count value sets
+  let totalValueSets = 0;
+  for (const vsp of provider.valueSetProviders) {
+    totalValueSets += vsp.vsCount();
+  }
+  html += `<td><strong>ValueSet #:</strong> ${totalValueSets || 'Unknown'}</td>`;
+
+  let totalConceptMaps = 0;
+  for (const cmp of provider.conceptMapProviders) {
+    totalConceptMaps += cmp.cmCount();
+  }
+  html += `<td><strong>ConceptMap #:</strong> ${totalConceptMaps || 'Unknown'}</td>`;
+  html += '</tr>';
+  html += '</table>';
+
+  html += '<hr/>';
+  html += buildSearchForm(req);
+  //
+  //
+  // // Translation form
+  // html += '<h6 class="mt-4">Translate</h6>';
+  // html += `<form method="get" action="${escapeHtml(req.baseUrl)}/ConceptMap/$translate">`;
+  // html += '<div class="row">';
+  // html += '<div><input type="text" name="system" placeholder="Source System" required/></div>';
+  // html += '<div><input type="text" name="code" placeholder="Code" required/></div>';
+  // html += '<div><input type="text" name="targetSystem" placeholder="Target System"/></div>';
+  // html += '</div>';
+  // html += '<div class="row">';
+  // html += '<div class="col-md-6 mb-2">';
+  // html += '</div>';
+  // html += '</div>';
+  // html += '<button type="submit" class="btn btn-primary">Translate</button>';
+  // html += '</form>';
+  //
+  // Search form for concept maps
+  // html += '<h6 class="mt-4">Search Concept Maps</h6>';
+  // html += `<form method="get" action="${escapeHtml(req.baseUrl)}/ConceptMap">`;
+  // html += '<div class="row">';
+  // html += '<div><input type="text" name="_id" placeholder="ID"/></div>';
+  // html += '<div><input type="text" name="url" placeholder="URL"/></div>';
+  // html += '<div><input type="text" name="name" placeholder="Name"/></div>';
+  // html += '<div><input type="text" name="title" placeholder="Title"/></div>';
+  // html += '</div>';
+  // html += '<button type="submit" class="btn btn-primary">Search</button>';
+  // html += '</form>';
+  // html += '</div></div>';
+
+  // ===== Packages and Factories Section =====
+  html += '<hr/><h3>Content Sources &amp; Code System Factories</h3>';
+
+  // List content sources
+  html += '<h6>Content Sources</h6>';
+  if (provider.contentSources && provider.contentSources.length > 0) {
+    const sorted = [...provider.contentSources].sort();
+    html += '<ul>';
+    for (const source of sorted) {
+      html += `<li>${escapeHtml(source)}</li>`;
+    }
+    html += '</ul>';
+  } else {
+    html += '<p><em>No content sources available</em></p>';
+  }
+
+  // Code System Factories table
+// Code System Factories table
+  html += '<h6 class="mt-4">External CodeSystems</h6>';
+  html += '<table class="grid">';
+  html += '<thead><tr><th>System</th><th>Version</th><th>Use Count</th></tr></thead>';
+  html += '<tbody>';
+
+// Deduplicate factories and sort by system URL
+  const seenFactories = new Set();
+  const uniqueFactories = [];
+  for (const factory of provider.codeSystemFactories.values()) {
+    const key = factory.system() + '|' + (factory.version() || '');
+    if (!seenFactories.has(key)) {
+      seenFactories.add(key);
+      uniqueFactories.push(factory);
+    }
+  }
+  uniqueFactories.sort((a, b) => a.system().localeCompare(b.system()));
+
+  for (const factory of uniqueFactories) {
+    html += '<tr>';
+    html += `<td>${escapeHtml(factory.system())}</td>`;
+    html += `<td>${escapeHtml(factory.version() || '-')}</td>`;
+    html += `<td>${factory.useCount ? factory.useCount() : '-'}</td>`;
+    html += '</tr>';
+  }
+
+  html += '</tbody></table>';
+  html += '</div></div>';
+
+  return html;
+}
+
 /**
  * Main render function - determines what to render based on resource type
  */
 function render(json, req) {
-  const resourceType = json.resourceType;
-  
-  switch (resourceType) {
-    case 'Parameters':
-      return renderParameters(json);
-    case 'CodeSystem':
-      return renderCodeSystem(json);
-    case 'ValueSet':
-      return renderValueSet(json);
-    case 'ConceptMap':
-      return renderConceptMap(json);
-    case 'CapabilityStatement':
-      return renderCapabilityStatement(json);
-    case 'Bundle':
-      return renderBundle(json, req);
-    case 'OperationOutcome':
-      return renderOperationOutcome(json);
-    default:
-      return renderGeneric(json);
+  if (req.path == "/") {
+    return buildHomePage(req);
+  } else {
+    const resourceType = json.resourceType;
+
+    switch (resourceType) {
+      case 'Parameters':
+        return renderParameters(json);
+      case 'CodeSystem':
+        return renderCodeSystem(json);
+      case 'ValueSet':
+        return renderValueSet(json);
+      case 'ConceptMap':
+        return renderConceptMap(json);
+      case 'CapabilityStatement':
+        return renderCapabilityStatement(json);
+      case 'Bundle':
+        return renderBundle(json, req);
+      case 'OperationOutcome':
+        return renderOperationOutcome(json, req);
+      default:
+        return renderGeneric(json);
+    }
   }
 }
 
@@ -198,39 +387,38 @@ function renderCapabilityStatement(json) {
  * Render OperationOutcome resource
  */
 function renderOperationOutcome(json) {
-  let html = '<div class="alert ';
-  
-  // Determine alert style based on severity
-  const severity = json.issue?.[0]?.severity || 'information';
-  switch (severity) {
-    case 'error':
-    case 'fatal':
-      html += 'alert-danger';
-      break;
-    case 'warning':
-      html += 'alert-warning';
-      break;
-    case 'information':
-      html += 'alert-info';
-      break;
-    default:
-      html += 'alert-secondary';
-  }
-  
-  html += '">';
+  let html = '<div class="operation-outcome">';
   html += `<h4>OperationOutcome</h4>`;
-  
+
   if (json.issue && Array.isArray(json.issue)) {
-    html += '<ul>';
     for (const issue of json.issue) {
-      html += `<li><strong>${escapeHtml(issue.severity || 'unknown')}:</strong> `;
+      html += '<div class="alert ';
+
+      // Determine alert style based on this issue's severity
+      const severity = issue.severity || 'information';
+      switch (severity) {
+        case 'error':
+        case 'fatal':
+          html += 'alert-danger';
+          break;
+        case 'warning':
+          html += 'alert-warning';
+          break;
+        case 'information':
+          html += 'alert-info';
+          break;
+        default:
+          html += 'alert-secondary';
+      }
+
+      html += '">';
+      html += `<strong>${escapeHtml(issue.severity || 'unknown')}:</strong> `;
       html += `[${escapeHtml(issue.code || 'unknown')}] `;
       html += escapeHtml(issue.diagnostics || issue.details?.text || 'No details');
-      html += '</li>';
+      html += '</div>';
     }
-    html += '</ul>';
   }
-  
+
   html += '</div>';
   return html;
 }
@@ -315,7 +503,7 @@ function renderSearchForm(json, req) {
       }
       html += '</select>';
     } else {
-      html += `<input type="text" name="${param.name}" id="${param.name}" class="form-control"/>`;
+      html += `<input type="text" name="${param.name}" id="${param.name}"/>`;
     }
     
     html += '</div>';

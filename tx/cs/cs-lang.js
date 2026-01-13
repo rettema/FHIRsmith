@@ -155,7 +155,7 @@ class IETFLanguageCodeProvider extends CodeSystemProvider {
         if (altDisplay && altDisplay !== primaryDisplay) {
           displays.addDesignation(false, 'active', 'en', CodeSystem.makeUseForDisplay(), altDisplay);
           // Add region variants for alternatives too
-          if (ctxt.language.isLangRegion()) {
+          if (ctxt.isLangRegion()) {
             const langDisplay = this.languageDefinitions.getDisplayForLang(ctxt.language, i);
             const regionDisplay = this.languageDefinitions.getDisplayForRegion(ctxt.region);
             const altRegionVariant = `${langDisplay} (${regionDisplay})`;
@@ -176,7 +176,7 @@ class IETFLanguageCodeProvider extends CodeSystemProvider {
     if (typeof code === 'string') {
       const ctxt = await this.locate(code);
       if (ctxt.context == null) {
-        throw new Error(ctxt.message);
+        throw new Error(ctxt.message ? ctxt.message : `Invalid language code: ${code}`);
       } else {
         return ctxt.context;
       }
@@ -196,7 +196,7 @@ class IETFLanguageCodeProvider extends CodeSystemProvider {
 
     const language = this.languageDefinitions.parse(code);
     if (!language) {
-      return { context: null, message: `Invalid language code: ${code}` };
+      return { context: null, message: undefined };
     }
 
     return { context: language, message: null };

@@ -107,7 +107,7 @@ class HGVSServices extends CodeSystemProvider {
       } else {
         return {
           context: null,
-          message: result.message || `HGVS code '${code}' is not valid`
+          message: result.message || undefined
         };
       }
     } catch (error) {

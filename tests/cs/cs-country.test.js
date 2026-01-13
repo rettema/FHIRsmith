@@ -1,6 +1,5 @@
 const { CountryCodeFactoryProvider } = require('../../tx/cs/cs-country');
 const { OperationContext } = require('../../tx/operation-context');
-const {Languages} = require("../../library/languages");
 const {TestUtilities} = require("../test-utilities");
 
 describe('CountryCodeServices', () => {
@@ -108,7 +107,7 @@ describe('CountryCodeServices', () => {
       for (const code of invalidCodes) {
         const result = await provider.locate(code);
         expect(result.context).toBeNull();
-        expect(result.message).toContain('not found');
+        expect(result.message).toBeUndefined();
       }
     });
 

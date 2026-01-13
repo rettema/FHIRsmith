@@ -108,7 +108,7 @@ class USStateServices extends CodeSystemProvider {
     if (typeof code === 'string') {
       const ctxt = await this.locate(code);
       if (ctxt.context == null) {
-        throw new Error(ctxt.message);
+        throw new Error(ctxt.message ? ctxt.message : `US State Code '${code}' not found`);
       } else {
         return ctxt.context;
       }
@@ -129,7 +129,7 @@ class USStateServices extends CodeSystemProvider {
     if (concept) {
       return { context: concept, message: null };
     }
-    return { context: null, message: `US State Code '${code}' not found` };
+    return { context: null, message: undefined };
   }
 
   // Iterator methods

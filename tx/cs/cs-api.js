@@ -7,6 +7,7 @@ const { OperationContext } = require("../operation-context");
 const {Extensions} = require("../library/extensions");
 const {validateParameter, validateArrayParameter} = require("../../library/utilities");
 const {I18nSupport} = require("../../library/i18nsupport");
+const {VersionUtilities} = require("../../library/version-utilities");
 
 class FilterExecutionContext {
   filters = [];
@@ -213,11 +214,13 @@ class CodeSystemProvider {
   listFeatures() { return null; }
 
   /**
-   * @param {string} v1 - first version
-   * @param {string} v2 - second version
-   * @returns {boolean} True if something....
+   * @param {string} checkVersion - first version
+   * @param {string} actualVersion - second version
+   * @returns {boolean} True if actualVersion is more detailed than checkVersion (for SCT)
    */
-  versionIsMoreDetailed(v1, v2) { return false; }
+  versionIsMoreDetailed(checkVersion, actualVersion) {
+     return false;
+  }
 
   /**
    * @returns { {status, standardsStatus : String, experimental : boolean} } applicable Features
@@ -340,7 +343,15 @@ class CodeSystemProvider {
   async parent(code) { return null; }
 
   /**
-   
+   * This is calleed if the designation is not marked with a usual use code indicating that it is considered as a display
+   * @param designation
+   * @returns {boolean}
+   */
+  isDisplay(designation) {
+    return false;
+  }
+
+  /**
    * @param {string | CodeSystemProviderContext} code
    * @param {ConceptDesignations} designation list
    * @returns {Designation[]} whatever designations exist (in all languages)
@@ -641,6 +652,10 @@ class CodeSystemProvider {
     return null;
   }
 
+  versionNeeded() {
+    return false;
+  }
+
   /**
    * @returns {string} valueset for the code system
    */
@@ -692,7 +707,13 @@ class CodeSystemFactoryProvider {
    */
   version() { throw new Error("Must override"); }
 
-
+  getPartialVersion() {
+    let ver = this.version();
+    if (ver && VersionUtilities.isSemVer(ver)) {
+      return VersionUtilities.getMajMin(ver);
+    }
+    return ver;
+  }
 /**
    * @returns {number} how many times the factory has been asked to construct a provider
    */

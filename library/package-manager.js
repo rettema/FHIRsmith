@@ -526,6 +526,10 @@ class PackageContentLoader {
     version() {
         return this.package.version;
     }
+
+    pid() {
+        return this.id()+"#"+this.version();
+    }
 }
 
 

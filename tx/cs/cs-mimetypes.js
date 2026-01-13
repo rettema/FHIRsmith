@@ -137,7 +137,7 @@ class MimeTypeServices extends CodeSystemProvider {
     if (typeof code === 'string') {
       const ctxt = await this.locate(code);
       if (ctxt.context == null) {
-        throw new Error(ctxt.message);
+        throw new Error(ctxt.message ? ctxt.message : `Invalid MIME type '${code}'`);
       } else {
         return ctxt.context;
       }
@@ -159,7 +159,7 @@ class MimeTypeServices extends CodeSystemProvider {
       return { context: concept, message: null };
     }
 
-    return { context: null, message: `Invalid MIME type '${code}'` };
+    return { context: null, message: undefined};
   }
 
   // Subsumption - not supported

@@ -243,7 +243,7 @@ class LoincServices extends CodeSystemProvider {
     const ctxt = await this.#ensureContext(context);
     if (ctxt) {
       // Add main display
-      displays.addDesignation(true, 'active', 'en-US', CodeSystem.makeUseForDisplay(), ctxt.desc);
+      displays.addDesignation(true, 'active', 'en-US', CodeSystem.makeUseForDisplay(), ctxt.desc.trim());
 
       // Add cached designations
       if (ctxt.displays.length === 0) {
@@ -262,7 +262,7 @@ class LoincServices extends CodeSystemProvider {
         if (!use) {
           use = entry.display ? CodeSystem.makeUseForDisplay() : null;
         }
-        displays.addDesignation(false, 'active', entry.lang, use, entry.value);
+        displays.addDesignation(false, 'active', entry.lang, use, entry.value.trim());
       }
 
       // Add supplement designations
@@ -560,7 +560,7 @@ class LoincServices extends CodeSystemProvider {
       return { context: context, message: null };
     }
 
-    return { context: null, message: `LOINC Code '${code}' not found` };
+    return { context: null, message: undefined };
   }
 
   // Iterator methods
@@ -1040,6 +1040,10 @@ class LoincServices extends CodeSystemProvider {
   versionAlgorithm() {
     return 'natural';
   }
+
+  isDisplay(designation) {
+    return designation.use.code == "SHORTNAME" || designation.use.code == "LONG_COMMON_NAME" || designation.use.code == "LinguisticVariantDisplayName";
+  }
 }
 
 class LoincServicesFactory extends CodeSystemFactoryProvider {
@@ -1415,6 +1419,9 @@ class LoincServicesFactory extends CodeSystemFactoryProvider {
       });
     });
   }
+
+
+
 }
 
 module.exports = {

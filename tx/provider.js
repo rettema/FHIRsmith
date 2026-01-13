@@ -8,7 +8,6 @@ const {PackageContentLoader} = require("../library/package-manager");
 const {PackageValueSetProvider} = require("./vs/vs-package");
 const ValueSet = require("./library/valueset");
 const {PackageConceptMapProvider} = require("./cm/cm-package");
-const {ConceptMap} = require("./library/conceptmap");
 
 /**
  * This class holds what information is in context
@@ -23,6 +22,7 @@ const {ConceptMap} = require("./library/conceptmap");
  */
 class Provider {
   i18n;
+  fhirVersion;
 
   /**
    * {Map<String, CodeSystemFactoryProvider>} A list of code system factories that contains all the preloaded native code systems
@@ -43,11 +43,14 @@ class Provider {
    */
   conceptMapProviders;
 
+  contentSources;
+
   baseUrl = null;
   cacheFolder = null;
   startTime = Date.now();
   startMemory = process.memoryUsage();
   lastTime = null;
+  requestCount = 0;
   totalDownloaded = 0;
 
   /**
@@ -201,7 +204,7 @@ class Provider {
 
   async listCodeSystemVersions(url) {
     let result = new Set();
-    for (let cs of this.codeSystems) {
+    for (let cs of this.codeSystems.values()) {
       if (cs.url == url) {
         result.add(cs.version);
       }
@@ -241,6 +244,14 @@ class Provider {
     }
   }
 
+  getFhirVersion() {
+    switch (this.fhirVersion) {
+      case 5: return "R5";
+      case 4: return "R4";
+      case 3: return "R3";
+      default: return "R5";
+    }
+  }
 }
 
 module.exports = { Provider };

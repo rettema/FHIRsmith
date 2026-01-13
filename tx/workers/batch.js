@@ -7,8 +7,6 @@
 const { TerminologyWorker } = require('./worker');
 const { Issue, OperationOutcome } = require('../library/operation-outcome');
 
-const DEBUG_LOGGING = false;
-
 class BatchWorker extends TerminologyWorker {
   /**
    * @param {OperationContext} opContext - Operation context
@@ -41,10 +39,7 @@ class BatchWorker extends TerminologyWorker {
     try {
       await this.handleBatch(req, res);
     } catch (error) {
-      this.log.error(`Error in batch operation: ${error.message}`);
-      if (DEBUG_LOGGING) {
-        console.log('Batch operation error:', error);
-      }
+      this.log.error(error);
       if (error instanceof Issue) {
         const oo = new OperationOutcome();
         oo.addIssue(error);
@@ -163,11 +158,7 @@ class BatchWorker extends TerminologyWorker {
       };
 
     } catch (error) {
-      this.log.error(`Error processing batch entry ${index}: ${error.message}`);
-      if (DEBUG_LOGGING) {
-        console.log(`Batch entry ${index} error:`, error);
-      }
-
+      this.log.error(error);
       const statusCode = error.statusCode || 500;
       const issueCode = error.issueCode || 'exception';
 
@@ -284,7 +275,7 @@ class BatchWorker extends TerminologyWorker {
    * @param {Object} request - Original request element
    * @returns {Object} Mock request object
    */
-  buildMockRequest(method, parsedOp, resource, request) {
+  buildMockRequest(method, parsedOp, resource) {
     return {
       method,
       params: {

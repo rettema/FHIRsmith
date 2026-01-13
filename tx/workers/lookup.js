@@ -14,8 +14,6 @@ const {TxParameters} = require("../params");
 const {Parameters} = require("../library/parameters");
 const {Issue, OperationOutcome} = require("../library/operation-outcome");
 
-const DEBUG_LOGGING = false;
-
 class LookupWorker extends TerminologyWorker {
   /**
    * @param {OperationContext} opContext - Operation context
@@ -46,8 +44,9 @@ class LookupWorker extends TerminologyWorker {
     try {
       await this.handleTypeLevelLookup(req, res);
     } catch (error) {
-      this.log.error(`Error in $lookup: ${error.message}`);
-      console.error('$lookup error:', error); // Full stack trace for debugging
+      console.log(error);
+      req.logInfo = this.usedSources.join("|")+" - error"+(error.msgId  ? " "+error.msgId : "");
+      this.log.error(error);
       const statusCode = error.statusCode || 500;
       const issueCode = error.issueCode || 'exception';
       return res.status(statusCode).json({
@@ -72,9 +71,8 @@ class LookupWorker extends TerminologyWorker {
     try {
       await this.handleInstanceLevelLookup(req, res);
     } catch (error) {
-      this.log.error(`Error in $lookup: ${error.message}`);
-      console.error('$lookup error:', error); // Full stack trace for debugging
-      //      const statusCode = error.statusCode || 500;
+      req.logInfo = this.usedSources.join("|")+" - error"+(error.msgId  ? " "+error.msgId : "");
+      this.log.error(error);
       const issueCode = error.issueCode || 'exception';
       return res.status(400).json({
         resourceType: 'OperationOutcome',
@@ -123,11 +121,13 @@ class LookupWorker extends TerminologyWorker {
 
         // Allow complete or fragment content modes, nullOk = true to handle not-found ourselves
         csProvider = await this.findCodeSystem(coding.system, coding.version || '', txp, ['complete', 'fragment'], true);
+        this.seeSourceProvider(csProvider, coding.system);
         code = coding.code;
 
       } else if (params.has('system') && params.has('code')) {
         // system + code parameters
         csProvider = await this.findCodeSystem(params.get('system'), params.get('version') || '', txp, ['complete', 'fragment'], true);
+        this.seeSourceProvider(csProvider, params.get('system'));
         code = params.get('code');
 
       } else {
@@ -146,14 +146,10 @@ class LookupWorker extends TerminologyWorker {
 
       // Perform the lookup
       const result = await this.doLookup(csProvider, code, txp);
-      console.dir(result, {depth: null});
       return res.status(200).json(result);
     } catch (error) {
-      this.log.error(`Error in CodeSystem $validate-code: ${error.message}`);
-      if (DEBUG_LOGGING) {
-        console.log('CodeSystem $validate-code error:', error);
-        console.log(error);
-      }
+      req.logInfo = this.usedSources.join("|")+" - error"+(error.msgId  ? " "+error.msgId : "");
+      this.log.error(error);
       if (error instanceof Issue) {
         let oo = new OperationOutcome();
         oo.addIssue(error);
@@ -177,6 +173,7 @@ class LookupWorker extends TerminologyWorker {
 
       // Find the CodeSystem by ID
       let codeSystem = this.provider.getCodeSystemById(this.opContext, id);
+      this.seeSourceProvider(codeSystem, id);
 
       if (!codeSystem) {
         return res.status(404).json(this.operationOutcome('error', 'not-found',
@@ -212,14 +209,10 @@ class LookupWorker extends TerminologyWorker {
 
       // Perform the lookup
       const result = await this.doLookup(csProvider, code, txp);
-      console.dir(result, {depth: null});
       return res.status(200).json(result);
     } catch (error) {
-      this.log.error(`Error in CodeSystem $validate-code: ${error.message}`);
-      if (DEBUG_LOGGING) {
-        console.log('CodeSystem $validate-code error:', error);
-        console.log(error);
-      }
+      req.logInfo = this.usedSources.join("|")+" - error"+(error.msgId  ? " "+error.msgId : "");
+      this.log.error(error);
       if (error instanceof Issue) {
         let oo = new OperationOutcome();
         oo.addIssue(error);

@@ -52,7 +52,7 @@ describe('AreaCodeServices', () => {
     test('should return error for invalid codes', async () => {
       const result = await provider.locate('999');
       expect(result.context).toBeNull();
-      expect(result.message).toContain('not found');
+      expect(result.message).toBeUndefined();
     });
 
     test('should return correct displays', async () => {
@@ -112,12 +112,12 @@ describe('AreaCodeServices', () => {
 
   describe('Filter Support',  () => {
     test('should support class/type equals filters', async () => {
-      expect(await provider.doesFilter('class', 'equals', 'country')).toBe(true);
-      expect(await provider.doesFilter('type', 'equals', 'region')).toBe(true);
+      expect(await provider.doesFilter('class', '=', 'country')).toBe(true);
+      expect(await provider.doesFilter('type', '=', 'region')).toBe(true);
     });
 
     test('should not support other filters', async () => {
-      expect(await provider.doesFilter('display', 'equals', 'test')).toBe(false);
+      expect(await provider.doesFilter('display', '=', 'test')).toBe(false);
       expect(await provider.doesFilter('class', 'contains', 'country')).toBe(false);
       expect(await provider.doesFilter('class', 'in', 'country,region')).toBe(false);
     });
@@ -130,7 +130,7 @@ describe('AreaCodeServices', () => {
 
     beforeEach(async () => {
       ctxt = await provider.getPrepContext(false);
-      await provider.filter(ctxt, 'class', 'equals', 'country');
+      await provider.filter(ctxt, 'class', '=', 'country');
       const filters = await provider.executeFilters(ctxt);
       countryFilter = filters[0];
     });
@@ -195,7 +195,7 @@ describe('AreaCodeServices', () => {
 
     beforeEach(async () => {
       ctxt = await provider.getPrepContext(false);
-      await provider.filter(ctxt, 'type', 'equals', 'region');
+      await provider.filter(ctxt, 'type', '=', 'region');
       const filters = await provider.executeFilters(ctxt);
       regionFilter = filters[0];
     });
@@ -253,7 +253,7 @@ describe('AreaCodeServices', () => {
   describe('Filter Error Cases', () => {
     test('should throw error for unsupported property', async () => {
       await expect(
-        provider.filter(await provider.getPrepContext(false), 'display', 'equals', 'test')
+        provider.filter(await provider.getPrepContext(false), 'display', '=', 'test')
       ).rejects.toThrow('not supported');
     });
 
@@ -274,7 +274,7 @@ describe('AreaCodeServices', () => {
   describe('Execute Filters', () => {
     test('should execute single filter', async () => {
       const ctxt = await provider.getPrepContext(false);
-      await provider.filter(ctxt, 'class', 'equals', 'country');
+      await provider.filter(ctxt, 'class', '=', 'country');
       const results = await provider.executeFilters(ctxt);
       const countryFilter = results[0];
 

@@ -8,7 +8,6 @@ The TX module provides FHIR terminology services for CodeSystem, ValueSet, and C
 * add more tests for the code system providers - filters, extended lookup, designations and languages 
 * more refactoring in validate.js and expand.js 
 * full batch support 
-* check R4 and R3 support 
 * check vsac support 
 * get tx tests running in pipelines 
 

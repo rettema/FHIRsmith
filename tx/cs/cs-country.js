@@ -107,7 +107,7 @@ class CountryCodeServices extends CodeSystemProvider {
     const ctxt = await this.#ensureContext(code);
     if (ctxt != null) {
       displays.addDesignation( true, 'active', 'en', CodeSystem.makeUseForDisplay(), ctxt.display);
-      this._listSupplementDesignations(ctxt, displays);
+      this._listSupplementDesignations(ctxt.code, displays);
     }
   }
 
@@ -139,7 +139,7 @@ class CountryCodeServices extends CodeSystemProvider {
     if (concept) {
       return { context: concept, message: null };
     }
-    return { context: null, message: `Country Code '${code}' not found` };
+    return { context: null, message: undefined};
   }
 
   // Iterator methods

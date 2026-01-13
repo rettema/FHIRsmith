@@ -94,6 +94,10 @@ class AbstractConceptMapProvider {
   async findConceptMapForTranslation(opContext, conceptMaps, sourceSystem, sourceScope, targetScope, targetSystem) {
     // nothing
   }
+
+  cmCount() {
+    return 0;
+  }
 }
 
 module.exports = {

@@ -1,4 +1,4 @@
-const {getValuePrimitive, Utilities} = require("../../library/utilities");
+const {getValuePrimitive} = require("../../library/utilities");
 const {Issue} = require("./operation-outcome");
 
 const Extensions = {
@@ -37,7 +37,16 @@ const Extensions = {
       element = element.jsonObj
     }
     if (element.modifierExtension) {
-      throw new Issue("error", "business-rule", null, null, 'Cannot process resource "'+name+'" due to the presence of modifier extensions @'+place);
+      let urls = new Set();
+      for (const extension of element.modifierExtension) {
+        urls.add(extension.url);
+      }
+      const urlList = [...urls].join('\', \'');
+      if (urls.size > 1) {
+        throw new Issue("error", "business-rule", null, null, 'Cannot process resource at "' + name + '" due to the presence of modifier extensions '+urlList);
+      } else {
+        throw new Issue("error", "business-rule", null, null, 'Cannot process resource at "' + name + '" due to the presence of the modifier extension '+urlList);
+      }
     }
     return true;
   },

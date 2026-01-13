@@ -102,7 +102,7 @@ describe('UniiServices', () => {
       for (const code of testCodes) {
         const result = await provider.locate(code);
         expect(result.context).toBeTruthy();
-        expect(result.message).toBeNull();
+        expect(result.message).toBeUndefined();
         expect(result.context).toBeInstanceOf(UniiConcept);
         expect(result.context.code).toBe(code);
       }
@@ -412,7 +412,7 @@ describe('UniiServices', () => {
       for (let i = 0; i < 3; i++) {
         const result = await provider.locate('2T8Q726O95');
         expect(result.context).toBeTruthy();
-        expect(result.message).toBeNull();
+        expect(result.message).toBeUndefined();
 
         const display = await provider.display(result.context);
         expect(display).toBe('LAMIVUDINE');

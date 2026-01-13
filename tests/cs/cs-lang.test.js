@@ -1,11 +1,10 @@
-const path = require('path');
-const { 
+const {
   IETFLanguageCodeProvider, 
   IETFLanguageCodeFactory, 
   IETFLanguageCodeFilter,
   LanguageComponent 
 } = require('../../tx/cs/cs-lang');
-const { LanguageDefinitions, Languages, Language } = require('../../library/languages');
+const { Languages, Language } = require('../../library/languages');
 const { FilterExecutionContext} = require('../../tx/cs/cs-api');
 const {OperationContext} = require("../../tx/operation-context");
 const {Designations} = require("../../tx/library/designations");
@@ -90,7 +89,7 @@ describe('IETF Language CodeSystem Provider', () => {
     test('should reject invalid language codes', async () => {
       const result = await provider.locate('invalid-code');
       expect(result.context).toBe(null);
-      expect(result.message).toContain('Invalid language code');
+      expect(result.message).toBeUndefined();
     });
 
     test('should handle empty codes', async () => {

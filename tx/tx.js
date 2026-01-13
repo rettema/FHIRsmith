@@ -12,6 +12,7 @@ const { Library } = require('./library');
 const { OperationContext, ResourceCache, ExpansionCache } = require('./operation-context');
 const { LanguageDefinitions } = require('../library/languages');
 const { I18nSupport } = require('../library/i18nsupport');
+const { CodeSystemXML } = require('./xml/codesystem-xml');
 const txHtml = require('./tx-html');
 
 // Import workers
@@ -22,13 +23,17 @@ const { ValidateWorker } = require('./workers/validate');
 const TranslateWorker = require('./workers/translate');
 const LookupWorker = require('./workers/lookup');
 const SubsumesWorker = require('./workers/subsumes');
-const ClosureWorker = require('./workers/closure');
 const { MetadataHandler } = require('./workers/metadata');
 const { BatchValidateWorker } = require('./workers/batch-validate');
+const {CapabilityStatementXML} = require("./xml/capabilitystatement-xml");
+const {TerminologyCapabilitiesXML} = require("./xml/terminologycapabilities-xml");
+const {ParametersXML} = require("./xml/parameters-xml");
+const {OperationOutcomeXML} = require("./xml/operationoutcome-xml");
+const {ValueSetXML} = require("./xml/valueset-xml");
+const {ConceptMapXML} = require("./xml/conceptmap-xml");
 
 class TXModule {
   constructor() {
-    this.log = Logger.getInstance().child({ module: 'tx' });
     this.config = null;
     this.library = null;
     this.endpoints = [];
@@ -48,6 +53,12 @@ class TXModule {
     return `tx-${this.requestIdCounter}`;
   }
 
+  acceptsXml(req) {
+    const accept = req.headers.accept || '';
+    return accept.includes('application/fhir+xml') || accept.includes('application/xml+fhir');
+  }
+
+
   /**
    * Initialize the TX module
    * @param {Object} config - Module configuration
@@ -55,6 +66,13 @@ class TXModule {
    */
   async initialize(config, app) {
     this.config = config;
+    // Initialize logger with config settings
+    this.log = Logger.getInstance().child({
+      module: 'tx',
+      consoleErrors: true, // config.consoleErrors,
+      telnetErrors: config.telnetErrors
+    });
+
     this.log.info('Initializing TX module');
 
     // Load HTML template
@@ -149,6 +167,9 @@ class TXModule {
 
     // Middleware to attach provider, context, and timing to request, and wrap res.json for HTML
     router.use((req, res, next) => {
+      // Increment request count
+      provider.requestCount++;
+
       // Generate unique request ID
       const requestId = this.generateRequestId();
 
@@ -175,13 +196,11 @@ class TXModule {
 
       // Wrap res.json to intercept and convert to HTML if browser requests it, and log the request
       const originalJson = res.json.bind(res);
-      const log = this.log;
 
       res.json = (data) => {
         const duration = Date.now() - req.txStartTime;
-        const operation = `${req.method} ${req.baseUrl}${req.path}`;
-        const params = req.method === 'POST' ? req.body : req.query;
         const isHtml = txHtml.acceptsHtml(req);
+        const isXml = this.acceptsXml(req);
 
         let responseSize;
         let result;
@@ -193,6 +212,20 @@ class TXModule {
           responseSize = Buffer.byteLength(html, 'utf8');
           res.setHeader('Content-Type', 'text/html');
           result = res.send(html);
+        } else if (isXml) {
+          try {
+            const xml = this.convertResourceToXml(data);
+            responseSize = Buffer.byteLength(xml, 'utf8');
+            res.setHeader('Content-Type', 'application/fhir+xml');
+            result = res.send(xml);
+          } catch (err) {
+            console.error(err);
+            // Fall back to JSON if XML conversion not supported
+            this.log.warn(`XML conversion failed for ${data.resourceType}: ${err.message}, falling back to JSON`);
+            const jsonStr = JSON.stringify(data);
+            responseSize = Buffer.byteLength(jsonStr, 'utf8');
+            result = originalJson(data);
+          }
         } else {
           const jsonStr = JSON.stringify(data);
           responseSize = Buffer.byteLength(jsonStr, 'utf8');
@@ -200,8 +233,9 @@ class TXModule {
         }
 
         // Log the request with request ID
-        const paramStr = Object.keys(params).length > 0 ? ` params=${JSON.stringify(this.trimParameters(params))}` : '';
-        log.info(`[${requestId}] ${operation}${paramStr} - ${res.statusCode} - ${isHtml ? 'html' : 'json'} - ${responseSize} bytes - ${duration}ms`);
+        const format = isHtml ? 'html' : (isXml ? 'xml' : 'json');
+        let li = req.logInfo ? "("+req.logInfo+")" : "";
+        this.log.info(`[${requestId}] ${req.method} ${format} ${res.statusCode} ${duration}ms ${responseSize}: ${req.originalUrl} ${li})`);
 
         return result;
       };
@@ -225,11 +259,14 @@ class TXModule {
     router.use((req, res, next) => {
       const contentType = req.get('Content-Type') || '';
 
-      // Only process POST/PUT with JSON-like content types
-      if ((req.method === 'POST' || req.method === 'PUT') &&
-        (contentType.includes('application/json') ||
+      // Only process POST/PUT
+      if (req.method !== 'POST' && req.method !== 'PUT') {
+        return next();
+      }
+
+      if (contentType.includes('application/json') ||
           contentType.includes('application/fhir+json') ||
-          contentType.includes('application/json+fhir'))) {
+          contentType.includes('application/json+fhir')) {
 
         // If body is a Buffer, parse it
         if (Buffer.isBuffer(req.body)) {
@@ -250,7 +287,36 @@ class TXModule {
             });
           }
         }
+
+      } else if (contentType.includes('application/xml') ||
+        // Handle XML
+        contentType.includes('application/fhir+xml') ||
+        contentType.includes('application/xml+fhir')) {
+
+        let xmlStr;
+        if (Buffer.isBuffer(req.body)) {
+          xmlStr = req.body.toString('utf8');
+        } else if (typeof req.body === 'string') {
+          xmlStr = req.body;
+        }
+
+        if (xmlStr) {
+          try {
+            req.body = this.convertXmlToResource(xmlStr);
+          } catch (e) {
+            this.log.error(`XML parse error: ${e.message}`);
+            return res.status(400).json({
+              resourceType: 'OperationOutcome',
+              issue: [{
+                severity: 'error',
+                code: 'invalid',
+                diagnostics: `Invalid XML: ${e.message}`
+              }]
+            });
+          }
+        }
       }
+
       next();
     });
 
@@ -549,6 +615,49 @@ class TXModule {
 
     return params;
   }
+
+  convertResourceToXml(res) {
+    switch (res.resourceType) {
+      case "CodeSystem" : return CodeSystemXML._jsonToXml(res);
+      case "ValueSet" : return ValueSetXML.toXml(res);
+      case "CapabilityStatement" : return CapabilityStatementXML.toXml(res, "R5");
+      case "TerminologyCapabilities" : return TerminologyCapabilitiesXML.toXml(res, "R5");
+      case "Parameters": return ParametersXML.toXml(res, this.fhirVersion);
+      case "OperationOutcome": return OperationOutcomeXML.toXml(res, this.fhirVersion);
+    }
+    throw new Error(`Resource type ${res.resourceType} not supported in XML`);
+  }
+
+  convertXmlToResource(xml) {
+    // Detect resource type from root element
+    const rootMatch = xml.match(/<([A-Za-z]+)\s/);
+    if (!rootMatch) {
+      throw new Error('Could not detect resource type from XML');
+    }
+
+    const resourceType = rootMatch[1];
+
+    let data;
+    switch (resourceType) {
+      case "Parameters":
+        data = ParametersXML.fromXml(xml);
+        break;
+      case "CodeSystem":
+        data = CodeSystemXML.fromXml(xml);
+        break;
+      case "ValueSet":
+        data = ValueSetXML.fromXml(xml);
+        break;
+      case "ConceptMap":
+        data = ConceptMapXML.fromXml(xml);
+        break;
+      default:
+        throw new Error(`Resource type ${resourceType} not supported for XML input`);
+    }
+
+    return data;
+  }
+
 }
 
 module.exports = TXModule;

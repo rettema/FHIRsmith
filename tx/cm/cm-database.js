@@ -10,6 +10,8 @@ const INDEXED_COLUMNS = ['id', 'url', 'version', 'date', 'description', 'name', 
  * Handles SQLite operations for indexing and searching ConceptMaps
  */
 class ConceptMapDatabase {
+  cmCount;
+
   /**
    * @param {string} dbPath - Path to the SQLite database file
    */
@@ -344,6 +346,7 @@ class ConceptMapDatabase {
 
           try {
             const conceptMapMap = new Map();
+            this.cmCount = rows.length;
 
             for (const row of rows) {
               const conceptMap = new ConceptMap(JSON.parse(row.content));

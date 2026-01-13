@@ -99,7 +99,7 @@ describe('MimeTypeServices', () => {
         console.log('Mimetype: '+invalidType);
         const result = await provider.locate(invalidType);
         expect(result.context).toBeNull();
-        expect(result.message).toContain('Invalid MIME type');
+        expect(result.message).toBeUndefined();
       }
 
       const result = await provider.locate('');

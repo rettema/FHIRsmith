@@ -1,4 +1,6 @@
 const {CanonicalResource} = require("./canonical-resource");
+const {getValueName} = require("../../library/utilities");
+const {VersionUtilities} = require("../../library/version-utilities");
 
 /**
  * Represents a FHIR ValueSet resource with version conversion support
@@ -49,7 +51,7 @@ class ValueSet extends CanonicalResource {
    * @returns {string} JSON string
    */
   toJSONString(version = 'R5') {
-    const outputObj = this._convertFromR5(this.jsonObj, version);
+    const outputObj = this.convertFromR5(this.jsonObj, version);
     return JSON.stringify(outputObj);
   }
 
@@ -89,17 +91,17 @@ class ValueSet extends CanonicalResource {
    * @returns {Object} New object in target version format
    * @private
    */
-  _convertFromR5(r5Obj, targetVersion) {
-    if (targetVersion === 'R5') {
+  convertFromR5(r5Obj, targetVersion) {
+    if (VersionUtilities.isR5Ver(targetVersion)) {
       return r5Obj; // No conversion needed
     }
 
     // Clone the object to avoid modifying the original
     const cloned = JSON.parse(JSON.stringify(r5Obj));
 
-    if (targetVersion === 'R4') {
+    if (VersionUtilities.isR4Ver(targetVersion)) {
       return this._convertR5ToR4(cloned);
-    } else if (targetVersion === 'R3') {
+    } else if (VersionUtilities.isR3Ver(targetVersion)) {
       return this._convertR5ToR3(cloned);
     }
 
@@ -152,7 +154,58 @@ class ValueSet extends CanonicalResource {
       });
     }
 
+    if (r5Obj.expansion) {
+      let exp = r5Obj.expansion;
+
+      // Convert ValueSet.expansion.property to extensions
+      if (exp.property && exp.property.length > 0) {
+        exp.extension = exp.extension || [];
+        for (let prop of exp.property) {
+          exp.extension.push({
+            url: "http://hl7.org/fhir/5.0/StructureDefinition/extension-ValueSet.expansion.property",
+            extension: [
+              { url: "code", valueCode: prop.code },
+              { url: "uri", valueUri: prop.uri }
+            ]
+          });
+        }
+        delete exp.property;
+        this.convertContainsPropertyR5ToR4(exp.contains);
+
+      }
+    }
+
     return r5Obj;
+  }
+
+  // Recursive function to convert contains.property
+  convertContainsPropertyR5ToR4(containsList) {
+    if (!containsList) return;
+
+    for (let item of containsList) {
+      if (item.property && item.property.length > 0) {
+        item.extension = item.extension || [];
+        for (let prop of item.property) {
+          let ext = {
+            url: "http://hl7.org/fhir/5.0/StructureDefinition/extension-ValueSet.expansion.contains.property",
+            extension: [
+              { url: "code", valueCode: prop.code }
+            ]
+          };
+          let pn = getValueName(prop);
+          let subExt = { url: "value" };
+          subExt[pn] = prop[pn];
+          ext.extension.push(subExt);
+          item.extension.push(ext);
+        }
+        delete item.property;
+      }
+
+      // Recurse into nested contains
+      if (item.contains) {
+        this.convertContainsPropertyR5ToR4(item.contains);
+      }
+    }
   }
 
   /**
@@ -254,8 +307,8 @@ class ValueSet extends CanonicalResource {
       throw new Error(`Invalid ValueSet: resourceType must be "ValueSet", got "${this.jsonObj.resourceType}"`);
     }
 
-    if (!this.jsonObj.url || typeof this.jsonObj.url !== 'string') {
-      throw new Error('Invalid ValueSet: url is required and must be a string');
+    if (this.jsonObj.url && typeof this.jsonObj.url !== 'string') {
+      throw new Error('Invalid ValueSet: url must be a string if present');
     }
 
     if (this.jsonObj.name && typeof this.jsonObj.name !== 'string') {

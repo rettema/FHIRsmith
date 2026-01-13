@@ -286,7 +286,7 @@ describe('FHIR CodeSystem Provider', () => {
       test('should return null for non-existent code', async () => {
         const result = await simpleProvider.locate('nonexistent');
         expect(result.context).toBeNull();
-        expect(result.message).toContain('not found');
+        expect(result.message).toBeUndefined();
       });
 
       test('should handle empty code', async () => {
@@ -385,7 +385,7 @@ describe('FHIR CodeSystem Provider', () => {
       test('should return null for non-existent code', async () => {
         const result = await simpleProvider.locate('nonexistent');
         expect(result.context).toBeNull();
-        expect(result.message).toContain('not found');
+        expect(result.message).toBeUndefined();
       });
 
       test('should handle empty code', async () => {

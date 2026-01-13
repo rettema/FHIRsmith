@@ -124,7 +124,7 @@ describe('Designations', () => {
     test('should find preferred designation without language list', () => {
       const preferred = designations.preferredDesignation();
       expect(preferred.display).toBe('Base English');
-      expect(preferred.isUseADisplay()).toBe(true);
+      expect(designations.isDisplay(preferred)).toBe(true);
     });
 
     test('should find preferred designation with language preference', () => {
@@ -293,20 +293,7 @@ describe('Designations', () => {
       const preferred = designations.preferredDesignation(langList);
 
       expect(preferred.display).toBe('Base US English');
-      expect(preferred.isUseADisplay()).toBe(true);
-    });
-
-    test('should prefer display when no base available for exact match', () => {
-      // Remove US base designation
-      designations.designations = designations.designations.filter(d =>
-        !(d.isDisplay() && d.language.code === 'en-US'));
-
-      const langList = Languages.fromAcceptLanguage('en-US');
-      const preferred = designations.preferredDesignation(langList);
-
-      expect(preferred.display).toBe('US English Display');
-      expect(preferred.isDisplay()).toBe(false);
-      expect(preferred.isUseADisplay()).toBe(true);
+      expect(designations.isDisplay(preferred)).toBe(true);
     });
 
     test('should fall back to language-region match', () => {

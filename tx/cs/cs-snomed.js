@@ -470,6 +470,20 @@ class SnomedProvider extends CodeSystemProvider {
     return this.sct.getVersion();
   }
 
+
+  /**
+   * @param {string} checkVersion - first version
+   * @param {string} actualVersion - second version
+   * @returns {boolean} True if actualVersion is more detailed than checkVersion (for SCT)
+   */
+  versionIsMoreDetailed(checkVersion, actualVersion) {
+    console.log('checkVersion:', checkVersion);
+    console.log('actualVersion:', actualVersion);
+    console.log('lengths:', checkVersion.length, actualVersion ? actualVersion.length : "??");
+    console.log('outcome:', actualVersion && actualVersion.startsWith(checkVersion));
+    return actualVersion && actualVersion.startsWith(checkVersion);
+  }
+
   description() {
     return this.sct.getDescription();
   }
@@ -655,7 +669,7 @@ class SnomedProvider extends CodeSystemProvider {
       } else {
         return {
           context: null,
-          message: `SNOMED CT Code '${code}' not found`
+          message: undefined
         };
       }
     }
@@ -834,12 +848,12 @@ class SnomedProvider extends CodeSystemProvider {
 
     const conceptResult = await this.locate(code);
     if (!conceptResult.context) {
-      return { context: null, message: conceptResult.message };
+      return conceptResult.message;
     }
 
     const ctxt = conceptResult.context;
     if (ctxt.isComplex()) {
-      return { context: null, message: 'Complex expressions not supported in filters' };
+      return 'Complex expressions not supported in filters';
     }
 
     const reference = ctxt.getReference();
@@ -854,9 +868,9 @@ class SnomedProvider extends CodeSystemProvider {
     }
 
     if (found) {
-      return { context: ctxt, message: null };
+      return ctxt;
     } else {
-      return { context: null, message: `Code ${code} is not in the specified filter` };
+      return `Code ${code} is not in the specified filter`;
     }
   }
 
@@ -958,6 +972,12 @@ class SnomedProvider extends CodeSystemProvider {
   isNotClosed() {
     return true;
   }
+
+  isDisplay(cd) {
+    return cd.use.system === this.system() &&
+           (cd.use.code === '900000000000013009' || cd.use.code === '900000000000003001');
+  }
+
 }
 
 /**
@@ -980,6 +1000,14 @@ class SnomedServicesFactory extends CodeSystemFactoryProvider {
     return this._sharedData.versionUri;
   }
 
+  getPartialVersion() {
+    let ver = this.version();
+    if (ver.includes("/version")) {
+      return ver.substring(0, ver.indexOf("/version"));
+    } else {
+      return null;
+    }
+  }
   // eslint-disable-next-line no-unused-vars
   async buildKnownValueSet(url, version) {
     return null;

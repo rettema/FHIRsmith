@@ -314,6 +314,9 @@ class PackageConceptMapProvider extends AbstractConceptMapProvider {
     }
   }
 
+  cmCount() {
+    return this.database.cmCount;
+}
 
 }
 
