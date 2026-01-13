@@ -99,7 +99,7 @@ class AreaCodeServices extends CodeSystemProvider {
     const ctxt = await this.#ensureContext(code);
     if (ctxt != null) {
       displays.addDesignation(true, 'active', 'en', CodeSystem.makeUseForDisplay(), ctxt.display);
-      this._listSupplementDesignations(ctxt, displays);
+      this._listSupplementDesignations(ctxt.code, displays);
     }
   }
 
@@ -131,7 +131,7 @@ class AreaCodeServices extends CodeSystemProvider {
     if (concept) {
       return { context: concept, message: null };
     }
-    return { context: null, message: `Area Code '${code}' not found` };
+    return { context: null, message: undefined};
   }
 
   // Iterator methods
@@ -162,7 +162,7 @@ class AreaCodeServices extends CodeSystemProvider {
     assert(op != null && typeof op === 'string', 'op must be a non-null string');
     assert(value != null && typeof value === 'string', 'value must be a non-null string');
 
-    return (prop === 'type' || prop === 'class') && op === 'equals';
+    return (prop === 'type' || prop === 'class') && op === '=';
   }
 
   async searchFilter(filterContext, filter, sort) {
@@ -181,7 +181,7 @@ class AreaCodeServices extends CodeSystemProvider {
     assert(op != null && typeof op === 'string', 'op must be a non-null string');
     assert(value != null && typeof value === 'string', 'value must be a non-null string');
 
-    if ((prop === 'type' || prop === 'class') && op === 'equals') {
+    if ((prop === 'type' || prop === 'class') && op === '=') {
       const result = new AreaCodeConceptFilter();
 
       for (const concept of this.codes) {

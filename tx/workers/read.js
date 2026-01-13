@@ -5,7 +5,6 @@
 //
 
 const { TerminologyWorker } = require('./worker');
-
 class ReadWorker extends TerminologyWorker {
   /**
    * @param {OperationContext} opContext - Operation context
@@ -66,8 +65,8 @@ class ReadWorker extends TerminologyWorker {
           });
       }
     } catch (error) {
-      this.log.error(`Error reading ${resourceType}/${id}:`, error);
-      console.error('$lookup error:', error); // Full stack trace for debugging
+      req.logInfo = this.usedSources.join("|")+" - error"+(error.msgId  ? " "+error.msgId : "");
+      this.log.error(error);
       return res.status(500).json({
         resourceType: 'OperationOutcome',
         issue: [{

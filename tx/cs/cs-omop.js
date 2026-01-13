@@ -476,7 +476,7 @@ class OMOPServices extends CodeSystemProvider {
     if (typeof context === 'string') {
       const ctxt = await this.locate(context);
       if (ctxt.context == null) {
-        throw new Error(ctxt.message);
+        throw new Error(ctxt.message ? ctxt.message : `OMOP Concept '${context}' not found`);
       } else {
         return ctxt.context;
       }
@@ -519,7 +519,7 @@ class OMOPServices extends CodeSystemProvider {
           );
           resolve({ context: concept, message: null });
         } else {
-          resolve({ context: null, message: `OMOP Concept '${code}' not found` });
+          resolve({ context: null, message: undefined });
         }
       });
     });

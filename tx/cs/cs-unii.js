@@ -186,7 +186,7 @@ class UniiServices extends CodeSystemProvider {
             }
           });
 
-          resolve({ context: concept, message: null });
+          resolve({ context: concept, message: undefined });
         });
       });
     });

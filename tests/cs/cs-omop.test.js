@@ -144,7 +144,7 @@ describe('OMOP Provider', () => {
     test('should return null for non-existent concept', async () => {
       const result = await provider.locate('999999999');
       expect(result.context).toBeNull();
-      expect(result.message).toContain('not found');
+      expect(result.message).toBeUndefined();
     });
 
     test('should return correct code for context', async () => {

@@ -75,6 +75,10 @@ class Library {
     }
     const ver = factory.version() ?? "";
     this.codeSystemFactories.set(factory.system()+"|"+ver, factory);
+    const verMin = factory.getPartialVersion();
+    if (verMin) {
+      this.codeSystemFactories.set(factory.system()+"|"+verMin, factory);
+    }
   }
 
 
@@ -403,6 +407,7 @@ class Library {
     let csc = 0;
     for (const resource of resources) {
       const cs = new CodeSystem(await contentLoader.loadFile(resource, contentLoader.fhirVersion()));
+      cs.sourcePackage = contentLoader.pid();
       cp.codeSystems.set(cs.url, cs);
       cp.codeSystems.set(cs.vurl, cs);
       csc++;

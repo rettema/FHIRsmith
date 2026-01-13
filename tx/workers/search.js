@@ -85,12 +85,12 @@ class SearchWorker extends TerminologyWorker {
       const bundle = this.buildSearchBundle(
         req, resourceType, matches, offset, count, elements
       );
-
+      req.logInfo = `${bundle.entry.length} matches`;
       return res.json(bundle);
 
     } catch (error) {
-      this.log.error(`Error searching ${resourceType}:`, error);
-      console.error('$lookup error:', error); // Full stack trace for debugging
+      req.logInfo = "error "+(error.msgId || error.className);
+      this.log.error(error);
       return res.status(500).json({
         resourceType: 'OperationOutcome',
         issue: [{

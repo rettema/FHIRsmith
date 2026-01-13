@@ -78,7 +78,6 @@ class CPTFilterContext {
     for (let i = Math.max(0, list.length - 10); i < list.length; i++) {
       logCodes += ',' + list[i].code;
     }
-    console.log(`CPT filter ${name}: ${list.length} concepts in filter (closed = ${closed}): ${logCodes}`);
   }
 
   next() {
@@ -296,7 +295,7 @@ class CPTServices extends CodeSystemProvider {
     if (typeof context === 'string') {
       const ctxt = await this.locate(context);
       if (ctxt.context == null) {
-        throw new Error(ctxt.message);
+        throw new Error(ctxt.message ? ctxt.message : `Code '${context}' not found in CPT`);
       } else {
         return ctxt.context;
       }
@@ -429,7 +428,7 @@ class CPTServices extends CodeSystemProvider {
       if (context) {
         return { context: context, message: null };
       }
-      return { context: null, message: `Code '${code}' not found in CPT` };
+      return { context: null, message: undefined };
     }
   }
 

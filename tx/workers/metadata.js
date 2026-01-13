@@ -6,6 +6,9 @@
 // GET /$versions - Returns supported FHIR versions
 //
 
+const {CapabilityStatement} = require("../library/capabilitystatement");
+const {TerminologyCapabilities} = require("../library/terminologycapabilities");
+
 /**
  * Metadata handler for FHIR terminology server
  * Used by TXModule to handle /metadata requests
@@ -29,13 +32,15 @@ class MetadataHandler {
     const provider = req.txProvider;
 
     if (mode === 'terminology') {
-      const tc = await this.buildTerminologyCapabilities(endpoint, provider);
-      return res.json(tc);
+      this.logInfo = 'termcaps';
+      const tc = new TerminologyCapabilities(await this.buildTerminologyCapabilities(endpoint, provider));
+      return res.json(tc.toJSON(endpoint.fhirVersion));
     }
+    this.logInfo = 'metadata';
 
     // Default: return CapabilityStatement
-    const cs = this.buildCapabilityStatement(endpoint, provider);
-    return res.json(cs);
+    const cs = new CapabilityStatement(this.buildCapabilityStatement(endpoint, provider));
+    return res.json(cs.toJSON(endpoint.fhirVersion));
   }
 
   /**

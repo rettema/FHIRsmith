@@ -245,12 +245,12 @@ class FhirCodeSystemProvider extends CodeSystemProvider {
   }
 
   /**
-   * @param {string} v1 - First version
-   * @param {string} v2 - Second version
+   * @param {string} checkVersion - First version
+   * @param {string} actualVersion - Second version
    * @returns {boolean} True if v1 is more detailed than v2
    */
-  versionIsMoreDetailed(v1, v2) {
-    return VersionUtilities.versionMatchesByAlgorithm(v1, v2, this.versionAlgorithm());
+  versionIsMoreDetailed(checkVersion, actualVersion) {
+    return VersionUtilities.versionMatchesByAlgorithm(checkVersion, actualVersion, this.versionAlgorithm());
   }
 
   /**
@@ -300,7 +300,7 @@ class FhirCodeSystemProvider extends CodeSystemProvider {
 
     return {
       context: null,
-      message: `Code '${code}' not found in CodeSystem '${this.system()}'`
+      message: undefined
     };
   }
 
@@ -318,7 +318,7 @@ class FhirCodeSystemProvider extends CodeSystemProvider {
     if (typeof context === 'string') {
       const result = await this.locate(context);
       if (result.context == null) {
-        throw new Error(result.message);
+        throw new Error(result.message ? result.message :  `Code '${context}' not found in CodeSystem '${this.system()}'`);
       }
       return result.context;
     }
@@ -1507,6 +1507,19 @@ class FhirCodeSystemProvider extends CodeSystemProvider {
   versionAlgorithm() {
     return this.codeSystem.versionAlgorithm();
   }
+
+  versionNeeded() {
+    return this.codeSystem.jsonObj.versionNeeded;
+  }
+
+
+  /**
+   * @returns {string} source package for the code system, if known
+   */
+  sourcePackage() {
+    return this.codeSystem.sourcePackage;
+  }
+
 }
 
 class FhirCodeSystemFactory extends CodeSystemFactoryProvider {

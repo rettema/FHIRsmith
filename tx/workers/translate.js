@@ -13,8 +13,6 @@ const { Parameters } = require('../library/parameters');
 const { Issue, OperationOutcome } = require('../library/operation-outcome');
 const {ConceptMap} = require("../library/conceptmap");
 
-const DEBUG_LOGGING = true;
-
 class TranslateWorker extends TerminologyWorker {
   /**
    * @param {OperationContext} opContext - Operation context
@@ -45,10 +43,7 @@ class TranslateWorker extends TerminologyWorker {
     try {
       await this.handleTypeLevelTranslate(req, res);
     } catch (error) {
-      this.log.error(`Error in ConceptMap $translate: ${error.message}`);
-      if (DEBUG_LOGGING) {
-        console.log('ConceptMap $translate error:', error);
-      }
+      this.log.error(error);
       if (error instanceof Issue) {
         const oo = new OperationOutcome();
         oo.addIssue(error);
@@ -70,10 +65,7 @@ class TranslateWorker extends TerminologyWorker {
     try {
       await this.handleInstanceLevelTranslate(req, res);
     } catch (error) {
-      this.log.error(`Error in ConceptMap $translate: ${error.message}`);
-      if (DEBUG_LOGGING) {
-        console.log('ConceptMap $translate error:', error);
-      }
+      this.log.error(error);
       if (error instanceof Issue) {
         const oo = new OperationOutcome();
         oo.addIssue(error);

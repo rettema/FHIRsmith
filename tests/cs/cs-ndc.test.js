@@ -376,7 +376,7 @@ describe('NDC Provider', () => {
       const result = await provider.locate('9999-9999');
 
       expect(result.context).toBeNull();
-      expect(result.message).toContain('not found');
+      expect(result.message).toBeUndefined();
     });
   });
 

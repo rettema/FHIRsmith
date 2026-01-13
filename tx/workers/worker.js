@@ -21,8 +21,10 @@ class TerminologySetupError extends Error {
  * Abstract base class for terminology operations
  */
 class TerminologyWorker {
+  usedSources = [];
   additionalResources = []; // Resources provided via tx-resource parameter or cache
   foundParameters = [];
+
   /**
    * @param {OperationContext} opContext - Operation context
    * @param {Logger} log - Provider for code systems and resources
@@ -113,7 +115,7 @@ class TerminologyWorker {
       // Find the latest version
       let latest = 0;
       for (let i = 1; i < matches.length; i++) {
-        if (VersionUtilities.isThisOrLater(matches[latest].version, matches[i].version)) {
+        if (VersionUtilities.isSemVer(matches[latest].version) && VersionUtilities.isSemVer(matches[i].version) &&  VersionUtilities.isThisOrLater(matches[latest].version, matches[i].version)) {
           latest = i;
         }
       }
@@ -180,6 +182,9 @@ class TerminologyWorker {
         this.checkVersion(url, provider.version(), params, provider.versionAlgorithm(), op);
       }
     }
+    if (provider == null) {
+      console.log("!");
+    }
 
     return provider;
   }
@@ -228,8 +233,8 @@ class TerminologyWorker {
 
   listDisplaysFromIncludeConcept(displays, c, vs) {
     if (c.display && c.display !== '') {
-      displays.baseLang = this.FLanguages.parse(vs.language);
-      displays.addDesignation(true, "active", '', '', c.displayElement);
+      displays.baseLang = this.languages.parse(vs.language);
+      displays.addDesignation(true, "active", '', '', c.display.trim());
     }
     for (let cd of c.designations || []) {
       // see https://chat.fhir.org/#narrow/stream/179202-terminology/topic/ValueSet.20designations.20and.20languages
@@ -854,6 +859,33 @@ class TerminologyWorker {
       }
       default:
         return resource;
+    }
+  }
+
+
+  seeSourceVS(vs, url) {
+    let s = url;
+    if (vs) {
+      if (vs.jsonObj) vs = vs.jsonObj;
+      s = vs.name || vs.title || vs.id || vs.url;
+    }
+    if (!this.usedSources.find(u => u == s)) {
+      this.usedSources.push(s);
+    }
+  }
+
+  seeSourceProvider(cs, url) {
+    let s = url;
+    if (cs) {
+      if (cs instanceof CodeSystem) {
+        cs = cs.jsonObj;
+        s = cs.name || cs.title || cs.id || cs.url;
+      } else {
+        s = cs.name() || cs.system();
+      }
+    }
+    if (!this.usedSources.find(u => u == s)) {
+      this.usedSources.push(s);
     }
   }
 }

@@ -89,16 +89,16 @@ class NamingSystem {
    * @private
    */
   _convertFromR5(r5Obj, targetVersion) {
-    if (targetVersion === 'R5') {
+    if (VersionUtilities.isR5Ver(targetVersion)) {
       return r5Obj; // No conversion needed
     }
 
     // Clone the object to avoid modifying the original
     const cloned = JSON.parse(JSON.stringify(r5Obj));
 
-    if (targetVersion === 'R4') {
+    if (VersionUtilities.isR4Ver(targetVersion)) {
       return this._convertR5ToR4(cloned);
-    } else if (targetVersion === 'R3') {
+    } else if (VersionUtilities.isR3Ver(targetVersion)) {
       return this._convertR5ToR3(cloned);
     }
 

@@ -545,13 +545,12 @@ class TxParameters {
   }
 
   clone() {
-    let result = new TxParameters();
+    let result = new TxParameters(this.languageDefinitions, this.i18n, this.validating);
     result.assign(this);
     return result;
   }
 
   assign(other) {
-    this.languageDefinitions = other.languageDefinitions;
     if (other.FVersionRules !== null) {
       this.FVersionRules = [...other.FVersionRules];
     }
@@ -594,13 +593,16 @@ class TxParameters {
     }
 
     if (other.FHTTPLanguages !== null) {
-      this.FHTTPLanguages = other.FHTTPLanguages.clone();
+      this.FHTTPLanguages = other.FHTTPLanguages;
     }
     if (other.FDisplayLanguages !== null) {
-      this.FDisplayLanguages = other.FDisplayLanguages.clone();
+      this.FDisplayLanguages = other.FDisplayLanguages;
     }
   }
 
+  logInfo() {
+    return ""; // any parameters worth logging
+  }
 }
 
 module.exports = { TxParameters, VersionRule };

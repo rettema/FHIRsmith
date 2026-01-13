@@ -43,7 +43,7 @@ class Lexer {
         this._checkAnnotation(ch) ||
         this._checkNumber(ch) ||
         this._checkNumberOrSymbol(ch))) {
-        throw new UcumException(`Error processing unit '${this.source}': unexpected character '${ch}' at position ${this.start}`);
+        throw new UcumException(`Error processing unit '${this.source}': unexpected character '${ch}' at character ${this.start+1}`);
       }
     }
   }
@@ -60,7 +60,7 @@ class Lexer {
       }
 
       if (this.token.length === 1) {
-        throw new UcumException(`Error processing unit '${this.source}': unexpected character '${ch}' at position ${this.start}: a + or - must be followed by at least one digit`);
+        throw new UcumException(`Error processing unit '${this.source}': unexpected character '${ch}' at character ${this.start+1}: a + or - must be followed by at least one digit`);
       }
 
       this.type = TokenType.NUMBER;
@@ -171,7 +171,7 @@ class Lexer {
   }
 
   error(errMsg) {
-    throw new UcumException(`Error processing unit '${this.source}': ${errMsg}' at position ${this.start}`);
+    throw new UcumException(`Error processing unit '${this.source}': ${errMsg} at character ${this.start+1}`);
   }
 
   getTokenAsInt() {
@@ -766,8 +766,7 @@ class Search {
         const regex = new RegExp(text);
         return regex.test(value);
       } catch (e) {
-        console.error('Error message:', e.message);
-        console.error('Stack trace:', e.stack);
+        this.log.error(e);
         return false;
       }
     } else {
@@ -1010,8 +1009,7 @@ class UcumValidator {
           }
         }
       } catch (e) {
-        console.error('Error message:', e.message);
-        console.error('Stack trace:', e.stack);
+        this.log.error(e);
         this.result.push(e.message);
       }
     }

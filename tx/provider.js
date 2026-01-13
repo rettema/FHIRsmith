@@ -204,7 +204,7 @@ class Provider {
 
   async listCodeSystemVersions(url) {
     let result = new Set();
-    for (let cs of this.codeSystems) {
+    for (let cs of this.codeSystems.values()) {
       if (cs.url == url) {
         result.add(cs.version);
       }

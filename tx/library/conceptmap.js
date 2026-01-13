@@ -115,7 +115,7 @@ class ConceptMap extends CanonicalResource {
    * @private
    */
   _convertFromR5(r5Obj, targetVersion) {
-    if (targetVersion === 'R5') {
+    if (VersionUtilities.isR5Ver(targetVersion)) {
       return r5Obj; // No conversion needed
     }
 

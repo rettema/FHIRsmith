@@ -54,7 +54,7 @@ describe('Iso4217Services', () => {
     test('should return error for invalid codes', async () => {
       const result = await provider.locate('ZZZ');
       expect(result.context).toBeNull();
-      expect(result.message).toContain('not found');
+      expect(result.message).toBeUndefined();
     });
 
     test('should return error for empty codes', async () => {
@@ -617,7 +617,7 @@ describe('Iso4217Services', () => {
       // Should not find lowercase codes
       const result = await provider.locate('usd');
       expect(result.context).toBeNull();
-      expect(result.message).toContain('not found');
+      expect(result.message).toBeUndefined();
     });
   });
 

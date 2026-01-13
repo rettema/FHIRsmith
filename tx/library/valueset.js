@@ -1,5 +1,6 @@
 const {CanonicalResource} = require("./canonical-resource");
 const {getValueName} = require("../../library/utilities");
+const {VersionUtilities} = require("../../library/version-utilities");
 
 /**
  * Represents a FHIR ValueSet resource with version conversion support
@@ -91,16 +92,16 @@ class ValueSet extends CanonicalResource {
    * @private
    */
   convertFromR5(r5Obj, targetVersion) {
-    if (targetVersion === 'R5') {
+    if (VersionUtilities.isR5Ver(targetVersion)) {
       return r5Obj; // No conversion needed
     }
 
     // Clone the object to avoid modifying the original
     const cloned = JSON.parse(JSON.stringify(r5Obj));
 
-    if (targetVersion === 'R4') {
+    if (VersionUtilities.isR4Ver(targetVersion)) {
       return this._convertR5ToR4(cloned);
-    } else if (targetVersion === 'R3') {
+    } else if (VersionUtilities.isR3Ver(targetVersion)) {
       return this._convertR5ToR3(cloned);
     }
 
@@ -306,8 +307,8 @@ class ValueSet extends CanonicalResource {
       throw new Error(`Invalid ValueSet: resourceType must be "ValueSet", got "${this.jsonObj.resourceType}"`);
     }
 
-    if (!this.jsonObj.url || typeof this.jsonObj.url !== 'string') {
-      throw new Error('Invalid ValueSet: url is required and must be a string');
+    if (this.jsonObj.url && typeof this.jsonObj.url !== 'string') {
+      throw new Error('Invalid ValueSet: url must be a string if present');
     }
 
     if (this.jsonObj.name && typeof this.jsonObj.name !== 'string') {

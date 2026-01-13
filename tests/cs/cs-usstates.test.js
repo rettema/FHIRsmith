@@ -63,7 +63,7 @@ describe('USStateServices', () => {
     test('should return error for invalid codes', async () => {
       const result = await provider.locate('ZZ');
       expect(result.context).toBeNull();
-      expect(result.message).toContain('not found');
+      expect(result.message).toBeUndefined();
     });
 
     test('should return error for empty codes', async () => {
@@ -343,7 +343,7 @@ describe('USStateServices', () => {
       // Should not find lowercase codes
       const result = await provider.locate('ca');
       expect(result.context).toBeNull();
-      expect(result.message).toContain('not found');
+      expect(result.message).toBeUndefined();
     });
   });
 

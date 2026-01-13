@@ -252,13 +252,6 @@ class ValueSetExpander {
     }
   }
 
-  logDisplays(cds) {
-    console.log('Designations: ' + cds.present);
-    for (const cd of cds.designations) {
-      console.log('  ' + cd.present);
-    }
-  }
-
   passesImport(imp, system, code) {
     imp.buildMap();
     return imp.hasCode(system, code);
@@ -314,9 +307,6 @@ class ValueSetExpander {
     let result = null;
     this.worker.deadCheck('processCode');
 
-    if (code == '42806-0') {
-      console.log("?");
-    }
     if (!this.passesImports(imports, system, code, 0)) {
       return null;
     }
@@ -524,6 +514,8 @@ class ValueSetExpander {
       } else {
         throw new Issue('error', 'not-found', null, 'VS_EXP_IMPORT_UNK_PINNED', this.worker.i18n.translate('VS_EXP_IMPORT_UNK_PINNED', this.params.httpLanguages, [uri, version]), 'not-found', 400);
       }
+    } else {
+      this.worker.seeSourceVS(vs, uri);
     }
   }
 
@@ -622,6 +614,7 @@ class ValueSetExpander {
 
     if (cset.system) {
       const cs = await this.worker.findCodeSystem(cset.system, cset.version, this.params, ['complete', 'fragment'], false, true, true, null);
+      this.worker.seeSourceProvider(cs, cset.system);
       if (cs == null) {
         // nothing
       } else {
@@ -729,8 +722,8 @@ class ValueSetExpander {
             }
 
             const iter = await cs.iterator(null);
-            if (valueSets.length === 0 && this.limitCount > 0 && iter.count > this.limitCount && !this.params.limitedExpansion) {
-              throw new Issue("error", "too-costly", null, 'VALUESET_TOO_COSTLY', this.worker.i18n.translate('VALUESET_TOO_COSTLY', this.params.httpLanguages, [vsSrc.url, '>' + this.limitCount]), null, 400).withDiagnostics(this.worker.opContext.diagnostics());
+            if (valueSets.length === 0 && this.limitCount > 0 && (iter && iter.total > this.limitCount) && !this.params.limitedExpansion && this.offset < 0)  {
+              throw new Issue("error", "too-costly", null, 'VALUESET_TOO_COSTLY', this.worker.i18n.translate('VALUESET_TOO_COSTLY', this.params.httpLanguages, [vsSrc.vurl, '>' + this.limitCount]), null, 400).withDiagnostics(this.worker.opContext.diagnostics());
 
             }
             let tcount = 0;
@@ -744,7 +737,7 @@ class ValueSetExpander {
             }
             this.addToTotal(tcount);
           } else {
-            this.opContext.log('prepare filters');
+            this.worker.opContext.log('prepare filters');
             this.noTotal();
             if (cs.isNotClosed(filter)) {
               notClosed.value = true;
@@ -752,7 +745,7 @@ class ValueSetExpander {
             const prep = await cs.getPrepContext(true);
             const ctxt = await cs.searchFilter(filter, prep, false);
             await cs.prepare(prep);
-            this.opContext.log('iterate filters');
+            this.worker.opContext.log('iterate filters');
             while (await cs.filterMore(ctxt)) {
               this.worker.deadCheck('processCodes#4');
               const c = await cs.filterConcept(ctxt);
@@ -763,7 +756,7 @@ class ValueSetExpander {
                   cds, await cs.definition(c), await cs.itemWeight(c), expansion, valueSets, await cs.getExtensions(c), null, await cs.getProperties(c), null, excludeInactive, vsSrc.url);
               }
             }
-            this.opContext.log('iterate filters done');
+            this.worker.opContext.log('iterate filters done');
           }
         }
 
@@ -1065,11 +1058,13 @@ class ValueSetExpander {
     }
 
     const iter = await cs.iterator(context);
-    let c = await cs.nextContext(iter);
-    while (c) {
-      this.worker.deadCheck('processCodeAndDescendants#3');
-      result += await this.includeCodeAndDescendants(cs, c, expansion, imports, n, excludeInactive, srcUrl);
-      c = await cs.nextContext(iter);
+    if (iter) {
+      let c = await cs.nextContext(iter);
+      while (c) {
+        this.worker.deadCheck('processCodeAndDescendants#3');
+        result += await this.includeCodeAndDescendants(cs, c, expansion, imports, n, excludeInactive, srcUrl);
+        c = await cs.nextContext(iter);
+      }
     }
     return result;
   }
@@ -1325,7 +1320,7 @@ class ValueSetExpander {
     }
 
     if (this.offset + this.count < 0 && this.fullList.length > this.limit) {
-      console.log('Operation took too long @ expand (' + this.constructor.name + ')');
+      this.log.log('Operation took too long @ expand (' + this.constructor.name + ')');
       throw new Issue("error", "too-costly", null, 'VALUESET_TOO_COSTLY', this.worker.i18n.translate('VALUESET_TOO_COSTLY', this.params.httpLanguages, [source.vurl, '>' + this.limit]), null, 400).withDiagnostics(this.worker.opContext.diagnostics());
     } else {
       let t = 0;
@@ -1516,6 +1511,8 @@ class ValueSetExpander {
     }
     return undefined;
   }
+
+
 }
 
 class ExpandWorker extends TerminologyWorker {
@@ -1548,10 +1545,9 @@ class ExpandWorker extends TerminologyWorker {
     try {
       await this.handleTypeLevelExpand(req, res);
     } catch (error) {
-      this.log.error(`Error in $expand: ${error.message}`);
-      console.error('$expand error:', error); // Full stack trace to console for debugging
+      req.logInfo = this.usedSources.join("|")+" - error"+(error.msgId  ? " "+error.msgId : "");
+      this.log.error(error);
       const statusCode = error.statusCode || 500;
-
       if (error instanceof Issue) {
         let oo = new OperationOutcome();
         oo.addIssue(error);
@@ -1583,8 +1579,8 @@ class ExpandWorker extends TerminologyWorker {
     try {
       await this.handleInstanceLevelExpand(req, res);
     } catch (error) {
-      this.log.error(`Error in $expand: ${error.message}`);
-      console.error('$expand error:', error); // Full stack trace to console for debugging
+      req.logInfo = this.usedSources.join("|")+" - error"+(error.msgId  ? " "+error.msgId : "");
+      this.log.error(error);
       const statusCode = error.statusCode || 500;
       const issueCode = error.issueCode || 'exception';
       return res.status(statusCode).json(this.fixForVersion({
@@ -1617,6 +1613,7 @@ class ExpandWorker extends TerminologyWorker {
         // Body is directly a ValueSet resource
         valueSet = new ValueSet(req.body);
         params = this.queryToParameters(req.query);
+        this.seeSourceVS(valueSet);
 
       } else if (req.body.resourceType === 'Parameters') {
         // Body is a Parameters resource
@@ -1626,6 +1623,7 @@ class ExpandWorker extends TerminologyWorker {
         const valueSetParam = this.findParameter(params, 'valueSet');
         if (valueSetParam && valueSetParam.resource) {
           valueSet = new ValueSet(valueSetParam.resource);
+          this.seeSourceVS(valueSet);
         }
 
       } else {
@@ -1665,7 +1663,7 @@ class ExpandWorker extends TerminologyWorker {
       const version = versionParam ? this.getParameterValue(versionParam) : null;
 
       valueSet = await this.findValueSet(url, version);
-
+      this.seeSourceVS(valueSet, url);
       if (!valueSet) {
         return res.status(404).json(this.operationOutcome('error', 'not-found',
           version ? `ValueSet not found: ${url} version ${version}` : `ValueSet not found: ${url}`));
@@ -1674,9 +1672,10 @@ class ExpandWorker extends TerminologyWorker {
 
     // Perform the expansion
     const result = await this.doExpand(valueSet, txp);
+    req.logInfo = this.usedSources.join("|")+txp.logInfo();
     return res.json(this.fixForVersion(result));
   }
-
+  
   /**
    * Handle instance-level expand: /ValueSet/{id}/$expand
    * ValueSet identified by resource ID
@@ -1722,6 +1721,7 @@ class ExpandWorker extends TerminologyWorker {
 
     // Perform the expansion
     const result = await this.doExpand(valueSet, txp);
+    req.logInfo = this.usedSources.join("|")+txp.logInfo();
     return res.json(this.fixForVersion(result));
   }
 

@@ -90,7 +90,7 @@ describe('IETF Language CodeSystem Provider', () => {
     test('should reject invalid language codes', async () => {
       const result = await provider.locate('invalid-code');
       expect(result.context).toBe(null);
-      expect(result.message).toContain('Invalid language code');
+      expect(result.message).toBeUndefined();
     });
 
     test('should handle empty codes', async () => {

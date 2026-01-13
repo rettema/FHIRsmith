@@ -35,7 +35,6 @@ const {ConceptMapXML} = require("./xml/conceptmap-xml");
 
 class TXModule {
   constructor() {
-    this.log = Logger.getInstance().child({ module: 'tx' });
     this.config = null;
     this.library = null;
     this.endpoints = [];
@@ -68,6 +67,13 @@ class TXModule {
    */
   async initialize(config, app) {
     this.config = config;
+    // Initialize logger with config settings
+    this.log = Logger.getInstance().child({
+      module: 'tx',
+      consoleErrors: true, // config.consoleErrors,
+      telnetErrors: config.telnetErrors
+    });
+
     this.log.info('Initializing TX module');
 
     // Load HTML template
@@ -195,8 +201,6 @@ class TXModule {
 
       res.json = (data) => {
         const duration = Date.now() - req.txStartTime;
-        const operation = `${req.method} ${req.baseUrl}${req.path}`;
-        const params = req.method === 'POST' ? req.body : req.query;
         const isHtml = txHtml.acceptsHtml(req);
         const isXml = this.acceptsXml(req);
 
@@ -213,14 +217,13 @@ class TXModule {
         } else if (isXml) {
           try {
             const xml = this.convertResourceToXml(data);
-            this.logToFile('/Users/grahamegrieve/temp/res-out.xml', xml);
-            this.logToFile('/Users/grahamegrieve/temp/res-out.json', JSON.stringify(data));
             responseSize = Buffer.byteLength(xml, 'utf8');
             res.setHeader('Content-Type', 'application/fhir+xml');
             result = res.send(xml);
           } catch (err) {
+            console.error(err);
             // Fall back to JSON if XML conversion not supported
-            log.warn(`XML conversion failed for ${data.resourceType}: ${err.message}, falling back to JSON`);
+            this.log.warn(`XML conversion failed for ${data.resourceType}: ${err.message}, falling back to JSON`);
             const jsonStr = JSON.stringify(data);
             responseSize = Buffer.byteLength(jsonStr, 'utf8');
             result = originalJson(data);
@@ -232,9 +235,9 @@ class TXModule {
         }
 
         // Log the request with request ID
-        const paramStr = Object.keys(params).length > 0 ? ` params=${JSON.stringify(this.trimParameters(params))}` : '';
         const format = isHtml ? 'html' : (isXml ? 'xml' : 'json');
-        log.info(`[${requestId}] ${operation}${paramStr} - ${res.statusCode} - ${format} - ${responseSize} bytes - ${duration}ms`);
+        let li = req.logInfo ? "("+req.logInfo+")" : "";
+        this.log.info(`[${requestId}] ${req.method} ${format} ${res.statusCode} ${duration}ms ${responseSize}: ${req.originalUrl} ${li})`);
 
         return result;
       };
@@ -618,8 +621,9 @@ class TXModule {
   convertResourceToXml(res) {
     switch (res.resourceType) {
       case "CodeSystem" : return CodeSystemXML._jsonToXml(res);
-      case "CapabilityStatement" : return new CapabilityStatementXML(res, "R5").toXml();
-      case "TerminologyCapabilities" : return new TerminologyCapabilitiesXML(res, "R5").toXml();
+      case "ValueSet" : return ValueSetXML.toXml(res);
+      case "CapabilityStatement" : return CapabilityStatementXML.toXml(res, "R5");
+      case "TerminologyCapabilities" : return TerminologyCapabilitiesXML.toXml(res, "R5");
       case "Parameters": return ParametersXML.toXml(res, this.fhirVersion);
       case "OperationOutcome": return OperationOutcomeXML.toXml(res, this.fhirVersion);
     }
@@ -632,8 +636,6 @@ class TXModule {
     if (!rootMatch) {
       throw new Error('Could not detect resource type from XML');
     }
-
-    this.logToFile('/Users/grahamegrieve/temp/res-in.xml', xml);
 
     const resourceType = rootMatch[1];
 
@@ -655,15 +657,9 @@ class TXModule {
         throw new Error(`Resource type ${resourceType} not supported for XML input`);
     }
 
-    this.logToFile('/Users/grahamegrieve/temp/res-in.json', JSON.stringify(data));
     return data;
   }
 
-  logToFile(fn, cnt) {
-    fs.writeFile(fn, cnt, (err) => {
-      if (err) console.error('Error writing log file:', err);
-    });
-  }
 }
 
 module.exports = TXModule;

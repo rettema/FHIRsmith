@@ -90,7 +90,7 @@ class VSACValueSetProvider extends AbstractValueSetProvider {
       try {
         await this.refreshValueSets();
       } catch (error) {
-        console.error('Error during scheduled refresh:', error.message);
+        this.log.error(error, 'Error during scheduled refresh:');
       }
     }, intervalMs);
   }
@@ -164,7 +164,7 @@ class VSACValueSetProvider extends AbstractValueSetProvider {
       console.log(`VSAC refresh completed. Total: ${totalFetched} ValueSets, Deleted: ${deletedCount}`);
 
     } catch (error) {
-      console.error('Error during VSAC refresh:', error.message);
+      console.log(error, 'Error during VSAC refresh:');
       throw error;
     } finally {
       this.isRefreshing = false;
@@ -225,7 +225,7 @@ class VSACValueSetProvider extends AbstractValueSetProvider {
    * @private
    */
   async _reloadMap() {
-    const newMap = await this.database.loadAllValueSets();
+    const newMap = await this.database.loadAllValueSets("vsac");
 
     // Atomic replacement of the map
     this.valueSetMap = newMap;

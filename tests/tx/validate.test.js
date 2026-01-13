@@ -415,20 +415,10 @@ describe('ValidateWorker', () => {
       
       await worker.handleCodeSystem(req, res);
       
-      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.status).toHaveBeenCalledWith(200);
       expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
-        resourceType: 'OperationOutcome'
+        resourceType: 'Parameters'
       }));
-    });
-
-    test('handleCodeSystem returns error when no code specified', async () => {
-      const { req, res } = createMockReqRes('GET', { 
-        url: 'http://hl7.org/fhir/administrative-gender' 
-      });
-      
-      await worker.handleCodeSystem(req, res);
-      
-      expect(res.status).toHaveBeenCalledWith(400);
     });
 
     test('handleCodeSystem validates successfully with url and code', async () => {
