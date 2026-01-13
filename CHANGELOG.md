@@ -5,7 +5,15 @@ All notable changes to the Health Intersections Node Server will be documented i
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [v0.1.0] - 2025-08-??
+## [v0.2.0] - 2026-01-13
+### Added
+- port tx.fhir.org to FHIRsmith, and pass all the tests
+
+### Changed
+- rework logging, testing, etc infrastructure
+
+
+## [v0.1.0] - 2025-08-21
 ### Added
 - set up ci and release workflows with Docker
 - Add tx-reg implementation
@@ -15,7 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - rework logging from scratch 
 
-## [v0.1.0] - 2025-08-??
+## [v0.1.0] - 2025-08-20
 
 First Documented Release 
 

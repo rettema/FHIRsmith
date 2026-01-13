@@ -133,7 +133,7 @@ You can install as a windows service using...
 
 ## Releases
 
-This project follows [Semantic Versioning](https://semver.org/) and uses a CHANGELOG.md file to track changes.
+This project follows [Semantic Versioning](https://semver.org/) and uses a [CHANGELOG.md](CHANGELOG.md) file to track changes.
 
 To create a new release:
 
