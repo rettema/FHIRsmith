@@ -1,4 +1,4 @@
-# TX Module - FHIR Terminology Server
+# ![🔥](../images/FHIRsmith64.png) TX Module - FHIR Terminology Server
 
 The TX module provides FHIR terminology services for CodeSystem, ValueSet, and ConceptMap resources. It supports multiple endpoints at different FHIR versions, all backed by a shared terminology library. It is the reference terminology server for the FHIR community and the FHIR terminology ecosystem.
 
