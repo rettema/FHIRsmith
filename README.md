@@ -7,7 +7,7 @@ This server provides a set of server-side services that are useful for the FHIR 
 ## Modules useful to anyone in the community
 
 * (Coming) R4/R6 interconverter 
-* [tx.fhir.org](tx/readme.md) server 
+* [tx.fhir.org](tx/README.md) server 
 * [SHL Server](shl/readme.md) - SHL/VHL support services 
 
 ## Services useful the community as a whole
