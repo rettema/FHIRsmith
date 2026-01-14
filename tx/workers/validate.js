@@ -513,7 +513,7 @@ class ValueSetChecker {
             cause.value = 'code-invalid';
             this.worker.opContext.addNote(this.valueSet, 'Not found in Incomplete Code System', this.indentCount);
             let msg = this.worker.i18n.translate('UNKNOWN_CODE_IN_FRAGMENT', this.params.HTTPLanguages, [code, cs.system(), cs.version()]);
-            messages.push(msg);
+            // messages.push(msg); disabled 15-1-2026 GG - it's not considered invalid if it's just a warning
             op.addIssue(new Issue('warning', 'code-invalid', addToPath(path, 'code'), 'UNKNOWN_CODE_IN_FRAGMENT', msg, 'invalid-code'));
           } else {
             result = false;
@@ -605,7 +605,7 @@ class ValueSetChecker {
             cause.value = 'code-invalid';
             this.worker.opContext.addNote(this.valueSet, 'Not found in Incomplete Code System', this.indentCount);
             let msg = this.worker.i18n.translate('UNKNOWN_CODE_IN_FRAGMENT', this.params.HTTPLanguages, [code, system, version]);
-            messages.push(msg);
+            // messages.push(msg); it's just a warning
             op.addIssue(new Issue('warning', 'code-invalid', addToPath(path, 'code'), 'UNKNOWN_CODE_IN_FRAGMENT', msg, 'invalid-code'));
           } else {
             result = false;
@@ -1191,7 +1191,7 @@ class ValueSetChecker {
               } else {
                 m = this.worker.i18n.translate('UNKNOWN_CODE_IN_FRAGMENT', this.params.HTTPLanguages, [c.code, ws, prov.version()]);
                 cause.value = 'code-invalid';
-                msg(m);
+                // msg(m); - it's just a warning
                 op.addIssue(new Issue('warning', 'code-invalid', addToPath(path, 'code'), 'UNKNOWN_CODE_IN_FRAGMENT', m, 'invalid-code'), true);
               }
             }
@@ -1496,6 +1496,7 @@ class ValueSetChecker {
         if (!this.params.membershipOnly) {
           if (cs.contentMode() !== 'complete') {
             op.addIssue(new Issue('warning', 'code-invalid', addToPath(path, 'code'), 'UNKNOWN_CODE_IN_FRAGMENT', this.worker.i18n.translate('UNKNOWN_CODE_IN_FRAGMENT', this.params.HTTPLanguages, [code, cs.system(), cs.version()]), 'invalid-code'));
+            result = true;
           } else {
             op.addIssue(new Issue('error', 'code-invalid', addToPath(path, 'code'), 'Unknown_Code_in_Version',
               this.worker.i18n.translate(Unknown_Code_in_VersionSCT(cs.system()), this.params.HTTPLanguages, [code, cs.system(), cs.version(), SCTVersion(cs.system(), cs.version())]), 'invalid-code'));
