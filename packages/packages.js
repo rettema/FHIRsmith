@@ -635,6 +635,8 @@ class PackagesModule {
           }
         }
       });
+      this.db.run('PRAGMA journal_mode = WAL');
+      this.db.run('PRAGMA busy_timeout = 5000');
     });
   }
 
@@ -1426,10 +1428,8 @@ class PackagesModule {
 
       // Check if we should redirect to bucket storage
       if (this.config.bucketPath) {
-        const bucketUrl = secure
-          ? this.config.bucketPath.replace('http:', 'https:')
-          : this.config.bucketPath;
-        const redirectUrl = `${bucketUrl}/${id}-${version}.tgz`;
+        let bucketUrl = this.getBucketUrl(secure);
+        const redirectUrl = `${bucketUrl}${id}-${version}.tgz`;
         res.redirect(redirectUrl);
         return;
       }
@@ -1441,6 +1441,16 @@ class PackagesModule {
       pckLog.error('Error in serveDownload:', error);
       res.status(500).json({error: 'Download failed', message: error.message});
     }
+  }
+
+  getBucketUrl(secure) {
+    let bucketUrl = secure
+      ? this.config.bucketPath.replace('http:', 'https:')
+      : this.config.bucketPath;
+    if (!bucketUrl.endsWith('/')) {
+      bucketUrl += '/';
+    }
+    return bucketUrl;
   }
 
   async findPackageVersion(id, version, exactMatch) {
@@ -1714,11 +1724,8 @@ class PackagesModule {
 
   buildTarballUrl(id, version, secure, req) {
     if (this.config.bucketPath) {
-      // Use bucket storage
-      const bucketUrl = secure
-        ? this.config.bucketPath.replace('http:', 'https:')
-        : this.config.bucketPath;
-      return `${bucketUrl}/${id}-${version}.tgz`;
+      let bucketUrl = this.getBucketUrl(secure);
+      return `${bucketUrl}${id}-${version}.tgz`;
     } else {
       // Use direct server URL
       const protocol = secure ? 'https' : 'http';
@@ -2172,10 +2179,7 @@ class PackagesModule {
 
   buildPackageUrl(id, version, secure = false, req = null) {
     if (this.config.bucketPath) {
-      // Use bucket storage
-      const bucketUrl = secure
-        ? this.config.bucketPath.replace('http:', 'https:')
-        : this.config.bucketPath;
+      let bucketUrl = this.getBucketUrl(secure);
       return `${bucketUrl}${id}-${version}.tgz`;
     } else {
       // Use direct server URL

@@ -19,6 +19,8 @@ class PackageCrawler {
     this.totalBytes = 0;
     this.crawlerLog = {};
     this.errors = '';
+    this.db.run('PRAGMA journal_mode = WAL');
+    this.db.run('PRAGMA busy_timeout = 5000');
   }
 
   async crawl(log) {
