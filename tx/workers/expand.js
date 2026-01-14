@@ -805,7 +805,7 @@ class ValueSetExpander {
             this.worker.deadCheck('processCodes#4a');
             const fc = fcl[i];
             if (!fc.value) {
-              throw new Issue('error', 'invalid', path+".filter["+i+"].value", 'UNABLE_TO_HANDLE_SYSTEM_FILTER_WITH_NO_VALUE', this.worker.i18n.translate('UNABLE_TO_HANDLE_SYSTEM_FILTER_WITH_NO_VALUE', this.params.httpLanguages, [cs.system(), fc.property, fc.op]), 'vs-invalid', 400);
+              throw new Issue('error', 'invalid', path+".filter["+i+"]", 'UNABLE_TO_HANDLE_SYSTEM_FILTER_WITH_NO_VALUE', this.worker.i18n.translate('UNABLE_TO_HANDLE_SYSTEM_FILTER_WITH_NO_VALUE', this.params.httpLanguages, [cs.system(), fc.property, fc.op]), 'vs-invalid', 400);
             }
             Extensions.checkNoModifiers(fc, 'ValueSetExpander.processCodes', 'filter');
             await cs.filter(prep, fc.property, fc.op, fc.value);

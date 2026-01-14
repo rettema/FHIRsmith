@@ -173,7 +173,7 @@ class TerminologyWorker {
         if (versions.length === 0) {
           throw new Issue("error", "not-found", null, "UNKNOWN_CODESYSTEM_VERSION_EXP_NONE", this.i18n.translate("UNKNOWN_CODESYSTEM_VERSION_EXP_NONE", params.FHTTPLanguages, [url, version]), "not-found", 404);
         } else {
-          throw new Issue("error", "not-found", null, "UNKNOWN_CODESYSTEM_VERSION_EXP", this.i18n.translate("UNKNOWN_CODESYSTEM_VERSION_EXP", params.FHTTPLanguages, [url, version, versions.join(', ')]), "not-found", 404);
+          throw new Issue("error", "not-found", null, "UNKNOWN_CODESYSTEM_VERSION_EXP", this.i18n.translate("UNKNOWN_CODESYSTEM_VERSION_EXP", params.FHTTPLanguages, [url, version, this.presentVersionList(versions)]), "not-found", 404);
         }
       }
     }
@@ -884,6 +884,15 @@ class TerminologyWorker {
     if (!this.usedSources.find(u => u == s)) {
       this.usedSources.push(s);
     }
+  }
+
+  presentVersionList(items) {
+    if (items.length === 0) return '';
+    if (items.length === 1) return items[0];
+    if (items.length === 2) return `${items[0]} or ${items[1]}`;
+
+    const lastItem = items.pop();
+    return `${items.join(', ')} and ${lastItem}`;
   }
 }
 
