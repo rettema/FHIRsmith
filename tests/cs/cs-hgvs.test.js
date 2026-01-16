@@ -52,7 +52,7 @@ describe('HGVS Provider', () => {
     });
 
     test('should have correct description', () => {
-      expect(provider.description()).toBe('HGVS codes');
+      expect(provider.description()).toBe('HGVS validator');
     });
 
     test('should return correct version', async () => {

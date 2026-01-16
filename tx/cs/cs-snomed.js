@@ -445,10 +445,6 @@ class SnomedProvider extends CodeSystemProvider {
    * @returns {boolean} True if actualVersion is more detailed than checkVersion (for SCT)
    */
   versionIsMoreDetailed(checkVersion, actualVersion) {
-    console.log('checkVersion:', checkVersion);
-    console.log('actualVersion:', actualVersion);
-    console.log('lengths:', checkVersion.length, actualVersion ? actualVersion.length : "??");
-    console.log('outcome:', actualVersion && actualVersion.startsWith(checkVersion));
     return actualVersion && actualVersion.startsWith(checkVersion);
   }
 
