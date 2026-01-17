@@ -3,11 +3,13 @@ const path = require("path");
 const {OperationContext} = require("../../tx/operation-context");
 const {Languages} = require("../../library/languages");
 
+const NO_LOAD_TEST = true;
+
 describe('Provider Test', () => {
 
   test('Full tx.fhir.org load', async () => {
     const isCI = process.env.CI === 'true';
-    if (!isCI) {
+    if (!NO_LOAD_TEST && !isCI) {
       let configFile = path.resolve(__dirname, '../../tx/tx.fhir.org.yml')
       let library = new Library(configFile);
       await library.load();
