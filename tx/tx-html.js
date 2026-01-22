@@ -7,6 +7,7 @@
 const path = require('path');
 const htmlServer = require('../common/html-server');
 const Logger = require('../common/logger');
+const packageJson = require("../package.json");
 
 const txHtmlLog = Logger.getInstance().child({ module: 'tx-html' });
 
@@ -86,9 +87,10 @@ class TxHtmlRenderer {
    */
   renderPage(title, content, endpoint, startTime) {
     const options = {
-      'endpoint-path': endpoint.path,
-      'fhir-version': endpoint.fhirVersion,
-      'ms': Date.now() - startTime
+      version: packageJson.version,
+      endpointpath: endpoint.path,
+      fhirversion: endpoint.fhirVersion,
+      ms: Date.now() - startTime
     };
 
     return htmlServer.renderPage('tx', title, content, options);

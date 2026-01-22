@@ -86,6 +86,8 @@ class HtmlServer {
       .replace(/\[%download-date%\]/g, this.escapeHtml(renderOptions.downloadDate))
       .replace(/\[%total-resources%\]/g, this.escapeHtml(renderOptions.totalResources.toLocaleString()))
       .replace(/\[%total-packages%\]/g, this.escapeHtml(renderOptions.totalPackages.toLocaleString()))
+      .replace(/\[%endpoint-path%\]/g, this.escapeHtml(renderOptions.endpointpath))
+      .replace(/\[%fhir-version%\]/g, this.escapeHtml(renderOptions.fhirversion))
       .replace(/\[%ms%\]/g, this.escapeHtml(renderOptions.processingTime.toString()));
     
     // Handle any custom template variables
