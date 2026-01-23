@@ -5,7 +5,7 @@
 //
 
 const { TerminologyWorker } = require('./worker');
-const {CodeSystemProvider} = require("../cs/cs-api");
+
 class ReadWorker extends TerminologyWorker {
   /**
    * @param {OperationContext} opContext - Operation context
