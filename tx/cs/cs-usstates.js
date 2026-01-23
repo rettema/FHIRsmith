@@ -292,6 +292,10 @@ class USStateFactoryProvider extends CodeSystemFactoryProvider {
   id() {
     return "us-states";
   }
+
+  iteratable() {
+    return true;
+  }
 }
 
 module.exports = {

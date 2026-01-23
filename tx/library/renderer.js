@@ -1,7 +1,7 @@
 const {CodeSystemProvider} = require("../cs/cs-api");
 const {Extensions} = require("./extensions");
 const {div} = require("../../library/html");
-const {CONSTRAINT} = require("sqlite3");
+const {getValuePrimitive} = require("../../library/utilities");
 
 /**
  * @typedef {Object} TerminologyLinkResolver
@@ -235,6 +235,19 @@ class Renderer {
     }
   }
 
+  async renderPropertyLink(tbl, msgId, value) {
+    if (value) {
+      let tr = tbl.tr();
+      tr.td().b().tx(this.translate(msgId));
+      const linkinfo = await this.linkResolver.resolveURL(this.opContext, value);
+      if (linkinfo) {
+        tr.td().ah(linkinfo.link).tx(linkinfo.description);
+      } else {
+        tr.td().tx(value);
+      }
+    }
+  }
+
   renderPropertyMD(tbl, msgId, value) {
     if (value) {
       let tr = tbl.tr();
@@ -301,14 +314,15 @@ class Renderer {
 
     let div_ = div();
     div_.h2().tx("Properties");
-    await this.renderMetadataTable(vs, div_.table("grid"));
+    let tbl = div_.table("grid");
+    await this.renderMetadataTable(vs, tbl);
     if (vs.compose) {
       div_.h2().tx("Logical Definition");
       await this.renderCompose(vs, div_.table("grid"));
     }
     if (vs.expansion) {
       div_.h2().tx("Expansion");
-      await this.renderExpansion(div_.table("grid"));
+      await this.renderExpansion(div_.table("grid"), vs, tbl);
     }
 
     return div_.toString();
@@ -394,7 +408,7 @@ class Renderer {
         const ul = li.ul();
         for (let c of inc.concept) {
           const li = ul.li();
-          const link = this.linkResolver ? this.linkResolver.resolveCode(this.opContext, inc.system, inc.version, c.code) : null;
+          const link = this.linkResolver ? await this.linkResolver.resolveCode(this.opContext, inc.system, inc.version, c.code) : null;
           if (link) {
             li.ah(link.link).tx(c.code);
           } else {
@@ -420,7 +434,7 @@ class Renderer {
             }
           } else {
             li.commaItem(f.property + " " + f.op + " ");
-            const loc = this.linkResolver ? this.linkResolver.resolveCode(this.opContext, inc.system, inc.version, f.value) : null;
+            const loc = this.linkResolver ? await this.linkResolver.resolveCode(this.opContext, inc.system, inc.version, f.value) : null;
             if (loc) {
               li.ah(loc.link).tx(loc.description);
             } else {
@@ -541,7 +555,7 @@ class Renderer {
     }
     headerRow.th().tx(this.translate('GENERAL_CODE'));
     if (columnInfo.hasDisplay) {
-      headerRow.th().tx(this.translate('GENERAL_DISPLAY'));
+      headerRow.th().tx(this.translate('TX_DISPLAY'));
     }
     if (columnInfo.hasDefinition) {
       headerRow.th().tx(this.translate('GENERAL_DEFINITION'));
@@ -867,6 +881,355 @@ class Renderer {
     return count;
   }
 
+  async renderExpansion(x, vs, tbl) {
+    this.renderProperty(tbl, 'Expansion Identifier', vs.expansion.identifier);
+    this.renderProperty(tbl, 'Expansion Timestamp', vs.expansion.timestamp);
+    this.renderProperty(tbl, 'Expansion Total', vs.expansion.total);
+    this.renderProperty(tbl, 'Expansion Offset', vs.expansion.offset);
+    for (let p of vs.expansion.parameter || []) {
+      await this.renderPropertyLink(tbl, "Parameter: " + p.name, getValuePrimitive(p));
+    }
+
+    if (!vs.expansion.contains || vs.expansion.contains.length === 0) {
+      x.para().i().tx('No concepts in expansion');
+      return;
+    }
+
+    // Analyze columns needed
+    const columnInfo = this.analyzeExpansionColumns(vs.expansion);
+
+    // Build the expansion table
+    const expTbl = x.table("codes");
+
+    // Header row
+    const headerRow = expTbl.tr();
+
+    if (columnInfo.hasHierarchy) {
+      headerRow.th().tx(this.translate('CODESYSTEM_LVL'));
+    }
+    headerRow.th().tx(this.translate('GENERAL_CODE'));
+    headerRow.th().tx(this.translate('VALUE_SET_SYSTEM'));
+    if (columnInfo.hasVersion) {
+      headerRow.th().tx(this.translate('GENERAL_VER'));
+    }
+    headerRow.th().tx(this.translate('TX_DISPLAY'));
+    if (columnInfo.hasAbstract) {
+      headerRow.th().tx('Abstract');
+    }
+    if (columnInfo.hasInactive) {
+      headerRow.th().tx('Inactive');
+    }
+
+    // Property columns (from expansion.property definitions)
+    for (const prop of columnInfo.properties) {
+      headerRow.th().tx(prop.code);
+    }
+
+    // Designation columns (use|language combinations)
+    for (const desig of columnInfo.designations) {
+      headerRow.th().tx(this.formatDesignationHeader(desig));
+    }
+
+    // Render contains recursively
+    for (const contains of vs.expansion.contains) {
+      await this.addExpansionRow(expTbl, contains, 0, columnInfo);
+    }
+  }
+
+  /**
+   * Analyze expansion contains to determine which columns are needed
+   */
+  analyzeExpansionColumns(expansion) {
+    const info = {
+      hasHierarchy: false,
+      hasVersion: false,
+      hasAbstract: false,
+      hasInactive: false,
+      properties: [],
+      designations: []
+    };
+
+    // Build map of property codes from expansion.property
+    const propertyDefs = new Map();
+    for (const prop of expansion.property || []) {
+      propertyDefs.set(prop.code, prop);
+    }
+
+    // Track which properties and designations are actually used
+    const usedProperties = new Set();
+    const usedDesignations = new Map(); // key: "use|language", value: {use, language}
+
+    const analyzeContains = (containsList, level) => {
+      for (const c of containsList) {
+        if (c.version) {
+          info.hasVersion = true;
+        }
+        if (c.abstract === true) {
+          info.hasAbstract = true;
+        }
+        if (c.inactive === true) {
+          info.hasInactive = true;
+        }
+
+        // Check for nested contains (hierarchy)
+        if (c.contains && c.contains.length > 0) {
+          info.hasHierarchy = true;
+          analyzeContains(c.contains, level + 1);
+        }
+
+        // Track used properties
+        if (c.property) {
+          for (const prop of c.property) {
+            usedProperties.add(prop.code);
+          }
+        }
+
+        // Track used designations
+        if (c.designation) {
+          for (const desig of c.designation) {
+            const key = this.getDesignationKey(desig);
+            if (!usedDesignations.has(key)) {
+              usedDesignations.set(key, {
+                use: desig.use,
+                language: desig.language
+              });
+            }
+          }
+        }
+      }
+    };
+
+    analyzeContains(expansion.contains || [], 0);
+
+    // Filter to properties that are defined and used
+    for (const [code, def] of propertyDefs) {
+      if (usedProperties.has(code)) {
+        info.properties.push(def);
+      }
+    }
+
+    // Convert designation map to array, sorted for consistent ordering
+    info.designations = Array.from(usedDesignations.values()).sort((a, b) => {
+      const keyA = this.getDesignationKey(a);
+      const keyB = this.getDesignationKey(b);
+      return keyA.localeCompare(keyB);
+    });
+
+    return info;
+  }
+
+  /**
+   * Get a unique key for a designation based on use and language
+   */
+  getDesignationKey(desig) {
+    const useCode = desig.use?.code || '';
+    const useSystem = desig.use?.system || '';
+    const lang = desig.language || '';
+    return `${useSystem}|${useCode}|${lang}`;
+  }
+
+  /**
+   * Format a designation header for display
+   */
+  formatDesignationHeader(desig) {
+    const parts = [];
+    if (desig.use?.display) {
+      parts.push(desig.use.display);
+    } else if (desig.use?.code) {
+      parts.push(desig.use.code);
+    }
+    if (desig.language) {
+      parts.push(`(${desig.language})`);
+    }
+    return parts.length > 0 ? parts.join(' ') : 'Designation';
+  }
+
+  /**
+   * Add a row for an expansion contains entry
+   */
+  async addExpansionRow(tbl, contains, level, columnInfo) {
+    const tr = tbl.tr();
+
+    // Apply styling for abstract or inactive concepts
+    if (contains.abstract === true) {
+      tr.style("font-style: italic");
+    }
+    if (contains.inactive === true) {
+      tr.style("background-color: #ffeeee");
+    }
+
+    // Level column
+    if (columnInfo.hasHierarchy) {
+      tr.td().tx(String(level + 1));
+    }
+
+    // Code column
+    const codeTd = tr.td();
+    if (level > 0) {
+      codeTd.tx('\u00A0'.repeat(level * 2)); // Non-breaking spaces for indentation
+    }
+
+    // Try to link the code
+    if (contains.code) {
+      const link = this.linkResolver ?
+          await this.linkResolver.resolveCode(this.opContext, contains.system, contains.version, contains.code) : null;
+      if (link) {
+        codeTd.ah(link.link).tx(contains.code);
+      } else {
+        codeTd.code().tx(contains.code);
+      }
+    }
+
+    // System column
+    const systemTd = tr.td();
+    if (contains.system) {
+      systemTd.code().tx(contains.system);
+    }
+
+    // Version column
+    if (columnInfo.hasVersion) {
+      tr.td().tx(contains.version || '');
+    }
+
+    // Display column
+    tr.td().tx(contains.display || '');
+
+    // Abstract column
+    if (columnInfo.hasAbstract) {
+      tr.td().tx(contains.abstract === true ? 'true' : '');
+    }
+
+    // Inactive column
+    if (columnInfo.hasInactive) {
+      tr.td().tx(contains.inactive === true ? 'true' : '');
+    }
+
+    // Property columns
+    for (const propDef of columnInfo.properties) {
+      const td = tr.td();
+      const values = this.getContainsPropertyValues(contains, propDef.code);
+
+      let first = true;
+      for (const val of values) {
+        if (!first) {
+          td.tx(', ');
+        }
+        first = false;
+        await this.renderExpansionPropertyValue(td, val, propDef);
+      }
+    }
+
+    // Designation columns
+    for (const desigDef of columnInfo.designations) {
+      const td = tr.td();
+      const value = this.getDesignationValue(contains, desigDef);
+      if (value) {
+        td.tx(value);
+      }
+    }
+
+    // Recurse for nested contains
+    if (contains.contains) {
+      for (const child of contains.contains) {
+        await this.addExpansionRow(tbl, child, level + 1, columnInfo);
+      }
+    }
+  }
+
+  /**
+   * Get property values from a contains entry
+   */
+  getContainsPropertyValues(contains, code) {
+    if (!contains.property) return [];
+    return contains.property
+        .filter(p => p.code === code)
+        .map(p => this.extractExpansionPropertyValue(p))
+        .filter(v => v !== null);
+  }
+
+  /**
+   * Extract the value from an expansion property
+   */
+  extractExpansionPropertyValue(prop) {
+    if (prop.valueCode !== undefined) return { type: 'code', value: prop.valueCode };
+    if (prop.valueString !== undefined) return { type: 'string', value: prop.valueString };
+    if (prop.valueBoolean !== undefined) return { type: 'boolean', value: prop.valueBoolean };
+    if (prop.valueInteger !== undefined) return { type: 'integer', value: prop.valueInteger };
+    if (prop.valueDecimal !== undefined) return { type: 'decimal', value: prop.valueDecimal };
+    if (prop.valueDateTime !== undefined) return { type: 'dateTime', value: prop.valueDateTime };
+    if (prop.valueCoding !== undefined) return { type: 'coding', value: prop.valueCoding };
+    return null;
+  }
+
+  /**
+   * Render an expansion property value
+   */
+  // eslint-disable-next-line no-unused-vars
+  async renderExpansionPropertyValue(td, val, propDef) {
+    if (!val) return;
+
+    switch (val.type) {
+      case 'code': {
+        td.code().tx(val.value);
+        break;
+      }
+      case 'coding': {
+        const coding = val.value;
+        const link = this.linkResolver ?
+            await this.linkResolver.resolveCode(this.opContext, coding.system, coding.version, coding.code) : null;
+        if (link) {
+          td.ah(link.link).tx(coding.code);
+        } else {
+          td.code().tx(coding.code);
+        }
+        if (coding.display) {
+          td.tx(' "' + coding.display + '"');
+        }
+        break;
+      }
+      case 'boolean': {
+        td.tx(val.value ? 'true' : 'false');
+        break;
+      }
+      case 'string': {
+        if (val.value.startsWith('http://') || val.value.startsWith('https://')) {
+          td.ah(val.value).tx(val.value);
+        } else {
+          td.tx(val.value);
+        }
+        break;
+      }
+      default:
+        td.tx(String(val.value));
+    }
+  }
+
+  /**
+   * Get a designation value matching the given use/language
+   */
+  getDesignationValue(contains, desigDef) {
+    if (!contains.designation) return null;
+
+    for (const desig of contains.designation) {
+      // Match on use and language
+      const useMatches = this.codingMatches(desig.use, desigDef.use);
+      const langMatches = (desig.language || '') === (desigDef.language || '');
+
+      if (useMatches && langMatches) {
+        return desig.value;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Check if two codings match (both null, or same system/code)
+   */
+  codingMatches(a, b) {
+    if (!a && !b) return true;
+    if (!a || !b) return false;
+    return (a.system || '') === (b.system || '') && (a.code || '') === (b.code || '');
+  }
 }
 
 module.exports = { Renderer };

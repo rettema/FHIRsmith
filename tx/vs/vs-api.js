@@ -97,6 +97,10 @@ class AbstractValueSetProvider {
       throw new Error('Version must be a string');
     }
   }
+
+  async listAllValueSets() {
+    return [];
+  }
 }
 
 module.exports = {

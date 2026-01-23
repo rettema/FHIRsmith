@@ -767,9 +767,14 @@ class CodeSystemFactoryProvider {
     throw new Error("Must override");
   }
 
-  codeLink() {
+  codeLink(code) {
     return undefined;
   }
+
+  iteratable() {
+    return false;
+  }
+
 }
 
 module.exports = {

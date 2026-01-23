@@ -93,7 +93,7 @@ class I18nSupport {
    * @returns {string} Formatted message
    */
   formatMessagePlural(languages, messageId, count, parameters = []) {
-    this._formatMessagePluralFromBundle(this.bundles, languages, messageId, count, parameters);
+    return this._formatMessagePluralFromBundle(this.bundles, languages, messageId, count, parameters);
   }
 
   /**

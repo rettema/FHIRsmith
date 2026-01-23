@@ -327,6 +327,9 @@ class PackageValueSetProvider extends AbstractValueSetProvider {
     return this.database.vsCount;
   }
 
+  async listAllValueSets() {
+    return await this.database.listAllValueSets();
+  }
 }
 
 module.exports = {

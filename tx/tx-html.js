@@ -183,16 +183,18 @@ class TxHtmlRenderer {
     html += ' | <input type="checkbox" id="summaryTable" onchange="updateSummaryTable()"/> <label for="summaryTable">Summary Table</label>';
     html += '</form>';
 
+    html += '<p>Or see the <a href="op.html">Operations</a></p>';
+
     // JavaScript to update form action and handle summary table preference
     html += `<script>
-updateSearchAction(baseUrl) {
+function updateSearchAction(baseUrl) {
   const form = document.getElementById('searchForm');
   const mode = document.querySelector('input[name="mode"]:checked').value;
   const resourceMap = { cs: 'CodeSystem', vs: 'ValueSet', cm: 'ConceptMap' };
   form.action = baseUrl + '/' + resourceMap[mode];
 }
 
-updateSummaryTable() {
+function updateSummaryTable() {
   const checkbox = document.getElementById('summaryTable');
   const elementsInput = document.getElementById('elementsInput');
   elementsInput.disabled = !checkbox.checked;
@@ -385,6 +387,8 @@ document.addEventListener('DOMContentLoaded', function() {
             return await this.renderBundle(json, req, inBundle);
           case 'OperationOutcome':
             return await this.renderOperationOutcome(json, req);
+          case 'Operations':
+            return await this.renderOperationsForm(json, req);
           default:
             return await this.renderGeneric(json, inBundle);
         }
@@ -405,7 +409,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     if (json.parameter && Array.isArray(json.parameter)) {
       for (const param of json.parameter) {
-        html += this.renderParameter(param);
+        html += await this.renderParameter(param);
       }
     }
 
@@ -750,7 +754,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
       // Validate-code form
       html += '<div class="operation-form" style="margin-bottom: 15px;">';
-      html += '<strong>Validate Code</strong>';
+      html += '<strong>Validate Code (ValueSet)</strong>';
       html += `<form method="get" action="$validate-code" style="margin-left: 10px; margin-top: 5px;">`;
       html += `<input type="hidden" name="url" value="${this.escapeHtml(json.url || '')}"/>`;
       html += `<input type="hidden" name="inferSystem" id="${inferSystemId}" value="true"/>`;
@@ -785,6 +789,7 @@ document.addEventListener('DOMContentLoaded', function() {
   /**
    * Render ConceptMap resource
    */
+  // eslint-disable-next-line no-unused-vars
   async renderConceptMap(json, inBundle) {
     return this.renderResourceWithNarrative(json);
   }
@@ -792,6 +797,7 @@ document.addEventListener('DOMContentLoaded', function() {
   /**
    * Render CapabilityStatement resource
    */
+  // eslint-disable-next-line no-unused-vars
   async renderCapabilityStatement(json, inBundle) {
     return this.renderResourceWithNarrative(json);
   }
@@ -1178,17 +1184,16 @@ document.addEventListener('DOMContentLoaded', function() {
     } else {
       html += '<div class="narrative">(No Narrative)</div>';
     }
-    // Collapsible JSON source
-    html += '<div class="xhtml">';
-    html += `<button type="button" class="btn btn-sm btn-outline-secondary" onclick="toggleOriginalNarrative('${resourceId}x')">`;
-    html += 'Show Original Narrative</button>';
-    html += `<div id="${resourceId}x" class="original-narrative" style="display: none; margin-top: 10px;">`;
     if (json.text && json.text.div) {
+    // Collapsible JSON source
+      html += '<div class="xhtml">';
+      html += `<button type="button" class="btn btn-sm btn-outline-secondary" onclick="toggleOriginalNarrative('${resourceId}x')">`;
+      html += 'Show Original Narrative</button>';
+      html += `<div id="${resourceId}x" class="original-narrative" style="display: none; margin-top: 10px;">`;
+
       html += '<div class="narrative">';
       html += json.text.div;  // Already HTML, render as-is
       html += '</div>';
-    } else {
-      html += '<div class="narrative">(No Narrative)</div>';
     }
     html += '</div>';
     html += '</div>';
@@ -1205,6 +1210,169 @@ document.addEventListener('DOMContentLoaded', function() {
 
     return html;
   }
+
+  // eslint-disable-next-line no-unused-vars
+  async renderOperationsForm(json, req) {
+    let html = '';
+    html += '<h2>Expand ValueSet</h2>';
+    html += `<form method="get" action="ValueSet/$expand" style="margin-left: 10px; margin-top: 5px;">`;
+    html += '<table class="grid" cellpadding="0" cellspacing="0">';
+    html += '<tr>';
+    html += '<td style="position: relative;">';
+    html += 'URL: <input type="text" name="url" id="vsUrlInput" size="40" autocomplete="off"/><span style="color: maroon">*</span>';
+    html += '<div id="vsUrlSuggestions" class="typeahead-suggestions" style="display:none; position:absolute; background:white; border:1px solid #ccc; max-height:200px; overflow-y:auto; z-index:1000; width:100%;"></div>';
+    html += '</td>';
+    html += '<td>Version: <input type="text" name="valueSetVersion" size="10"/></td>';
+    html += '</tr>';
+    html += '<tr>';
+    html += '<td>Filter: <input type="text" name="filter" size="20"/></td>';
+    html += '<td>Language: <input type="text" name="displayLanguage" size="10"/></td>';
+    html += '</tr>';
+    html += '<tr>';
+    html += '<td colspan="2">';
+    html += '<input type="checkbox" name="includeDesignations" id="expand_desig" value="true"/> ';
+    html += '<label for="expand_desig">Include Designations</label>';
+    html += ' <input type="checkbox" name="activeOnly" id="expand_active" value="true"/> ';
+    html += '<label for="expand_active">Active Only</label>';
+    html += ' <input type="checkbox" name="excludeNested" id="expand_excludeNested" value="true"/> ';
+    html += '<label for="expand_excludeNested">Not nested</label>';
+    html += '</td>';
+    html += '</tr>';
+    html += '</table>';
+    html += '<button type="submit" class="btn btn-sm btn-primary">Expand</button>';
+    html += '</form>';
+
+    const vcSystemId = this.generateResourceId();
+    const inferSystemId = this.generateResourceId();
+
+    // General Validate-code form
+    html += '<h2>Validate Code</h2>';
+    html += `<form method="get" action="ValueSet/$validate-code" style="margin-left: 10px; margin-top: 5px;">`;
+    html += `<input type="hidden" name="inferSystem" id="${inferSystemId}" value="true"/>`;
+    html += '<table class="grid" cellpadding="0" cellspacing="0">';
+    html += '<tr>';
+    html += '<td style="position: relative;">';
+    html += 'ValueSet URL: <input type="text" name="url" id="vcVsUrlInput" size="40" autocomplete="off"/><span style="color: maroon">*</span>';
+    html += '<div id="vcVsUrlSuggestions" class="typeahead-suggestions" style="display:none; position:absolute; background:white; border:1px solid #ccc; max-height:200px; overflow-y:auto; z-index:1000; width:100%;"></div>';
+    html += '</td>';
+    html += '<td>ValueSet Version: <input type="text" name="valueSetVersion" size="10"/></td>';
+    html += '</tr>';
+    html += '<tr>';
+    html += `<td>System: <input type="text" name="system" id="${vcSystemId}" size="30" onchange="updateInferSystem('${vcSystemId}', '${inferSystemId}')"/></td>`;
+    html += '<td>Version: <input type="text" name="version" size="10"/></td>';
+    html += '</tr>';
+    html += '<tr>';
+    html += '<td>Code: <input type="text" name="code" size="20" required/><span style="color: maroon">*</span></td>';
+    html += '<td>Display: <input type="text" name="display" size="20"/></td>';
+    html += '</tr>';
+    html += '<tr>';
+    html += '<td>Language: <input type="text" name="displayLanguage" size="10"/></td>';
+    html += '<td>';
+    html += '<input type="checkbox" name="abstract" value="true"/> ';
+    html += '<label>Abstract</label>';
+    html += '</td>';
+    html += '</tr>';
+    html += '</table>';
+    html += '<button type="submit" class="btn btn-sm btn-primary">Validate Code</button>';
+    html += '</form>';
+
+    // Embed the value set list as JSON and add typeahead script for both forms
+    html += `<script>
+(function() {
+  const valueSets = ${JSON.stringify(json.valueSets || [])};
+
+  // Setup typeahead for a given input/suggestions pair
+  function setupTypeahead(inputId, suggestionsId) {
+    const input = document.getElementById(inputId);
+    const suggestions = document.getElementById(suggestionsId);
+    let selectedIndex = -1;
+
+    input.addEventListener('input', function() {
+      const query = this.value.toLowerCase();
+      suggestions.innerHTML = '';
+      selectedIndex = -1;
+
+      if (query.length < 2) {
+        suggestions.style.display = 'none';
+        return;
+      }
+
+      const matches = valueSets
+        .filter(vs => vs.toLowerCase().includes(query))
+        .slice(0, 50);
+
+      if (matches.length === 0) {
+        suggestions.style.display = 'none';
+        return;
+      }
+
+      for (const match of matches) {
+        const div = document.createElement('div');
+        div.textContent = match;
+        div.style.padding = '4px 8px';
+        div.style.cursor = 'pointer';
+        div.addEventListener('mouseenter', function() {
+          this.style.backgroundColor = '#e0e0e0';
+        });
+        div.addEventListener('mouseleave', function() {
+          this.style.backgroundColor = 'white';
+        });
+        div.addEventListener('click', function() {
+          input.value = match;
+          suggestions.style.display = 'none';
+        });
+        suggestions.appendChild(div);
+      }
+
+      suggestions.style.display = 'block';
+    });
+
+    input.addEventListener('keydown', function(e) {
+      const items = suggestions.querySelectorAll('div');
+      if (items.length === 0) return;
+
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        selectedIndex = Math.min(selectedIndex + 1, items.length - 1);
+        updateSelection(items);
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        selectedIndex = Math.max(selectedIndex - 1, 0);
+        updateSelection(items);
+      } else if (e.key === 'Enter' && selectedIndex >= 0) {
+        e.preventDefault();
+        input.value = items[selectedIndex].textContent;
+        suggestions.style.display = 'none';
+      } else if (e.key === 'Escape') {
+        suggestions.style.display = 'none';
+      }
+    });
+
+    function updateSelection(items) {
+      items.forEach((item, i) => {
+        item.style.backgroundColor = i === selectedIndex ? '#e0e0e0' : 'white';
+      });
+      if (selectedIndex >= 0) {
+        items[selectedIndex].scrollIntoView({ block: 'nearest' });
+      }
+    }
+
+    document.addEventListener('click', function(e) {
+      if (!input.contains(e.target) && !suggestions.contains(e.target)) {
+        suggestions.style.display = 'none';
+      }
+    });
+  }
+
+  // Initialize typeahead for both forms
+  setupTypeahead('vsUrlInput', 'vsUrlSuggestions');
+  setupTypeahead('vcVsUrlInput', 'vcVsUrlSuggestions');
+})();
+</script>`;
+
+    return html;
+  }
+
 }
 
 module.exports = {

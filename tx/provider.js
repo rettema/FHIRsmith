@@ -149,6 +149,16 @@ class Provider {
     return undefined;
   }
 
+  getCodeSystemFactoryById(opContext, id) {
+    // Search through codeSystems map for matching id
+    for (const cs of this.codeSystemFactories.values()) {
+      if (cs.id() == id) {
+        return cs;
+      }
+    }
+    return undefined;
+  }
+
   async getValueSetById(opContext, id) {
     for (const vp of this.valueSetProviders) {
       if (opContext) opContext.deadCheck('getValueSetById');
@@ -254,6 +264,15 @@ class Provider {
     }
   }
 
+  async listAllValueSets() {
+    let result = [];
+    for (let vsp of this.valueSetProviders) {
+      result.push(... await vsp.listAllValueSets());
+    }
+    return result;
+
+  }
+
   async resolveURL(opContext, system, version) {
     validateParameter(opContext, "opContext", OperationContext);
     validateParameter(system, "system", String);
@@ -280,7 +299,7 @@ class Provider {
     if (factory != null) {
       return {
         link: this.path+"/CodeSystem/"+factory.id(),
-        description: factory.name()
+        description: factory.name()+(version ? " v"+version : "")
       };
     }
     let cs = this.codeSystems.get(vurl);
@@ -290,7 +309,7 @@ class Provider {
     if (cs != null) {
       return {
         link: this.path+"/CodeSystem/"+cs.id,
-        description: cs.title ? cs.title : cs.name
+        description: (cs.title ? cs.title : cs.name)+(version ? " v"+version : "")
       };
     }
 
@@ -298,20 +317,76 @@ class Provider {
     if (vs) {
       return {
         link: this.path+"/ValueSet/"+vs.id,
-        description: vs.title ? vs.title : vs.name
+        description: (vs.title ? vs.title : vs.name)+(version ? " v"+version : "")
       };
     }
-    // let cm = await this.findConceptMap(opContext, system, version);
-    // if (cm) {
-    //   return {
-    //     link: this.path+"/ConceptMap/"+cm.id,
-    //     description: cm.title ? cm.title : cm.name
-    //   };
-    // }
+    let cm = await this.findConceptMap(opContext, system, version);
+    if (cm) {
+      return {
+        link: this.path+"/ConceptMap/"+cm.id,
+        description: (cm.title ? cm.title : cm.name)+(version ? " v"+version : "")
+      };
+    }
     return null;
   }
 
-  resolveCode(opContext, url, version, code) {
+  async resolveCode(opContext, system, version, code) {
+    validateParameter(opContext, "opContext", OperationContext);
+    validateParameter(system, "system", String);
+    validateOptionalParameter(version, "version", String);
+    validateParameter(code, "code", String);
+
+    if (system.includes("|")) {
+      const url = system.substring(0, system.indexOf("|"));
+      const v = system.substring(system.indexOf("|")+1);
+      if (version == null || v === version) {
+        version = v;
+      } else {
+        throw new TerminologyError(`Version inconsistent in ${system}: ${v} vs ${version}`);
+      }
+      system = url;
+    } else if (!version) {
+      version = null;
+    }
+    const vurl = system+(version ? "|"+version : "");
+    const vurlMM = VersionUtilities.isSemVer(version) ? system+"|"+VersionUtilities.getMajMin(version) : null;
+    let factory = this.codeSystemFactories.get(vurl);
+    if (factory == null && vurlMM) {
+      factory = this.codeSystemFactories.get(vurlMM);
+    }
+    if (factory != null) {
+      const csp = factory.build(opContext, []);
+      const c = csp.locate(code);
+      if (c) {
+        if (factory.iterable()) {
+          return {
+            link: this.path + "/CodeSystem/x-" + factory.id(),
+            description: csp.display(c)
+          }
+        } else {
+           const link = csp.codeLink(c);
+           if (link) {
+             return {
+               link: link,
+               description: csp.display(c)
+             }
+           }
+        }
+      }
+    }
+    let cs = this.codeSystems.get(vurl);
+    if (cs == null && vurlMM) {
+      cs = this.codeSystems.get(vurlMM);
+    }
+    if (cs != null) {
+      const c = cs.codeMap.get(code);
+      if (c) {
+        return {
+          link: this.path + "/CodeSystem/" + cs.id + '#' + code,
+          description: c.display
+        };
+      }
+    }
     return null;
   }
 

@@ -4,7 +4,7 @@ The TX module provides FHIR terminology services for CodeSystem, ValueSet, and C
 
 ## Todo
 
-* More work on the HTML interface (external code systems, global functions) 
+* More work on the HTML interface (external code systems, global functions, render capability statements) 
 * add more tests for the code system providers - filters, extended lookup, designations and languages 
 * more refactoring in validate.js and expand.js 
 * full batch support 

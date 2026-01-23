@@ -731,6 +731,38 @@ class ValueSetDatabase {
     // nothing - we don't do any assigning.
   }
 
+  /**
+   * Get a list of all ValueSet URLs in the database
+   * @returns {Promise<string[]>} Array of ValueSet URLs
+   */
+  async listAllValueSets() {
+    return new Promise((resolve, reject) => {
+      const db = new sqlite3.Database(this.dbPath, sqlite3.OPEN_READONLY, (err) => {
+        if (err) {
+          reject(new Error(`Failed to open database for listing: ${err.message}`));
+          return;
+        }
+
+        db.all('SELECT url FROM valuesets ORDER BY url', [], (err, rows) => {
+          if (err) {
+            db.close();
+            reject(new Error(`Failed to list value sets: ${err.message}`));
+            return;
+          }
+
+          const urls = rows.map(row => row.url);
+
+          db.close((err) => {
+            if (err) {
+              reject(new Error(`Failed to close database after listing: ${err.message}`));
+            } else {
+              resolve(urls);
+            }
+          });
+        });
+      });
+    });
+  }
 }
 
 module.exports = {

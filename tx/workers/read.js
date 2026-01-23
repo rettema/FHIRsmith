@@ -5,6 +5,7 @@
 //
 
 const { TerminologyWorker } = require('./worker');
+
 class ReadWorker extends TerminologyWorker {
   /**
    * @param {OperationContext} opContext - Operation context
@@ -39,7 +40,7 @@ class ReadWorker extends TerminologyWorker {
     try {
       switch (resourceType) {
         case 'CodeSystem':
-          return this.handleCodeSystem(req, res, id);
+          return await this.handleCodeSystem(req, res, id);
 
         case 'ValueSet':
           return await this.handleValueSet(req, res, id);
@@ -81,10 +82,49 @@ class ReadWorker extends TerminologyWorker {
   /**
    * Handle CodeSystem read
    */
-  handleCodeSystem(req, res, id) {
+  async handleCodeSystem(req, res, id) {
     let cs = this.provider.getCodeSystemById(this.opContext, id);
     if (cs != null) {
       return res.json(cs.jsonObj);
+    }
+
+    if (id.startsWith("x-")) {
+      cs = this.provider.getCodeSystemFactoryById(this.opContext, id.substring(2));
+      if (cs != null) {
+        let json = {
+          resourceType: "CodeSystem",
+          id: "x-" + cs.id(),
+          url: cs.system(),
+          name: cs.name(),
+          status: "active",
+          description: "This is a place holder for the code system which is fully supported through internal means (not by this code system)",
+          content: "not-present"
+        }
+        if (cs.version()) {
+          json.version = cs.version();
+        }
+        if (cs.iteratable()) {
+          json.content =  "conplete",
+          json.concept = [];
+          let csp = cs.build(this.opContext, []);
+          let iter = await csp.iteratorAll();
+          let c = await csp.nextContext(iter);
+          while (c) {
+            let cc = {
+              code: await csp.code(c),
+              display: await csp.display(c)
+            }
+            let def = await csp.definition(c);
+            if (def) {
+              cc.definition = def;
+            }
+            json.concept.push(cc);
+            c = await csp.nextContext(iter);
+          }
+
+        }
+        return res.json(json);
+      }
     }
 
     return res.status(404).json({

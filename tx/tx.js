@@ -33,6 +33,7 @@ const {ValueSetXML} = require("./xml/valueset-xml");
 const {ConceptMapXML} = require("./xml/conceptmap-xml");
 const {TxHtmlRenderer} = require("./tx-html");
 const {Renderer} = require("./library/renderer");
+const {OperationsWorker} = require("./workers/operations");
 
 class TXModule {
   constructor() {
@@ -371,6 +372,7 @@ class TXModule {
 
     // ===== Operations =====
 
+
     // CodeSystem/$lookup (GET and POST)
     router.get('/CodeSystem/\\$lookup', (req, res) => {
       let worker = new LookupWorker(req.txOpContext, this.log, req.txProvider, this.languages, this.i18n);
@@ -564,6 +566,11 @@ class TXModule {
         }
       });
     }
+
+    router.get('/op.html',  async(req, res) => {
+      let worker = new OperationsWorker(req.txOpContext, this.log, req.txProvider, this.languages, this.i18n);
+      worker.handle(req, res);
+    });
 
     // Metadata / CapabilityStatement
     router.get('/metadata', async (req, res) => {
