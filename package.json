@@ -25,6 +25,9 @@
     "import": "node tx-import.js",
     "tx-import": "node tx/importers/tx-import.js"
   },
+  "overrides": {
+    "tar": "7.5.6"
+  },
   "dependencies": {
     "axios": "^1.11.0",
     "base45": "^3.0.0",
