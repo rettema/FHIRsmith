@@ -8,10 +8,11 @@ const path = require('path');
 const htmlServer = require('../common/html-server');
 const Logger = require('../common/logger');
 const packageJson = require("../package.json");
+const { Liquid } = require('liquidjs');
 
 const txHtmlLog = Logger.getInstance().child({ module: 'tx-html' });
 
-const TEMPLATE_PATH = path.join(__dirname, 'tx-template.html');
+const TEMPLATE_PATH = path.join(__dirname, 'html', 'tx-template.html');
 
 // Search parameters for the search form
 const SEARCH_PARAMS = [
@@ -55,9 +56,11 @@ function loadTemplate() {
 
 class TxHtmlRenderer {
   renderer;
+  liquid;
 
-  constructor(renderer) {
+  constructor(renderer, liquid) {
     this.renderer = renderer;
+    this.liquid = liquid;
   }
 
   /**
@@ -142,80 +145,13 @@ class TxHtmlRenderer {
     }
   }
 
-
 // eslint-disable-next-line no-unused-vars
-  buildSearchForm(req, mode, params) {
-    let html = '';
-
-    // Search form
-    html += '<h3>Search</h3>';
-
-    // Add an ID to the form so JavaScript can update its action
-    html += `<form method="get" id="searchForm" action="${this.escapeHtml(req.baseUrl)}/CodeSystem">`;
-    html += '<table class="grid" cellpadding="0" cellspacing="0">';
-    html += '<tr>';
-    html += '<td colspan="2">URL: <input type="text" name="url" size="40"/></td>';
-    html += '<td>Version: <input type="text" name="version"/></td>';
-    html += '</tr>';
-    html += '<tr>';
-    html += '<td title="Searches in name, title, description, publisher">Text: <input type="text" name="text"/></td>';
-    html += '<td>Status: <select name="status" class="form-select"><option value="">(any status)</option>';
-    html += '<option value="draft">draft</option><option value="active">active</option>';
-    html += '<option value="retired">retired</option><option value="unknown">unknown</option></select></td>';
-    html += '<td>Language: <input type="text" name="lang" size="10"/> (ietf code)</td>';
-    html += '</tr>';
-    html += '<tr>';
-    html += '<td colspan="2" title="CodeSystem - for supplements, value sets, and concept maps">System: <input type="text" name="system" size="40"/></td>';
-    html += '<td>CS Content: <select name="content-mode" class="form-select"><option value="">(any content)</option>';
-    html += '<option value="not-present">not-present</option><option value="example">example</option>';
-    html += '<option value="fragment">fragment</option><option value="complete">complete</option>';
-    html += '<option value="supplement">supplement</option></select></td>';
-    html += '</tr>';
-    html += '</table>';
-
-    // Hidden input for _elements (will be enabled/disabled by JavaScript)
-    html += '<input type="hidden" name="_elements" id="elementsInput" value="url,version,name,title,status,content,date" disabled/>';
-
-    html += '<button type="submit" class="btn btn-primary">Search:</button>';
-    html += ` <input type="radio" name="mode" value="cs" checked onchange="updateSearchAction('${this.escapeHtml(req.baseUrl)}')"/> CodeSystems`;
-    html += ` <input type="radio" name="mode" value="vs" onchange="updateSearchAction('${this.escapeHtml(req.baseUrl)}')"/> ValueSets`;
-    html += ` <input type="radio" name="mode" value="cm" onchange="updateSearchAction('${this.escapeHtml(req.baseUrl)}')"/> ConceptMaps`;
-    html += ' | <input type="checkbox" id="summaryTable" onchange="updateSummaryTable()"/> <label for="summaryTable">Summary Table</label>';
-    html += '</form>';
-
-    html += '<p>Or see the <a href="op.html">Operations</a></p>';
-
-    // JavaScript to update form action and handle summary table preference
-    html += `<script>
-function updateSearchAction(baseUrl) {
-  const form = document.getElementById('searchForm');
-  const mode = document.querySelector('input[name="mode"]:checked').value;
-  const resourceMap = { cs: 'CodeSystem', vs: 'ValueSet', cm: 'ConceptMap' };
-  form.action = baseUrl + '/' + resourceMap[mode];
-}
-
-function updateSummaryTable() {
-  const checkbox = document.getElementById('summaryTable');
-  const elementsInput = document.getElementById('elementsInput');
-  elementsInput.disabled = !checkbox.checked;
-  localStorage.setItem('txSummaryTable', checkbox.checked);
-}
-
-// Restore summary table preference on page load
-document.addEventListener('DOMContentLoaded', function() {
-  const saved = localStorage.getItem('txSummaryTable');
-  if (saved === 'true') {
-    const checkbox = document.getElementById('summaryTable');
-    checkbox.checked = true;
-    document.getElementById('elementsInput').disabled = false;
-  }
-});
-</script>`;
-
+  async buildSearchForm(req, mode, params) {
+    const html = await this.liquid.renderFile('search-form', { baseUrl: this.escapeHtml(req.baseUrl) });
     return html;
   }
 
-  buildHomePage(req) {
+  async buildHomePage(req) {
     const provider = req.txProvider;
 
     let html = '';
@@ -281,36 +217,16 @@ document.addEventListener('DOMContentLoaded', function() {
     html += '</table>';
 
     html += '<hr/>';
-    html += this.buildSearchForm(req);
-    //
-    //
-    // // Translation form
-    // html += '<h6 class="mt-4">Translate</h6>';
-    // html += `<form method="get" action="${this.escapeHtml(req.baseUrl)}/ConceptMap/$translate">`;
-    // html += '<div class="row">';
-    // html += '<div><input type="text" name="system" placeholder="Source System" required/></div>';
-    // html += '<div><input type="text" name="code" placeholder="Code" required/></div>';
-    // html += '<div><input type="text" name="targetSystem" placeholder="Target System"/></div>';
-    // html += '</div>';
-    // html += '<div class="row">';
-    // html += '<div class="col-md-6 mb-2">';
-    // html += '</div>';
-    // html += '</div>';
-    // html += '<button type="submit" class="btn btn-primary">Translate</button>';
-    // html += '</form>';
-    //
-    // Search form for concept maps
-    // html += '<h6 class="mt-4">Search Concept Maps</h6>';
-    // html += `<form method="get" action="${this.escapeHtml(req.baseUrl)}/ConceptMap">`;
-    // html += '<div class="row">';
-    // html += '<div><input type="text" name="_id" placeholder="ID"/></div>';
-    // html += '<div><input type="text" name="url" placeholder="URL"/></div>';
-    // html += '<div><input type="text" name="name" placeholder="Name"/></div>';
-    // html += '<div><input type="text" name="title" placeholder="Title"/></div>';
-    // html += '</div>';
-    // html += '<button type="submit" class="btn btn-primary">Search</button>';
-    // html += '</form>';
-    // html += '</div></div>';
+    // ===== Metrics Graphs =====
+    const metrics = req.txMetrics();
+    html += await this.liquid.renderFile('home-metrics', {
+      memoryHistoryJson: JSON.stringify(metrics.memoryHistory),
+      requestHistoryJson: JSON.stringify(metrics.requestHistory),
+      startTime: provider.startTime
+    });
+
+    html += '<hr/>';
+    html += await this.buildSearchForm(req);
 
     // ===== Packages and Factories Section =====
     html += '<hr/><h3>Content Sources &amp; Code System Factories</h3>';
@@ -367,7 +283,7 @@ document.addEventListener('DOMContentLoaded', function() {
    */
   async render(json, req, inBundle = false) {
     if (req && req.path == "/") {
-      return this.buildHomePage(req);
+      return await this.buildHomePage(req);
     } else {
       try {
         const resourceType = json.resourceType;
@@ -680,35 +596,10 @@ document.addEventListener('DOMContentLoaded', function() {
     let html = await this.renderResourceWithNarrative(json, await this.renderer.renderCodeSystem(json));
 
     if (!inBundle) {
-      const opsId = this.generateResourceId();
-
-      html += '<div class="operations" style="margin-top: 20px;">';
-      html += `<button type="button" class="btn btn-sm btn-outline-secondary" onclick="toggleOperations('${opsId}')">Show Operations</button>`;
-      html += `<div id="${opsId}" style="display: none; margin-top: 10px;">`;
-
-      // Lookup form
-      html += '<div class="operation-form" style="margin-bottom: 15px;">';
-      html += '<strong>Lookup</strong>';
-      html += `<form method="get" action="$lookup" style="display: inline-block; margin-left: 10px;">`;
-      html += `<input type="hidden" name="system" value="${this.escapeHtml(json.url || '')}"/>`;
-      html += '<input type="text" name="code" placeholder="Code" required size="20"/>';
-      html += ' <button type="submit" class="btn btn-sm btn-primary">Lookup</button>';
-      html += '</form>';
-      html += '</div>';
-
-      // Subsumes form
-      html += '<div class="operation-form" style="margin-bottom: 15px;">';
-      html += '<strong>Subsumes</strong>';
-      html += `<form method="get" action="$subsumes" style="display: inline-block; margin-left: 10px;">`;
-      html += `<input type="hidden" name="system" value="${this.escapeHtml(json.url || '')}"/>`;
-      html += '<input type="text" name="codeA" placeholder="Code A" required size="15"/>';
-      html += ' <input type="text" name="codeB" placeholder="Code B" required size="15"/>';
-      html += ' <button type="submit" class="btn btn-sm btn-primary">Subsumes</button>';
-      html += '</form>';
-      html += '</div>';
-
-      html += '</div>'; // close collapsible div
-      html += '</div>'; // close operations div
+      html += await this.liquid.renderFile('codesystem-operations', {
+        opsId: this.generateResourceId(),
+        url: this.escapeHtml(json.url || '')
+      });
     }
 
     return html;
@@ -721,66 +612,12 @@ document.addEventListener('DOMContentLoaded', function() {
     let html = await this.renderResourceWithNarrative(json, await this.renderer.renderValueSet(json));
 
     if (!inBundle) {
-      const opsId = this.generateResourceId();
-      const vcSystemId = this.generateResourceId();
-      const inferSystemId = this.generateResourceId();
-
-      html += '<div class="operations" style="margin-top: 20px;">';
-      html += `<button type="button" class="btn btn-sm btn-outline-secondary" onclick="toggleOperations('${opsId}')">Show Operations</button>`;
-      html += `<div id="${opsId}" style="display: none; margin-top: 10px;">`;
-
-      // Expand form
-      html += '<div class="operation-form" style="margin-bottom: 15px;">';
-      html += '<strong>Expand</strong>';
-      html += `<form method="get" action="$expand" style="margin-left: 10px; margin-top: 5px;">`;
-      html += `<input type="hidden" name="url" value="${this.escapeHtml(json.url || '')}"/>`;
-      html += '<table class="grid" cellpadding="0" cellspacing="0">';
-      html += '<tr>';
-      html += '<td>Filter: <input type="text" name="filter" size="20"/></td>';
-      html += '<td>Language: <input type="text" name="displayLanguage" size="10"/></td>';
-      html += '</tr>';
-      html += '<tr>';
-      html += '<td colspan="2">';
-      html += '<input type="checkbox" name="includeDesignations" id="expand_desig" value="true"/> ';
-      html += '<label for="expand_desig">Include Designations</label>';
-      html += ' <input type="checkbox" name="activeOnly" id="expand_active" value="true"/> ';
-      html += '<label for="expand_active">Active Only</label>';
-      html += '</td>';
-      html += '</tr>';
-      html += '</table>';
-      html += '<button type="submit" class="btn btn-sm btn-primary">Expand</button>';
-      html += '</form>';
-      html += '</div>';
-
-      // Validate-code form
-      html += '<div class="operation-form" style="margin-bottom: 15px;">';
-      html += '<strong>Validate Code (ValueSet)</strong>';
-      html += `<form method="get" action="$validate-code" style="margin-left: 10px; margin-top: 5px;">`;
-      html += `<input type="hidden" name="url" value="${this.escapeHtml(json.url || '')}"/>`;
-      html += `<input type="hidden" name="inferSystem" id="${inferSystemId}" value="true"/>`;
-      html += '<table class="grid" cellpadding="0" cellspacing="0">';
-      html += '<tr>';
-      html += `<td>System: <input type="text" name="system" id="${vcSystemId}" size="30" onchange="updateInferSystem('${vcSystemId}', '${inferSystemId}')"/></td>`;
-      html += '<td>Version: <input type="text" name="version" size="10"/></td>';
-      html += '</tr>';
-      html += '<tr>';
-      html += '<td>Code: <input type="text" name="code" size="20" required/></td>';
-      html += '<td>Display: <input type="text" name="display" size="20"/></td>';
-      html += '</tr>';
-      html += '<tr>';
-      html += '<td>Language: <input type="text" name="displayLanguage" size="10"/></td>';
-      html += '<td>';
-      html += '<input type="checkbox" name="abstract" value="true"/> ';
-      html += '<label>Abstract</label>';
-      html += '</td>';
-      html += '</tr>';
-      html += '</table>';
-      html += '<button type="submit" class="btn btn-sm btn-primary">Validate Code</button>';
-      html += '</form>';
-      html += '</div>';
-
-      html += '</div>'; // close collapsible div
-      html += '</div>'; // close operations div
+      html += await this.liquid.renderFile('valueset-operations', {
+        opsId: this.generateResourceId(),
+        vcSystemId: this.generateResourceId(),
+        inferSystemId: this.generateResourceId(),
+        url: this.escapeHtml(json.url || '')
+      });
     }
 
     return html;
@@ -1213,166 +1050,15 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // eslint-disable-next-line no-unused-vars
   async renderOperationsForm(json, req) {
-    let html = '';
-    html += '<h2>Expand ValueSet</h2>';
-    html += `<form method="get" action="ValueSet/$expand" style="margin-left: 10px; margin-top: 5px;">`;
-    html += '<table class="grid" cellpadding="0" cellspacing="0">';
-    html += '<tr>';
-    html += '<td style="position: relative;">';
-    html += 'URL: <input type="text" name="url" id="vsUrlInput" size="40" autocomplete="off"/><span style="color: maroon">*</span>';
-    html += '<div id="vsUrlSuggestions" class="typeahead-suggestions" style="display:none; position:absolute; background:white; border:1px solid #ccc; max-height:200px; overflow-y:auto; z-index:1000; width:100%;"></div>';
-    html += '</td>';
-    html += '<td>Version: <input type="text" name="valueSetVersion" size="10"/></td>';
-    html += '</tr>';
-    html += '<tr>';
-    html += '<td>Filter: <input type="text" name="filter" size="20"/></td>';
-    html += '<td>Language: <input type="text" name="displayLanguage" size="10"/></td>';
-    html += '</tr>';
-    html += '<tr>';
-    html += '<td colspan="2">';
-    html += '<input type="checkbox" name="includeDesignations" id="expand_desig" value="true"/> ';
-    html += '<label for="expand_desig">Include Designations</label>';
-    html += ' <input type="checkbox" name="activeOnly" id="expand_active" value="true"/> ';
-    html += '<label for="expand_active">Active Only</label>';
-    html += ' <input type="checkbox" name="excludeNested" id="expand_excludeNested" value="true"/> ';
-    html += '<label for="expand_excludeNested">Not nested</label>';
-    html += '</td>';
-    html += '</tr>';
-    html += '</table>';
-    html += '<button type="submit" class="btn btn-sm btn-primary">Expand</button>';
-    html += '</form>';
-
     const vcSystemId = this.generateResourceId();
     const inferSystemId = this.generateResourceId();
 
-    // General Validate-code form
-    html += '<h2>Validate Code</h2>';
-    html += `<form method="get" action="ValueSet/$validate-code" style="margin-left: 10px; margin-top: 5px;">`;
-    html += `<input type="hidden" name="inferSystem" id="${inferSystemId}" value="true"/>`;
-    html += '<table class="grid" cellpadding="0" cellspacing="0">';
-    html += '<tr>';
-    html += '<td style="position: relative;">';
-    html += 'ValueSet URL: <input type="text" name="url" id="vcVsUrlInput" size="40" autocomplete="off"/><span style="color: maroon">*</span>';
-    html += '<div id="vcVsUrlSuggestions" class="typeahead-suggestions" style="display:none; position:absolute; background:white; border:1px solid #ccc; max-height:200px; overflow-y:auto; z-index:1000; width:100%;"></div>';
-    html += '</td>';
-    html += '<td>ValueSet Version: <input type="text" name="valueSetVersion" size="10"/></td>';
-    html += '</tr>';
-    html += '<tr>';
-    html += `<td>System: <input type="text" name="system" id="${vcSystemId}" size="30" onchange="updateInferSystem('${vcSystemId}', '${inferSystemId}')"/></td>`;
-    html += '<td>Version: <input type="text" name="version" size="10"/></td>';
-    html += '</tr>';
-    html += '<tr>';
-    html += '<td>Code: <input type="text" name="code" size="20" required/><span style="color: maroon">*</span></td>';
-    html += '<td>Display: <input type="text" name="display" size="20"/></td>';
-    html += '</tr>';
-    html += '<tr>';
-    html += '<td>Language: <input type="text" name="displayLanguage" size="10"/></td>';
-    html += '<td>';
-    html += '<input type="checkbox" name="abstract" value="true"/> ';
-    html += '<label>Abstract</label>';
-    html += '</td>';
-    html += '</tr>';
-    html += '</table>';
-    html += '<button type="submit" class="btn btn-sm btn-primary">Validate Code</button>';
-    html += '</form>';
-
-    // Embed the value set list as JSON and add typeahead script for both forms
-    html += `<script>
-(function() {
-  const valueSets = ${JSON.stringify(json.valueSets || [])};
-
-  // Setup typeahead for a given input/suggestions pair
-  function setupTypeahead(inputId, suggestionsId) {
-    const input = document.getElementById(inputId);
-    const suggestions = document.getElementById(suggestionsId);
-    let selectedIndex = -1;
-
-    input.addEventListener('input', function() {
-      const query = this.value.toLowerCase();
-      suggestions.innerHTML = '';
-      selectedIndex = -1;
-
-      if (query.length < 2) {
-        suggestions.style.display = 'none';
-        return;
-      }
-
-      const matches = valueSets
-        .filter(vs => vs.toLowerCase().includes(query))
-        .slice(0, 50);
-
-      if (matches.length === 0) {
-        suggestions.style.display = 'none';
-        return;
-      }
-
-      for (const match of matches) {
-        const div = document.createElement('div');
-        div.textContent = match;
-        div.style.padding = '4px 8px';
-        div.style.cursor = 'pointer';
-        div.addEventListener('mouseenter', function() {
-          this.style.backgroundColor = '#e0e0e0';
-        });
-        div.addEventListener('mouseleave', function() {
-          this.style.backgroundColor = 'white';
-        });
-        div.addEventListener('click', function() {
-          input.value = match;
-          suggestions.style.display = 'none';
-        });
-        suggestions.appendChild(div);
-      }
-
-      suggestions.style.display = 'block';
-    });
-
-    input.addEventListener('keydown', function(e) {
-      const items = suggestions.querySelectorAll('div');
-      if (items.length === 0) return;
-
-      if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        selectedIndex = Math.min(selectedIndex + 1, items.length - 1);
-        updateSelection(items);
-      } else if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        selectedIndex = Math.max(selectedIndex - 1, 0);
-        updateSelection(items);
-      } else if (e.key === 'Enter' && selectedIndex >= 0) {
-        e.preventDefault();
-        input.value = items[selectedIndex].textContent;
-        suggestions.style.display = 'none';
-      } else if (e.key === 'Escape') {
-        suggestions.style.display = 'none';
-      }
-    });
-
-    function updateSelection(items) {
-      items.forEach((item, i) => {
-        item.style.backgroundColor = i === selectedIndex ? '#e0e0e0' : 'white';
-      });
-      if (selectedIndex >= 0) {
-        items[selectedIndex].scrollIntoView({ block: 'nearest' });
-      }
-    }
-
-    document.addEventListener('click', function(e) {
-      if (!input.contains(e.target) && !suggestions.contains(e.target)) {
-        suggestions.style.display = 'none';
-      }
+    return await this.liquid.renderFile('operations-form', {
+      vcSystemId,
+      inferSystemId,
+      valueSetsJson: JSON.stringify(json.valueSets || [])
     });
   }
-
-  // Initialize typeahead for both forms
-  setupTypeahead('vsUrlInput', 'vsUrlSuggestions');
-  setupTypeahead('vcVsUrlInput', 'vcVsUrlSuggestions');
-})();
-</script>`;
-
-    return html;
-  }
-
 }
 
 module.exports = {

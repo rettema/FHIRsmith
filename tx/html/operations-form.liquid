@@ -1,0 +1,148 @@
+<h2>Expand ValueSet</h2>
+<form method="get" action="ValueSet/$expand" style="margin-left: 10px; margin-top: 5px;">
+  <table class="grid" cellpadding="0" cellspacing="0">
+    <tr>
+      <td style="position: relative;">
+        URL: <input type="text" name="url" id="vsUrlInput" size="40" autocomplete="off"/><span style="color: maroon">*</span>
+        <div id="vsUrlSuggestions" class="typeahead-suggestions" style="display:none; position:absolute; background:white; border:1px solid #ccc; max-height:200px; overflow-y:auto; z-index:1000; width:100%;"></div>
+      </td>
+      <td>Version: <input type="text" name="valueSetVersion" size="10"/></td>
+    </tr>
+    <tr>
+      <td>Filter: <input type="text" name="filter" size="20"/></td>
+      <td>Language: <input type="text" name="displayLanguage" size="10"/></td>
+    </tr>
+    <tr>
+      <td colspan="2">
+        <input type="checkbox" name="includeDesignations" id="expand_desig" value="true"/>
+        <label for="expand_desig">Include Designations</label>
+        <input type="checkbox" name="activeOnly" id="expand_active" value="true"/>
+        <label for="expand_active">Active Only</label>
+        <input type="checkbox" name="excludeNested" id="expand_excludeNested" value="true"/>
+        <label for="expand_excludeNested">Not nested</label>
+      </td>
+    </tr>
+  </table>
+  <button type="submit" class="btn btn-sm btn-primary">Expand</button>
+</form>
+
+<h2>Validate Code</h2>
+<form method="get" action="ValueSet/$validate-code" style="margin-left: 10px; margin-top: 5px;">
+  <input type="hidden" name="inferSystem" id="{{ inferSystemId }}" value="true"/>
+  <table class="grid" cellpadding="0" cellspacing="0">
+    <tr>
+      <td style="position: relative;">
+        ValueSet URL: <input type="text" name="url" id="vcVsUrlInput" size="40" autocomplete="off"/><span style="color: maroon">*</span>
+        <div id="vcVsUrlSuggestions" class="typeahead-suggestions" style="display:none; position:absolute; background:white; border:1px solid #ccc; max-height:200px; overflow-y:auto; z-index:1000; width:100%;"></div>
+      </td>
+      <td>ValueSet Version: <input type="text" name="valueSetVersion" size="10"/></td>
+    </tr>
+    <tr>
+      <td>System: <input type="text" name="system" id="{{ vcSystemId }}" size="30" onchange="updateInferSystem('{{ vcSystemId }}', '{{ inferSystemId }}')"/></td>
+      <td>Version: <input type="text" name="version" size="10"/></td>
+    </tr>
+    <tr>
+      <td>Code: <input type="text" name="code" size="20" required/><span style="color: maroon">*</span></td>
+      <td>Display: <input type="text" name="display" size="20"/></td>
+    </tr>
+    <tr>
+      <td>Language: <input type="text" name="displayLanguage" size="10"/></td>
+      <td>
+        <input type="checkbox" name="abstract" value="true"/>
+        <label>Abstract</label>
+      </td>
+    </tr>
+  </table>
+  <button type="submit" class="btn btn-sm btn-primary">Validate Code</button>
+</form>
+
+<script>
+(function() {
+  const valueSets = {{ valueSetsJson }};
+
+  function setupTypeahead(inputId, suggestionsId) {
+    const input = document.getElementById(inputId);
+    const suggestions = document.getElementById(suggestionsId);
+    let selectedIndex = -1;
+
+    input.addEventListener('input', function() {
+      const query = this.value.toLowerCase();
+      suggestions.innerHTML = '';
+      selectedIndex = -1;
+
+      if (query.length < 2) {
+        suggestions.style.display = 'none';
+        return;
+      }
+
+      const matches = valueSets
+        .filter(vs => vs.toLowerCase().includes(query))
+        .slice(0, 50);
+
+      if (matches.length === 0) {
+        suggestions.style.display = 'none';
+        return;
+      }
+
+      for (const match of matches) {
+        const div = document.createElement('div');
+        div.textContent = match;
+        div.style.padding = '4px 8px';
+        div.style.cursor = 'pointer';
+        div.addEventListener('mouseenter', function() {
+          this.style.backgroundColor = '#e0e0e0';
+        });
+        div.addEventListener('mouseleave', function() {
+          this.style.backgroundColor = 'white';
+        });
+        div.addEventListener('click', function() {
+          input.value = match;
+          suggestions.style.display = 'none';
+        });
+        suggestions.appendChild(div);
+      }
+
+      suggestions.style.display = 'block';
+    });
+
+    input.addEventListener('keydown', function(e) {
+      const items = suggestions.querySelectorAll('div');
+      if (items.length === 0) return;
+
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        selectedIndex = Math.min(selectedIndex + 1, items.length - 1);
+        updateSelection(items);
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        selectedIndex = Math.max(selectedIndex - 1, 0);
+        updateSelection(items);
+      } else if (e.key === 'Enter' && selectedIndex >= 0) {
+        e.preventDefault();
+        input.value = items[selectedIndex].textContent;
+        suggestions.style.display = 'none';
+      } else if (e.key === 'Escape') {
+        suggestions.style.display = 'none';
+      }
+    });
+
+    function updateSelection(items) {
+      items.forEach((item, i) => {
+        item.style.backgroundColor = i === selectedIndex ? '#e0e0e0' : 'white';
+      });
+      if (selectedIndex >= 0) {
+        items[selectedIndex].scrollIntoView({ block: 'nearest' });
+      }
+    }
+
+    document.addEventListener('click', function(e) {
+      if (!input.contains(e.target) && !suggestions.contains(e.target)) {
+        suggestions.style.display = 'none';
+      }
+    });
+  }
+
+  setupTypeahead('vsUrlInput', 'vsUrlSuggestions');
+  setupTypeahead('vcVsUrlInput', 'vcVsUrlSuggestions');
+})();
+</script>

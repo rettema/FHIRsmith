@@ -14,6 +14,7 @@ const { LanguageDefinitions } = require('../library/languages');
 const { I18nSupport } = require('../library/i18nsupport');
 const { CodeSystemXML } = require('./xml/codesystem-xml');
 const txHtml = require('./tx-html');
+const { Liquid } = require('liquidjs');
 
 // Import workers
 const ReadWorker = require('./workers/read');
@@ -45,6 +46,17 @@ class TXModule {
     this.languages = null; // LanguageDefinitions
     this.i18n = null; // I18nSupport
     this.metadataHandler = null; // MetadataHandler
+    this.liquid = new Liquid({
+      root: path.join(__dirname, 'html'),  // optional: where to look for templates
+      extname: '.liquid'    // optional: default extension
+    });
+    this.metrics = {
+      startRss: process.memoryUsage().rss,
+      startTime: Date.now(),
+      memoryHistory: [],      // { time: timestamp, rss: bytes }
+      requestHistory: [],     // { time: timestamp, count: number }
+      requestCountSnapshot: 0
+    };
   }
 
   /**
@@ -129,6 +141,7 @@ class TXModule {
     }
 
     this.log.info(`TX module initialized with ${config.endpoints.length} endpoint(s)`);
+    this.startMetricsCollection();
   }
 
   /**
@@ -156,7 +169,7 @@ class TXModule {
     this.log.info(`Setting up endpoint: ${endpointPath} (FHIR v${fhirVersion}, context: ${context || 'none'})`);
 
     // Create the provider once for this endpoint
-    const provider = await this.library.cloneWithFhirVersion(fhirVersion, context, endpointPath);
+    this.provider = await this.library.cloneWithFhirVersion(fhirVersion, context, endpointPath);
 
     const router = express.Router();
 
@@ -198,7 +211,7 @@ class TXModule {
     // Middleware to attach provider, context, and timing to request, and wrap res.json for HTML
     router.use((req, res, next) => {
       // Increment request count
-      provider.requestCount++;
+      this.provider.requestCount++;
 
       // Generate unique request ID
       const requestId = this.generateRequestId();
@@ -213,13 +226,14 @@ class TXModule {
       );
 
       // Attach everything to request
-      req.txProvider = provider;
+      req.txProvider = this.provider;
       req.txEndpoint = endpointInfo;
       req.txStartTime = Date.now();
       req.txOpContext = opContext;
       req.txLanguages = this.languages;
       req.txI18n = this.i18n;
       req.txLog = this.log;
+      req.txMetrics = this.getMetricsData.bind(this);
 
       // Add X-Request-Id header to response
       res.setHeader('X-Request-Id', requestId);
@@ -227,48 +241,54 @@ class TXModule {
       // Wrap res.json to intercept and convert to HTML if browser requests it, and log the request
       const originalJson = res.json.bind(res);
 
-      let txhtml = new TxHtmlRenderer(new Renderer(opContext, provider));
+      let txhtml = new TxHtmlRenderer(new Renderer(opContext, this.provider), this.liquid);
       res.json = async (data) => {
-        const duration = Date.now() - req.txStartTime;
-        const isHtml = txhtml.acceptsHtml(req);
-        const isXml = this.acceptsXml(req);
+        try {
+          const duration = Date.now() - req.txStartTime;
+          const isHtml = txhtml.acceptsHtml(req);
+          const isXml = this.acceptsXml(req);
 
-        let responseSize;
-        let result;
+          let responseSize;
+          let result;
 
-        if (isHtml) {
-          const title = txhtml.buildTitle(data, req);
-          const content= await txhtml.render(data, req);
-          const html = await txhtml.renderPage(title, content, req.txEndpoint, req.txStartTime);
-          responseSize = Buffer.byteLength(html, 'utf8');
-          res.setHeader('Content-Type', 'text/html');
-          result = res.send(html);
-        } else if (isXml) {
-          try {
-            const xml = this.convertResourceToXml(data);
-            responseSize = Buffer.byteLength(xml, 'utf8');
-            res.setHeader('Content-Type', 'application/fhir+xml');
-            result = res.send(xml);
-          } catch (err) {
-            console.error(err);
-            // Fall back to JSON if XML conversion not supported
-            this.log.warn(`XML conversion failed for ${data.resourceType}: ${err.message}, falling back to JSON`);
+          if (isHtml) {
+            const title = txhtml.buildTitle(data, req);
+            const content = await txhtml.render(data, req);
+            const html = await txhtml.renderPage(title, content, req.txEndpoint, req.txStartTime);
+            responseSize = Buffer.byteLength(html, 'utf8');
+            res.setHeader('Content-Type', 'text/html');
+            result = res.send(html);
+          } else if (isXml) {
+            try {
+              const xml = this.convertResourceToXml(data);
+              responseSize = Buffer.byteLength(xml, 'utf8');
+              res.setHeader('Content-Type', 'application/fhir+xml');
+              result = res.send(xml);
+            } catch (err) {
+              console.error(err);
+              // Fall back to JSON if XML conversion not supported
+              this.log.warn(`XML conversion failed for ${data.resourceType}: ${err.message}, falling back to JSON`);
+              const jsonStr = JSON.stringify(data);
+              responseSize = Buffer.byteLength(jsonStr, 'utf8');
+              result = originalJson(data);
+            }
+          } else {
             const jsonStr = JSON.stringify(data);
             responseSize = Buffer.byteLength(jsonStr, 'utf8');
             result = originalJson(data);
           }
-        } else {
-          const jsonStr = JSON.stringify(data);
-          responseSize = Buffer.byteLength(jsonStr, 'utf8');
-          result = originalJson(data);
+
+          // Log the request with request ID
+          const format = isHtml ? 'html' : (isXml ? 'xml' : 'json');
+          let li = req.logInfo ? "(" + req.logInfo + ")" : "";
+          this.log.info(`[${requestId}] ${req.method} ${format} ${res.statusCode} ${duration}ms ${responseSize}: ${req.originalUrl} ${li})`);
+
+          return result;
+        } catch (err) {
+          this.log.error(`Error rendering response: ${err.message}`);
+          console.error(err);
+          res.status(500).send('Internal Server Error');
         }
-
-        // Log the request with request ID
-        const format = isHtml ? 'html' : (isXml ? 'xml' : 'json');
-        let li = req.logInfo ? "("+req.logInfo+")" : "";
-        this.log.info(`[${requestId}] ${req.method} ${format} ${res.statusCode} ${duration}ms ${responseSize}: ${req.originalUrl} ${li})`);
-
-        return result;
       };
 
       next();
@@ -593,8 +613,8 @@ class TXModule {
     });
 
     // Root endpoint info
-    router.get('/', (req, res) => {
-      res.json({
+    router.get('/', async (req, res) => {
+      await res.json({
         resourceType: 'OperationOutcome',
         issue: [{
           severity: 'information',
@@ -695,6 +715,54 @@ class TXModule {
     return data;
   }
 
+  startMetricsCollection() {
+    // Collect metrics every ~14.4 minutes (100 points over 24 hours)
+    this.intervalMs = (24 * 60 * 60 * 1000) / 100; // ~864000ms = 14.4 min
+
+    // Take initial snapshot
+    this.recordMetrics();
+
+    setInterval(() => {
+      this.recordMetrics();
+    }, this.intervalMs);
+  }
+
+  recordMetrics() {
+    const now = Date.now();
+    const cutoff = now - (24 * 60 * 60 * 1000); // 24 hours ago
+
+    // Record memory
+    const currentRss = process.memoryUsage().rss;
+    this.metrics.memoryHistory.push({ time: now, rss: currentRss - this.metrics.startRss });
+
+    const requestsDelta = this.provider.requestCount - this.metrics.requestCountSnapshot;
+    const minutesSinceStart = this.metrics.memoryHistory.length > 1
+      ? this.intervalMs / 60000
+      : (now - this.metrics.startTime) / 60000;
+    const requestsPerMin = minutesSinceStart > 0 ? requestsDelta / minutesSinceStart : 0;
+
+    this.metrics.requestHistory.push({ time: now, rpm: requestsPerMin });
+    this.metrics.requestCountSnapshot = this.provider.requestCount;
+
+    // Prune old data (keep 24 hours)
+    this.metrics.memoryHistory = this.metrics.memoryHistory.filter(m => m.time > cutoff);
+    this.metrics.requestHistory = this.metrics.requestHistory.filter(r => r.time > cutoff);
+  }
+
+  getMetricsData() {
+    // Ensure we have current data point
+    const now = Date.now();
+    const lastMemory = this.metrics.memoryHistory[this.metrics.memoryHistory.length - 1];
+    if (!lastMemory || (now - lastMemory.time) > 60000) {
+      this.recordMetrics();
+    }
+
+    return {
+      memoryHistory: this.metrics.memoryHistory,
+      requestHistory: this.metrics.requestHistory,
+      startRss: this.metrics.startRss
+    };
+  }
 }
 
 module.exports = TXModule;

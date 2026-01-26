@@ -285,6 +285,11 @@ function buildRootPageContent() {
   return content;
 }
 
+// eslint-disable-next-line no-unused-vars
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection:', reason);
+});
+
 app.get('/', async (req, res) => {
   // Check if client wants HTML response
   const acceptsHtml = req.headers.accept && req.headers.accept.includes('text/html');
