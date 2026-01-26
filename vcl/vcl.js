@@ -11,11 +11,12 @@ const Logger = require('../common/logger');
 const vclLog = Logger.getInstance().child({ module: 'vcl' });
 
 class VCLModule {
-  constructor() {
+  constructor(stats) {
     this.router = express.Router();
     this.config = null;
     this.setupSecurityMiddleware();
     this.setupRoutes();
+    this.stats = stats;
   }
 
   setupSecurityMiddleware() {
@@ -181,6 +182,7 @@ class VCLModule {
 
     // VCL parsing endpoint
     this.router.get('/', this.validateQueryParams(vclParams), (req, res) => {
+      this.countRequest();
       var {vcl} = req.query;
 
       // Validation
@@ -235,6 +237,10 @@ class VCLModule {
     return {
       enabled: true
     };
+  }
+
+  countRequest() {
+    this.stats.requestCount++;
   }
 }
 

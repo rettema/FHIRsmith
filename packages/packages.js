@@ -17,7 +17,7 @@ const {validateParameter} = require("../library/utilities");
 const pckLog = Logger.getInstance().child({ module: 'packages' });
 
 class PackagesModule {
-  constructor() {
+  constructor(stats) {
     this.router = express.Router();
     this.config = null;
     this.db = null;
@@ -29,6 +29,7 @@ class PackagesModule {
     this.crawlerRunning = false;
     this.setupSecurityMiddleware();
     this.setupRoutes();
+    this.stats = stats;
   }
 
   setupSecurityMiddleware() {
@@ -925,6 +926,7 @@ class PackagesModule {
 
     // GET /packages/catalog - Search packages or get updates
     this.router.get('/catalog', this.validateQueryParams(searchParams), async (req, res) => {
+      this.countRequest();
       try {
         await this.serveSearch(req, res);
         pckLog.info("/catalog"+searchParams);
@@ -936,6 +938,7 @@ class PackagesModule {
 
     // GET /packages/-/v1/search - Search packages (v1 API)
     this.router.get('/-/v1/search', this.validateQueryParams(searchParams), async (req, res) => {
+      this.countRequest();
       try {
         req.query.objWrapper = 'true';
         await this.serveSearch(req, res);
@@ -948,6 +951,7 @@ class PackagesModule {
 
     // GET /packages/updates
     this.router.get('/updates', this.validateQueryParams(updatesParams), async (req, res) => {
+      this.countRequest();
       try {
         let {dateType, daysValue, dateValue} = req.query;
         let dt = dateType || 'relative';
@@ -962,6 +966,7 @@ class PackagesModule {
     });
 
     this.router.get('/log', async (req, res) => {
+      this.countRequest();
       try {
         const acceptsHtml = req.headers.accept && req.headers.accept.includes('text/html');
 
@@ -1035,6 +1040,7 @@ class PackagesModule {
     this.router.get('/broken', this.validateQueryParams({ 
       filter: { maxLength: 100, pattern: /^[a-zA-Z0-9._-]*$/ } 
     }), async (req, res) => {
+      this.countRequest();
       try {
         const {filter} = req.query;
         await this.serveBroken(req, res, filter);
@@ -1047,6 +1053,8 @@ class PackagesModule {
 
     // GET /packages/:id/:version
     this.router.get('/:id/:version', (req, res, next) => {
+      this.countRequest();
+
       // Validate path parameters
       const { id, version } = req.params;
       
@@ -1075,6 +1083,8 @@ class PackagesModule {
 
     // GET /packages/:page.html
     this.router.get('/:page.html', (req, res, next) => {
+      this.countRequest();
+
       const { page } = req.params;
       
       if (!page || !/^[a-zA-Z0-9_-]+$/.test(page) || page.length > 50) {
@@ -1096,6 +1106,8 @@ class PackagesModule {
 
     // GET /packages/:id - Get package versions
     this.router.get('/:id([^/]+)', async (req, res) => {
+      this.countRequest();
+
       try {
         const {id} = req.params;
         const {sort} = req.query;
@@ -1116,6 +1128,8 @@ class PackagesModule {
 
     // Main packages endpoint
     this.router.get('/', this.validateQueryParams(searchParams), async (req, res) => {
+      this.countRequest();
+
       try {
         await this.serveSearch(req, res);
         pckLog.info(`/`);
@@ -1127,6 +1141,8 @@ class PackagesModule {
 
     // Module status endpoint (existing)
     this.router.get('/status', (req, res) => {
+      this.countRequest();
+
       const status = this.getStatus();
       res.json(status);
       pckLog.info('Serve Status');
@@ -1134,6 +1150,8 @@ class PackagesModule {
 
     // Manual crawler trigger (existing)
     this.router.post('/crawl', async (req, res) => {
+      this.countRequest();
+
       try {
         await this.runCrawler();
         res.json({
@@ -1152,6 +1170,8 @@ class PackagesModule {
 
     // Crawler statistics endpoint (existing)
     this.router.get('/stats', async (req, res) => {
+      this.countRequest();
+
       try {
         const acceptsHtml = req.headers.accept && req.headers.accept.includes('text/html');
 
@@ -1209,6 +1229,8 @@ class PackagesModule {
 
     // Search endpoint (existing)
     this.router.get('/search', async (req, res) => {
+      this.countRequest();
+
       const acceptsHtml = req.headers.accept && req.headers.accept.includes('text/html');
 
       if (acceptsHtml) {
@@ -1238,6 +1260,8 @@ class PackagesModule {
 
     // Catch-all for unsupported operations (place this last)
     this.router.all('*', (req, res) => {
+      this.countRequest();
+
       res.status(404).json({
         error: `The operation ${req.method} ${req.path} is not supported`
       });
@@ -2740,6 +2764,10 @@ class PackagesModule {
     content += '</div>';
 
     return content;
+  }
+
+  countRequest() {
+    this.stats.requestCount++;
   }
 }
 

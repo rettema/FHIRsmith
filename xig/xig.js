@@ -2069,8 +2069,14 @@ function getDatabaseInfo() {
   });
 }
 
+function countRequest() {
+  globalStats.requestCount++;
+}
+
 // Routes
 router.get('/:packagePid/:resourceType/:resourceId', async (req, res) => {
+  countRequest();
+
   const { packagePid, resourceType, resourceId } = req.params;
   
   // Check if this looks like a package/resource pattern
@@ -2091,6 +2097,8 @@ router.get('/:packagePid/:resourceType/:resourceId', async (req, res) => {
 
 // Resources list endpoint with control panel
 router.get('/', async (req, res) => {
+  countRequest();
+
   const startTime = Date.now(); // Add this at the very beginning
   
   try {
@@ -2179,6 +2187,8 @@ router.get('/', async (req, res) => {
 
 // Stats endpoint
 router.get('/stats', async (req, res) => {
+  countRequest();
+
   const startTime = Date.now(); // Add this at the very beginning
 
   try {
@@ -2229,7 +2239,8 @@ router.get('/stats', async (req, res) => {
 
 // Resource detail endpoint - handles individual resource pages
 router.get('/resource/:packagePid/:resourceType/:resourceId', async (req, res) => {
- const startTime = Date.now(); // Add this at the very beginning
+  countRequest();
+  const startTime = Date.now(); // Add this at the very beginning
   try {
     const { packagePid, resourceType, resourceId } = req.params;
     
@@ -2687,6 +2698,8 @@ function fixNarrative(narrativeHtml, baseUrl) {
 
 // JSON endpoints
 router.get('/status', async (req, res) => {
+  countRequest();
+
   try {
     const dbInfo = await getDatabaseInfo();
     res.json({
@@ -2706,6 +2719,8 @@ router.get('/status', async (req, res) => {
 });
 
 router.get('/cache', (req, res) => {
+  countRequest();
+
   res.json(getCacheStats());
 });
 
@@ -2726,10 +2741,11 @@ router.post('/update', async (req, res) => {
   }
 });
 
+let globalStats;
 // Initialize the XIG module
-async function initializeXigModule() {
+async function initializeXigModule(stats) {
   try {
-
+    globalStats = stats;
     loadTemplate();
     
     await initializeDatabase();

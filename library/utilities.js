@@ -27,6 +27,8 @@ const Utilities = {
   parseFloatOrDefault(value, defaultValue) {
   const num = parseFloat(value);
   return isNaN(num) ? defaultValue : num;
+
+
 }
 
 };
@@ -169,4 +171,26 @@ function isAbsoluteUrl(s) {
   return s && (s.startsWith('urn:') || s.startsWith('http:') || s.startsWith('https:') || s.startsWith('ftp:'));
 }
 
-module.exports = { Utilities, validateParameter, validateOptionalParameter, validateArrayParameter, validateResource, strToBool, getValuePrimitive, getValueDT, getValueName, isAbsoluteUrl };
+/**
+ * Escape HTML special characters
+ */
+function escapeHtml(text) {
+  if (text === null || text === undefined) {
+    return '';
+  }
+  if (typeof text !== 'string') {
+    return String(text);
+  }
+
+  const map = {
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#x27;'
+  };
+
+  return text.replace(/[&<>"']/g, m => map[m]);
+}
+
+module.exports = { Utilities, validateParameter, validateOptionalParameter, validateArrayParameter, validateResource, strToBool, getValuePrimitive, getValueDT, getValueName, isAbsoluteUrl, escapeHtml };

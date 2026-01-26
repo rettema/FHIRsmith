@@ -30,7 +30,7 @@ try {
 }
 
 class SHLModule {
-  constructor() {
+  constructor(stats) {
     this.db = null;
     this.config = null;
     this.router = express.Router();
@@ -38,6 +38,7 @@ class SHLModule {
     this.fhirValidator = null;
     this.setupSecurityMiddleware();
     this.setupRoutes();
+    this.stats = stats;
   }
 
   setupSecurityMiddleware() {
@@ -129,6 +130,7 @@ class SHLModule {
 
   // Body validation middleware
   validateJsonBody(requiredFields = [], optionalFields = []) {
+    this.countRequest();
     return (req, res, next) => {
       try {
         if (!req.body || typeof req.body !== 'object') {
@@ -566,6 +568,7 @@ class SHLModule {
 
     // FHIR Validation endpoint
     this.router.post('/validate', this.validateQueryParams(validationParams), async (req, res) => {
+      this.countRequest();
       if (!this.fhirValidator || !this.fhirValidator.isRunning()) {
         return res.status(503).json({
           resourceType: 'OperationOutcome',
@@ -628,6 +631,7 @@ class SHLModule {
 
     // Validator status endpoint
     this.router.get('/validate/status', (req, res) => {
+      this.countRequest();
       const status = {
         validatorRunning: this.fhirValidator ? this.fhirValidator.isRunning() : false,
         validatorInitialized: this.fhirValidator !== null
@@ -638,6 +642,7 @@ class SHLModule {
 
     // Load additional IG endpoint
     this.router.post('/validate/loadig', this.validateJsonBody(['packageId', 'version']), async (req, res) => {
+      this.countRequest();
       if (!this.fhirValidator || !this.fhirValidator.isRunning()) {
         return res.status(503).json({
           resourceType: 'OperationOutcome',
@@ -680,6 +685,7 @@ class SHLModule {
 
     // SHL create endpoint
     this.router.post('/create', this.validateJsonBody(['vhl', 'password', 'days']), (req, res) => {
+      this.countRequest();
       const { vhl, password, days } = req.body;
       
       if (typeof vhl !== 'boolean' || !password) {
@@ -734,6 +740,7 @@ class SHLModule {
 
     // SHL upload endpoint
     this.router.post('/upload', this.validateJsonBody(['uuid', 'pword', 'files']), (req, res) => {
+      this.countRequest();
       const { uuid, pword, files } = req.body;
       
       if (!uuid || !pword || !Array.isArray(files)) {
@@ -801,6 +808,7 @@ class SHLModule {
 
     // Helper function for the shared access logic
     const handleSHLAccess = (req, res) => {
+      this.countRequest();
       const { uuid } = req.params;
       
       let recipient, embeddedLengthMax;
@@ -888,6 +896,7 @@ class SHLModule {
 
     // SHL file endpoint - serves individual files
     this.router.get('/file/:fileId', (req, res) => {
+      this.countRequest();
       const { fileId } = req.params;
       
       // Validate fileId format
@@ -937,6 +946,7 @@ class SHLModule {
 
     // SHL sign endpoint
     this.router.post('/sign', this.validateJsonBody(['url']), async (req, res) => {
+      this.countRequest();
       const { url } = req.body;
       
       if (!url || typeof url !== 'string') {
@@ -1072,6 +1082,10 @@ class SHLModule {
       cleanupJob: this.cleanupJob ? 'Running' : 'Stopped',
       validator: this.fhirValidator ? (this.fhirValidator.isRunning() ? 'Running' : 'Stopped') : 'Not initialized'
     };
+  }
+
+  countRequest() {
+    this.stats.requestCount++;
   }
 }
 

@@ -9,7 +9,7 @@ const Logger = require('../common/logger');
 const regLog = Logger.getInstance().child({ module: 'registry' });
 
 class RegistryModule {
-  constructor() {
+  constructor(stats) {
     this.router = express.Router();
     this.logger = Logger.getInstance().child({ module: 'registry' });
     this.crawler = null;
@@ -23,6 +23,7 @@ class RegistryModule {
     // Thread-safe data storage
     this.currentData = null;
     this.dataLock = false;
+    this.stats = stats;
   }
 
   /**
@@ -354,6 +355,8 @@ class RegistryModule {
    * Handle main registry page
    */
   async handleMainPage(req, res) {
+    this.countRequest();
+
     const acceptsHtml = req.headers.accept && req.headers.accept.includes('text/html');
     
     if (!acceptsHtml) {
@@ -960,6 +963,8 @@ class RegistryModule {
    * Serves a form when accessed directly from a browser
    */
   handleResolveEndpoint(req, res) {
+    this.countRequest();
+
     try {
       const params = this._normalizeQueryParams(req.query);
       const { fhirVersion, url, valueSet, usage } = params;
@@ -1269,6 +1274,8 @@ class RegistryModule {
   }
 
   handleLogEndpoint(req, res) {
+    this.countRequest();
+
     try {
       const params = this._normalizeQueryParams(req.query);
       const requestedLimit = parseInt(params.limit, 10);
@@ -1368,6 +1375,10 @@ class RegistryModule {
     html += '</pre>';
 
     return html;
+  }
+
+  countRequest() {
+    this.stats.requestCount++;
   }
 }
 

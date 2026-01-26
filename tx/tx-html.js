@@ -217,15 +217,6 @@ class TxHtmlRenderer {
     html += '</table>';
 
     html += '<hr/>';
-    // ===== Metrics Graphs =====
-    const metrics = req.txMetrics();
-    html += await this.liquid.renderFile('home-metrics', {
-      memoryHistoryJson: JSON.stringify(metrics.memoryHistory),
-      requestHistoryJson: JSON.stringify(metrics.requestHistory),
-      startTime: provider.startTime
-    });
-
-    html += '<hr/>';
     html += await this.buildSearchForm(req);
 
     // ===== Packages and Factories Section =====

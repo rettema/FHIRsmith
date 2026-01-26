@@ -7,7 +7,7 @@ const session = require('express-session');
 const SQLiteStore = require('connect-sqlite3')(session);
 
 class PublisherModule {
-  constructor() {
+  constructor(stats) {
     this.router = express.Router();
     this.db = null;
     this.config = null;
@@ -15,6 +15,7 @@ class PublisherModule {
     this.taskProcessor = null;
     this.isProcessing = false;
     this.shutdownRequested = false;
+    this.stats = stats;
   }
 
   async initialize(config) {
@@ -623,6 +624,8 @@ class PublisherModule {
 
   // Route handlers
   async renderDashboard(req, res) {
+    this.countRequest();
+
     try {
       const htmlServer = require('../common/html-server');
 
@@ -689,6 +692,8 @@ class PublisherModule {
   }
 
   renderLogin(req, res) {
+    this.countRequest();
+
     const htmlServer = require('../common/html-server');
 
     let content = '<div class="row justify-content-center">';
@@ -714,6 +719,8 @@ class PublisherModule {
   }
 
   async handleLogin(req, res) {
+    this.countRequest();
+
     try {
       const { login, password } = req.body;
 
@@ -752,11 +759,15 @@ class PublisherModule {
   }
 
   handleLogout(req, res) {
+    this.countRequest();
+
     req.session.destroy();
     res.redirect('/publisher');
   }
 
   async renderTasks(req, res) {
+    this.countRequest();
+
     try {
       const htmlServer = require('../common/html-server');
       const tasks = await this.getTasks();
@@ -862,6 +873,8 @@ class PublisherModule {
   }
 
   async createTask(req, res) {
+    this.countRequest();
+
     try {
       const { website_id, github_org, github_repo, git_branch, npm_package_id, version } = req.body;
 
@@ -903,6 +916,8 @@ class PublisherModule {
   }
 
   async approveTask(req, res) {
+    this.countRequest();
+
     try {
       const taskId = req.params.id;
 
@@ -946,6 +961,8 @@ class PublisherModule {
   }
 
   async getTaskOutput(req, res) {
+    this.countRequest();
+
     try {
       const taskId = req.params.id;
       const task = await this.getTask(taskId);
@@ -1055,6 +1072,8 @@ class PublisherModule {
   }
 
   async renderWebsites(req, res) {
+    this.countRequest();
+
     try {
       const htmlServer = require('../common/html-server');
       const websites = await this.getWebsites();
@@ -1122,6 +1141,8 @@ class PublisherModule {
   }
 
   async createWebsite(req, res) {
+    this.countRequest();
+
     try {
       const { name, local_folder, server_update_script } = req.body;
 
@@ -1147,6 +1168,8 @@ class PublisherModule {
   }
 
   async renderUsers(req, res) {
+    this.countRequest();
+
     try {
       const htmlServer = require('../common/html-server');
       const users = await this.getUsers();
@@ -1244,6 +1267,8 @@ class PublisherModule {
   }
 
   async createUser(req, res) {
+    this.countRequest();
+
     try {
       const { name, login, password, is_admin } = req.body;
 
@@ -1275,6 +1300,8 @@ class PublisherModule {
   }
 
   async updatePermissions(req, res) {
+    this.countRequest();
+
     try {
       const { user_id } = req.body;
       const websites = await this.getWebsites();
@@ -1520,6 +1547,11 @@ class PublisherModule {
         shutdownRequested: this.shutdownRequested
       }
     };
+  }
+
+
+  countRequest() {
+    this.stats.requestCount++;
   }
 }
 

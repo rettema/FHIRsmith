@@ -25,6 +25,9 @@ const TXModule = require('./tx/tx.js');
 const packageJson = require('./package.json');
 
 const htmlServer = require('./common/html-server');
+const ServerStats = require("./stats");
+const {Liquid} = require("liquidjs");
+const {escapeHtml} = require("./library/utilities");
 htmlServer.useLog(serverLog);
 
 const app = express();
@@ -58,13 +61,15 @@ app.use(express.json({ limit: '50mb' }));
 // Module instances
 const modules = {};
 
+const stats = new ServerStats();
+
 // Initialize modules based on configuration
 async function initializeModules() {
 
   // Initialize SHL module
   if (config.modules.shl.enabled) {
     try {
-      modules.shl = new SHLModule();
+      modules.shl = new SHLModule(stats);
       await modules.shl.initialize(config.modules.shl);
       app.use('/shl', modules.shl.router);
     } catch (error) {
@@ -76,7 +81,7 @@ async function initializeModules() {
   // Initialize VCL module
   if (config.modules.vcl.enabled) {
     try {
-      modules.vcl = new VCLModule();
+      modules.vcl = new VCLModule(stats);
       await modules.vcl.initialize(config.modules.vcl);
       app.use('/VCL', modules.vcl.router);
     } catch (error) {
@@ -88,7 +93,7 @@ async function initializeModules() {
   // Initialize XIG module
   if (config.modules.xig.enabled) {
     try {
-      await xigModule.initializeXigModule();
+      await xigModule.initializeXigModule(stats);
       app.use('/xig', xigModule.router);
       modules.xig = xigModule;
     } catch (error) {
@@ -100,7 +105,7 @@ async function initializeModules() {
   // Initialize Packages module
   if (config.modules.packages.enabled) {
     try {
-      modules.packages = new PackagesModule();
+      modules.packages = new PackagesModule(stats);
       await modules.packages.initialize(config.modules.packages);
       app.use('/packages', modules.packages.router);
     } catch (error) {
@@ -112,7 +117,7 @@ async function initializeModules() {
   // Initialize Registry module
   if (config.modules.registry && config.modules.registry.enabled) {
     try {
-      modules.registry = new RegistryModule();
+      modules.registry = new RegistryModule(stats);
       await modules.registry.initialize(config.modules.registry);
       app.use('/tx-reg', modules.registry.router);
     } catch (error) {
@@ -124,7 +129,7 @@ async function initializeModules() {
   // Initialize Publisher module
   if (config.modules.publisher && config.modules.publisher.enabled) {
     try {
-      modules.publisher = new PublisherModule();
+      modules.publisher = new PublisherModule(stats);
       await modules.publisher.initialize(config.modules.publisher);
       app.use('/publisher', modules.publisher.router);
     } catch (error) {
@@ -136,7 +141,7 @@ async function initializeModules() {
   // Initialize Token module
   if (config.modules.token && config.modules.token.enabled) {
     try {
-      modules.token = new TokenModule();
+      modules.token = new TokenModule(stats);
       await modules.token.initialize(config.modules.token);
       app.use('/token', modules.token.router);
     } catch (error) {
@@ -148,7 +153,7 @@ async function initializeModules() {
   // Initialize NpmProjector module
   if (config.modules.npmprojector && config.modules.npmprojector.enabled) {
     try {
-      modules.npmprojector = new NpmProjectorModule();
+      modules.npmprojector = new NpmProjectorModule(stats);
       await modules.npmprojector.initialize(config.modules.npmprojector);
       const basePath = NpmProjectorModule.getBasePath(config.modules.npmprojector);
       app.use(basePath, modules.npmprojector.router);
@@ -163,7 +168,7 @@ async function initializeModules() {
   // because it supports multiple endpoints at different paths
   if (config.modules.tx && config.modules.tx.enabled) {
     try {
-      modules.tx = new TXModule();
+      modules.tx = new TXModule(stats);
       await modules.tx.initialize(config.modules.tx, app);
     } catch (error) {
       console.log(error);
@@ -205,7 +210,9 @@ async function loadTemplates() {
   }
 }
 
-function buildRootPageContent() {
+async function buildRootPageContent() {
+  stats.requestCount++;
+  let mc = 0;
   let content = '<div class="row mb-4">';
   content += '<div class="col-12">';
 
@@ -214,30 +221,35 @@ function buildRootPageContent() {
 
   // Check which modules are enabled and add them to the list
   if (config.modules.packages.enabled) {
+    mc++;
     content += '<li class="list-group-item">';
     content += '<a href="/packages" class="text-decoration-none">Package Server</a>: Browse and download FHIR Implementation Guide packages';
     content += '</li>';
   }
 
   if (config.modules.xig.enabled) {
+    mc++;
     content += '<li class="list-group-item">';
     content += '<a href="/xig" class="text-decoration-none">FHIR IG Statistics</a>: Statistics and analysis of FHIR Implementation Guides';
     content += '</li>';
   }
 
   if (config.modules.shl.enabled) {
+    mc++;
     content += '<li class="list-group-item">';
     content += '<a href="/shl" class="text-decoration-none">SHL Server</a>: SMART Health Links management and validation';
     content += '</li>';
   }
 
   if (config.modules.vcl.enabled) {
+    mc++;
     content += '<li class="list-group-item">';
     content += '<a href="/VCL" class="text-decoration-none">VCL Server</a>: ValueSet Compose Language expression parsing';
     content += '</li>';
   }
 
   if (config.modules.registry && config.modules.registry.enabled) {
+    mc++;
     content += '<li class="list-group-item">';
     content += '<a href="/tx-reg" class="text-decoration-none">Terminology Server Registry</a>: ';
     content += 'Discover and query FHIR terminology servers for code system and value set support';
@@ -245,6 +257,7 @@ function buildRootPageContent() {
   }
 
   if (config.modules.publisher && config.modules.publisher.enabled) {
+    mc++;
     content += '<li class="list-group-item">';
     content += '<a href="/publisher" class="text-decoration-none">FHIR Publisher</a>: ';
     content += 'Manage FHIR Implementation Guide publication tasks and approvals';
@@ -252,6 +265,7 @@ function buildRootPageContent() {
   }
 
   if (config.modules.token && config.modules.token.enabled) {
+    mc++;
     content += '<li class="list-group-item">';
     content += '<a href="/token" class="text-decoration-none">Token Server</a>: ';
     content += 'OAuth authentication and API key management for FHIR services';
@@ -259,6 +273,7 @@ function buildRootPageContent() {
   }
 
   if (config.modules.npmprojector && config.modules.npmprojector.enabled) {
+    mc++;
     content += '<li class="list-group-item">';
     content += '<a href="/npmprojector" class="text-decoration-none">NpmProjector</a>: ';
     content += 'Hot-reloading FHIR server with FHIRPath-based search indexes';
@@ -272,6 +287,7 @@ function buildRootPageContent() {
     if (config.modules.tx.endpoints && config.modules.tx.endpoints.length > 0) {
       content += '<ul class="mt-2 mb-0">';
       for (const endpoint of config.modules.tx.endpoints) {
+        mc++;
         content += `<li><a href="${endpoint.path}" class="text-decoration-none">${endpoint.path}</a> (FHIR v${endpoint.fhirVersion}${endpoint.context ? ', context: ' + endpoint.context : ''})</li>`;
       }
       content += '</ul>';
@@ -280,8 +296,57 @@ function buildRootPageContent() {
   }
 
   content += '</ul>';
-  content += '</div>';
 
+  content += '<hr/>';
+
+
+  // Calculate uptime
+  const uptimeMs = Date.now() - stats.startTime;
+  const uptimeSeconds = Math.floor(uptimeMs / 1000);
+  const uptimeDays = Math.floor(uptimeSeconds / 86400);
+  const uptimeHours = Math.floor((uptimeSeconds % 86400) / 3600);
+  const uptimeMinutes = Math.floor((uptimeSeconds % 3600) / 60);
+  const uptimeSecs = uptimeSeconds % 60;
+  let uptimeStr = '';
+  if (uptimeDays > 0) uptimeStr += `${uptimeDays}d `;
+  if (uptimeHours > 0 || uptimeDays > 0) uptimeStr += `${uptimeHours}h `;
+  if (uptimeMinutes > 0 || uptimeHours > 0 || uptimeDays > 0) uptimeStr += `${uptimeMinutes}m `;
+  uptimeStr += `${uptimeSecs}s`;
+
+  // Memory usage
+  const memUsage = process.memoryUsage();
+  const heapUsedMB = (memUsage.heapUsed / 1024 / 1024).toFixed(2);
+  const heapTotalMB = (memUsage.heapTotal / 1024 / 1024).toFixed(2);
+  const rssMB = (memUsage.rss / 1024 / 1024).toFixed(2);
+
+  content += '<table class="grid">';
+  content += '<tr>';
+  content += `<td><strong>Module Count:</strong> ${mc}</td>`;
+  content += `<td><strong>Uptime:</strong> ${escapeHtml(uptimeStr)}</td>`;
+  content += `<td><strong>Request Count:</strong> ${stats.requestCount}</td>`;
+  content += '</tr>';
+  content += '<tr>';
+  content += `<td><strong>Heap Used:</strong> ${heapUsedMB} MB</td>`;
+  content += `<td><strong>Heap Total:</strong> ${heapTotalMB} MB</td>`;
+  content += `<td><strong>Process Memory:</strong> ${rssMB} MB</td>`;
+  content += '</tr>';
+
+  content += '</table>';
+
+
+  // ===== Metrics Graphs =====
+
+  const liquid = new Liquid({
+    root: path.join(__dirname, 'tx', 'html'),
+    extname: '.liquid'
+  });
+  content += await liquid.renderFile('home-metrics', {
+    memoryHistoryJson: JSON.stringify(stats.memoryHistory),
+    requestHistoryJson: JSON.stringify(stats.requestHistory),
+    startTime: stats.startTime
+  });
+
+  content += '</div>';
   return content;
 }
 
@@ -304,7 +369,7 @@ app.get('/', async (req, res) => {
         htmlServer.loadTemplate('root', templatePath);
       }
 
-      const content = buildRootPageContent();
+      const content = await buildRootPageContent();
       
       // Build basic stats for root page
       const stats = {
@@ -412,6 +477,7 @@ async function startServer() {
 
     // Start server
     app.listen(PORT, () => {
+      stats.markStarted();
       serverLog.info(`=== Server running on http://localhost:${PORT} ===`);
     });
     if (modules.packages && config.modules.packages.enabled) {

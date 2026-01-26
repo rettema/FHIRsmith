@@ -16,7 +16,7 @@ const fhirModels = {
   'dstu2': () => require('fhirpath/fhir-context/dstu2')
 };
 class NpmProjectorModule {
-  constructor() {
+  constructor(stats) {
     this.router = express.Router();
     this.log = Logger.getInstance().child({ module: 'npmprojector' });
     this.config = null;
@@ -25,6 +25,7 @@ class NpmProjectorModule {
     this.lastReloadTime = null;
     this.lastReloadStats = null;
     this.reloadCount = 0;
+    this.stats = stats;
   }
 
   /**
@@ -135,6 +136,8 @@ class NpmProjectorModule {
 
     // Root - module info
     this.router.get('/', (req, res) => {
+      this.countRequest();
+
       const indexer = this.getIndexer();
       const types = indexer.getResourceTypes();
       const stats = indexer.getStats();
@@ -159,12 +162,16 @@ class NpmProjectorModule {
 
     // Capability Statement (metadata)
     this.router.get('/metadata', (req, res) => {
+      this.countRequest();
+
       const indexer = this.getIndexer();
       res.json(this.buildCapabilityStatement(indexer));
     });
 
     // Stats endpoint
     this.router.get('/_stats', (req, res) => {
+      this.countRequest();
+
       const indexer = this.getIndexer();
       res.json({
         ...indexer.getStats(),
@@ -175,6 +182,8 @@ class NpmProjectorModule {
 
     // Trigger manual reload
     this.router.post('/_reload', (req, res) => {
+      this.countRequest();
+
       this.log.info('Manual reload triggered');
       this.watcher.triggerReload();
       res.json({ message: 'Reload triggered', reloadCount: this.reloadCount });
@@ -182,6 +191,8 @@ class NpmProjectorModule {
 
     // Read: GET /[type]/[id]
     this.router.get('/:resourceType/:id', (req, res) => {
+      this.countRequest();
+
       const { resourceType, id } = req.params;
       const indexer = this.getIndexer();
 
@@ -200,6 +211,8 @@ class NpmProjectorModule {
 
     // Search: GET /[type]?params...
     this.router.get('/:resourceType', (req, res) => {
+      this.countRequest();
+
       const { resourceType } = req.params;
       const indexer = this.getIndexer();
 
@@ -353,6 +366,11 @@ class NpmProjectorModule {
       this.watcher.stop();
     }
     this.log.info('NpmProjector module shut down');
+  }
+
+
+  countRequest() {
+    this.stats.requestCount++;
   }
 }
 

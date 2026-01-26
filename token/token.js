@@ -23,11 +23,12 @@ const Logger = require('../common/logger');
 const htmlServer = require('../common/html-server');
 
 class TokenModule {
-  constructor() {
+  constructor(stats) {
     this.router = express.Router();
     this.db = null;
     this.config = null;
     this.log = Logger.getInstance().child({ module: 'token' });
+    this.stats = stats;
   }
 
   async initialize(config) {
@@ -445,6 +446,8 @@ class TokenModule {
 
   // Web interface handlers
   async renderDashboard(req, res) {
+    this.countRequest();
+
     try {
       if (!req.isAuthenticated()) {
         return res.redirect('/token/login');
@@ -468,6 +471,8 @@ class TokenModule {
   }
 
   renderLogin(req, res) {
+    this.countRequest();
+
     if (req.isAuthenticated()) {
       return res.redirect('/token');
     }
@@ -486,6 +491,8 @@ class TokenModule {
   }
 
   async handleLogout(req, res) {
+    this.countRequest();
+
     const userId = req.user ? req.user.id : null;
     
     req.logout((err) => {
@@ -509,6 +516,8 @@ class TokenModule {
 
   // API Key management
   async createApiKey(req, res) {
+    this.countRequest();
+
     try {
       const { name, scopes = 'read' } = req.body;
       const userId = req.user.id;
@@ -557,6 +566,8 @@ class TokenModule {
   }
 
   async deleteApiKey(req, res) {
+    this.countRequest();
+
     try {
       const keyId = parseInt(req.params.id);
       const userId = req.user.id;
@@ -585,6 +596,8 @@ class TokenModule {
 
   // JSON API for other servers
   async validateApiKey(req, res) {
+    this.countRequest();
+
     try {
       const apiKey = req.params.key;
       
@@ -652,6 +665,8 @@ class TokenModule {
   }
 
   async recordUsage(req, res) {
+    this.countRequest();
+
     try {
       const apiKey = req.params.key;
       const { count = 1 } = req.body;
@@ -683,6 +698,8 @@ class TokenModule {
   }
 
   async getUsageStats(req, res) {
+    this.countRequest();
+
     try {
       const apiKey = req.params.key;
       const days = Math.min(parseInt(req.query.days) || 30, 365); // Max 1 year
@@ -1234,6 +1251,11 @@ class TokenModule {
         });
       });
     }
+  }
+
+
+  countRequest() {
+    this.stats.requestCount++;
   }
 }
 
