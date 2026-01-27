@@ -67,5 +67,5 @@ jobs:
           context: .
           push: true
           tags: |
-            ghcr.io/${{ github.actor }}/nodeserver:cibuild
-            ghcr.io/${{ github.actor }}/nodeserver:cibuild-${{ github.sha }}
+            ghcr.io/${{ github.repository }}/fhirsmith:cibuild
+            ghcr.io/${{ github.repository }}/fhirsmith:cibuild-${{ github.sha }}
