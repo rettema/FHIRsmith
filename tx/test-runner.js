@@ -5,14 +5,15 @@ const path = require('path');
 const fs = require('fs');
 const TXModule = require('../tx/tx.js');
 const ServerStats = require("../stats");
+const Logger = require("../common/logger");
 
 async function startTxTests() {
     await startServer();
-    // await loadValidator();
+    await loadValidator();
 }
 
 async function  finishTxTests() {
-    // await unloadValidator();
+    await unloadValidator();
     await stopServer();
 }
 
@@ -24,12 +25,11 @@ async function runTest(test) {
 const TEST_PORT = 9095;
 const VALIDATOR_PORT = 9096;
 const TEST_CONFIG_FILE = path.join(__dirname, 'fixtures', 'test-cases-setup.json');
-const VALIDATOR_JAR = path.join(__dirname, '..', '..', 'validator', 'validator_cli.jar'); // Adjust path as needed
-
 
 let server = null;
 let validator = null;
 let txModule = null;
+let log = null;
 
 async function startServer() {
     const app = express();
@@ -81,5 +81,34 @@ async function stopServer() {
     }
 }
 
+async function loadValidator() {
+    const validatorJarPath = path.join(__dirname, '../bin/validator_cli.jar');
+    log =  Logger.getInstance().child({ module: 'test-runner' });
+    validator = new FhirValidator(validatorJarPath, log);
+    const validatorConfig = {
+        version : '4.0',
+        txServer : 'http://localhost:'+TEST_PORT,
+        txLog : path.join(__dirname, '../logs/text-cases.log'),
+        port: VALIDATOR_PORT,
+        timeout: 60000
+    }
+    await validator.start(validatorConfig);
+}
 
+
+async function unloadValidator() {
+
+    // Stop FHIR validator
+    if (validator) {
+        try {
+            log.info('Stopping FHIR validator...');
+            await validator.stop();
+            log.info('FHIR validator stopped');
+        } catch (error) {
+            log.error('Error stopping FHIR validator:', error);
+        }
+        validator = null;
+    }
+
+}
 module.exports = { startTxTests, finishTxTests, runTest };

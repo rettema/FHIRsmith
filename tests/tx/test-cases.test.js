@@ -8,7 +8,7 @@ describe('Tx Tests', () => {
 
   beforeAll(async () => {
     await startTxTests();
-  }, 60000);
+  }, 600000);
   afterAll(async () => {
     await finishTxTests();
   });
