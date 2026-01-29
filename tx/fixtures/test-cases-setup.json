@@ -2,7 +2,7 @@
   "enabled": true,
   "consoleErrors": false,
   "host" : "local.host",
-  "librarySource": "tx/tx.fhir.org.yml",
+  "librarySource": "tx/fixtures/test-cases.yml",
   "endpoints": [
     {
       "path": "/r5",

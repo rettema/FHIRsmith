@@ -18,7 +18,14 @@ async function  finishTxTests() {
 }
 
 async function runTest(test) {
-    expect(true).toBe(true);
+    const params = {
+        server: 'http://localhost:'+TEST_PORT+"/r5",
+        suiteName: test.suite,
+        testName: test.test,
+        version: '5.0'
+    };
+    const result = await validator.runTxTest(params);
+    expect(result).toEqual({ result: true });
 }
 
 
@@ -30,6 +37,7 @@ let server = null;
 let validator = null;
 let txModule = null;
 let log = null;
+let stats = null;
 
 async function startServer() {
     const app = express();
@@ -49,7 +57,8 @@ async function startServer() {
     app.use(express.json({ limit: '50mb' }));
 
     // Initialize TX module only
-    txModule = new TXModule(new ServerStats());
+    stats = new ServerStats();
+    txModule = new TXModule(stats);
     await txModule.initialize(config, app);
 
     return new Promise((resolve, reject) => {
@@ -65,6 +74,8 @@ async function startServer() {
 }
 
 async function stopServer() {
+    stats.finishStats();
+
     if (txModule && typeof txModule.shutdown === 'function') {
         await txModule.shutdown();
         txModule = null;
@@ -72,6 +83,7 @@ async function stopServer() {
 
     if (server) {
         return new Promise((resolve) => {
+            server.closeAllConnections();
             server.close(() => {
                 console.log('Test server stopped');
                 server = null;
@@ -87,7 +99,7 @@ async function loadValidator() {
     validator = new FhirValidator(validatorJarPath, log);
     const validatorConfig = {
         version : '4.0',
-        txServer : 'http://localhost:'+TEST_PORT,
+        txServer : 'http://tx-dev.fhir.org',
         txLog : path.join(__dirname, '../logs/text-cases.log'),
         port: VALIDATOR_PORT,
         timeout: 60000

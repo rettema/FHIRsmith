@@ -2262,8 +2262,8 @@ describe('omop', () => {
     await runTest({"suite":"omop","test":"omop-basic-validation-coding-bad-version"});
   });
 
-  it('omop-basic-validation-codeableconcept-bad-display', async () => {
-    await runTest({"suite":"omop","test":"omop-basic-validation-codeableconcept-bad-display"});
+  it('omop-basic-validation-codeableconcept-bad-version', async () => {
+    await runTest({"suite":"omop","test":"omop-basic-validation-codeableconcept-bad-version"});
   });
 
   it('omop-basic-validation-code-good-vs', async () => {
@@ -2320,28 +2320,6 @@ describe('omop', () => {
 
   it('translate-loinc-implicit-bad', async () => {
     await runTest({"suite":"omop","test":"translate-loinc-implicit-bad"});
-  });
-
-});
-
-describe('UCUM', () => {
-  // UCUM Test Cases
-
-  it('lookup', async () => {
-    await runTest({"suite":"UCUM","test":"lookup"});
-  });
-
-  it('lookup-with-annotation', async () => {
-    await runTest({"suite":"UCUM","test":"lookup-with-annotation"});
-  });
-
-});
-
-describe('icd-11', () => {
-  // ICD-11 Test Cases
-
-  it('term-caps', async () => {
-    await runTest({"suite":"icd-11","test":"term-caps"});
   });
 
 });
