@@ -1257,6 +1257,9 @@ class ValueSetExpander {
       this.offset = 0;
     }
 
+    if (this.logExtraOutput) {
+      console.log('c/o/l: '+this.count+", "+this.offset+", "+this.limitCount);
+    }
     this.worker.opContext.log('start working');
     this.worker.deadCheck('expand');
 
@@ -1811,6 +1814,9 @@ class ExpandWorker extends TerminologyWorker {
     // Create expander and run expansion
     const expander = new ValueSetExpander(this, params);
     expander.logExtraOutput = logExtraOutput;
+    if (logExtraOutput) {
+      console.log(params.summary());
+    }
     return await expander.expand(valueSet, filter);
   }
 
