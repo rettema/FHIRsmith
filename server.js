@@ -378,7 +378,7 @@ app.get('/', async (req, res) => {
         processingTime: Date.now() - startTime
       };
 
-      const html = htmlServer.renderPage('root', 'FHIR Development Server', content, stats);
+      const html = htmlServer.renderPage('root', config.hostName || 'FHIRsmith Server', content, stats);
       res.setHeader('Content-Type', 'text/html');
       res.send(html);
     } catch (error) {

@@ -1653,7 +1653,10 @@ class ExpandWorker extends TerminologyWorker {
 
     // Handle tx-resource and cache-id parameters
     this.setupAdditionalResources(params);
-    let logExtraOutput = this.findParameter(params, 'logExtraOutput');
+    const logExtraOutput = this.findParameter(params, 'logExtraOutput');
+    if (logExtraOutput) {
+      console.log('Extra Logging:');
+    }
 
     let txp = new TxParameters(this.opContext.i18n.languageDefinitions, this.opContext.i18n, false);
     txp.readParams(params);
@@ -1724,7 +1727,11 @@ class ExpandWorker extends TerminologyWorker {
 
     // Handle tx-resource and cache-id parameters
     this.setupAdditionalResources(params);
-    let logExtraOutput = this.findParameter(params, 'logExtraOutput');
+    const logExtraOutput = this.findParameter(params, 'logExtraOutput');
+    if (logExtraOutput) {
+      console.log('Extra Logging:');
+    }
+
 
     let txp = new TxParameters(this.opContext.i18n.languageDefinitions, this.opContext.i18n, false);
     txp.readParams(params);
