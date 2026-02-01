@@ -24,9 +24,9 @@ try {
 const Logger = require('./library/logger');
 const serverLog = Logger.getInstance().child({ module: 'server' });
 
-const activeModules = Object.keys(config.modules)
+const activeModules = config.modules ? Object.keys(config.modules)
   .filter(mod => config.modules[mod].enabled)
-  .join(', ');
+  .join(', ') : [];
 serverLog.info(`Loaded Configuration. Active modules = ${activeModules}`);
 
 // Import modules
@@ -68,7 +68,7 @@ async function initializeModules() {
   stats = new ServerStats();
 
   // Initialize SHL module
-  if (config.modules.shl.enabled) {
+  if (config.modules?.shl?.enabled) {
     try {
       modules.shl = new SHLModule(stats);
       await modules.shl.initialize(config.modules.shl);
@@ -80,7 +80,7 @@ async function initializeModules() {
   }
 
   // Initialize VCL module
-  if (config.modules.vcl.enabled) {
+  if (config.modules?.vcl?.enabled) {
     try {
       modules.vcl = new VCLModule(stats);
       await modules.vcl.initialize(config.modules.vcl);
@@ -92,7 +92,7 @@ async function initializeModules() {
   }
   
   // Initialize XIG module
-  if (config.modules.xig.enabled) {
+  if (config.modules?.xig?.enabled) {
     try {
       await xigModule.initializeXigModule(stats);
       app.use('/xig', xigModule.router);
@@ -104,7 +104,7 @@ async function initializeModules() {
   }
 
   // Initialize Packages module
-  if (config.modules.packages.enabled) {
+  if (config.modules?.packages?.enabled) {
     try {
       modules.packages = new PackagesModule(stats);
       await modules.packages.initialize(config.modules.packages);
@@ -116,7 +116,7 @@ async function initializeModules() {
   }
 
   // Initialize Registry module
-  if (config.modules.registry && config.modules.registry.enabled) {
+  if (config.modules?.registry?.enabled) {
     try {
       modules.registry = new RegistryModule(stats);
       await modules.registry.initialize(config.modules.registry);
@@ -128,7 +128,7 @@ async function initializeModules() {
   }
 
   // Initialize Publisher module
-  if (config.modules.publisher && config.modules.publisher.enabled) {
+  if (config.modules?.publisher?.enabled) {
     try {
       modules.publisher = new PublisherModule(stats);
       await modules.publisher.initialize(config.modules.publisher);
@@ -140,7 +140,7 @@ async function initializeModules() {
   }
 
   // Initialize Token module
-  if (config.modules.token && config.modules.token.enabled) {
+  if (config.modules?.token?.enabled) {
     try {
       modules.token = new TokenModule(stats);
       await modules.token.initialize(config.modules.token);
@@ -152,7 +152,7 @@ async function initializeModules() {
   }
 
   // Initialize NpmProjector module
-  if (config.modules.npmprojector && config.modules.npmprojector.enabled) {
+  if (config.modules?.npmprojector?.enabled) {
     try {
       modules.npmprojector = new NpmProjectorModule(stats);
       await modules.npmprojector.initialize(config.modules.npmprojector);
@@ -167,7 +167,7 @@ async function initializeModules() {
   // Initialize TX module
   // Note: TX module registers its own endpoints directly on the app
   // because it supports multiple endpoints at different paths
-  if (config.modules.tx && config.modules.tx.enabled) {
+  if (config.modules?.tx?.enabled) {
     try {
       modules.tx = new TXModule(stats);
       await modules.tx.initialize(config.modules.tx, app);
