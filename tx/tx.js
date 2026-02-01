@@ -7,7 +7,7 @@
 
 const express = require('express');
 const path = require('path');
-const Logger = require('../common/logger');
+const Logger = require('../library/logger');
 const { Library } = require('./library');
 const { OperationContext, ResourceCache, ExpansionCache } = require('./operation-context');
 const { LanguageDefinitions } = require('../library/languages');

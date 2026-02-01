@@ -16,7 +16,7 @@ let testCases;
 
 async function load() {
     const packageServers = ['https://packages2.fhir.org/packages'];
-    const cacheFolder = path.join(__dirname, '../..', '.package-cache');
+    const cacheFolder = path.join(__dirname, '../..data/', 'terminology-cache');
     const packageManager = new PackageManager(packageServers, cacheFolder);
     const packagePath = await packageManager.fetch("hl7.fhir.uv.tx-ecosystem", "current");
     const fullPackagePath = path.join(cacheFolder, packagePath);

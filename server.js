@@ -8,9 +8,26 @@ const express = require('express');
 // const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
+const folders = require('./library/folder-setup');  // <-- ADD: load early
 
-const Logger = require('./common/logger');
+// Load configuration BEFORE logger
+let config;
+try {
+  const configPath = folders.filePath('config.json');  // <-- CHANGE: config now in data dir
+  const configData = fs.readFileSync(configPath, 'utf8');
+  config = JSON.parse(configData);
+} catch (error) {
+  console.error('Failed to load configuration:', error.message);
+  process.exit(1);
+}
+
+const Logger = require('./library/logger');
 const serverLog = Logger.getInstance().child({ module: 'server' });
+
+const activeModules = Object.keys(config.modules)
+  .filter(mod => config.modules[mod].enabled)
+  .join(', ');
+serverLog.info(`Loaded Configuration. Active modules = ${activeModules}`);
 
 // Import modules
 const SHLModule = require('./shl/shl.js');
@@ -24,30 +41,13 @@ const NpmProjectorModule = require('./npmprojector/npmprojector.js');
 const TXModule = require('./tx/tx.js');
 const packageJson = require('./package.json');
 
-const htmlServer = require('./common/html-server');
+const htmlServer = require('./library/html-server');
 const ServerStats = require("./stats");
 const {Liquid} = require("liquidjs");
 const {escapeHtml} = require("./library/utilities");
 htmlServer.useLog(serverLog);
 
 const app = express();
-
-// Load configuration
-let config;
-try {
-  const configPath = path.join(__dirname, 'config.json');
-  const configData = fs.readFileSync(configPath, 'utf8');
-  config = JSON.parse(configData);
-  
-  const activeModules = Object.keys(config.modules)
-    .filter(mod => config.modules[mod].enabled)
-    .join(', ');
-
-  serverLog.info(`Loaded Configuration. Active modules = ${activeModules}`);
-} catch (error) {
-  serverLog.error('Failed to load configuration:'+error.message);
-  process.exit(1);
-}
 
 const PORT = process.env.PORT || config.server.port || 3000;
 

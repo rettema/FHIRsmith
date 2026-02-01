@@ -5,7 +5,7 @@ const path = require('path');
 const fs = require('fs');
 const TXModule = require('../tx.js');
 const ServerStats = require("../../stats");
-const Logger = require("../../common/logger");
+const Logger = require("../../library/logger");
 const {txTestVersion} = require("./test-cases-version");
 
 let count = 0;

@@ -5,8 +5,8 @@
 //
 
 const path = require('path');
-const htmlServer = require('../common/html-server');
-const Logger = require('../common/logger');
+const htmlServer = require('../library/html-server');
+const Logger = require('../library/logger');
 const packageJson = require("../package.json");
 
 const txHtmlLog = Logger.getInstance().child({ module: 'tx-html' });
