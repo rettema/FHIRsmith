@@ -2,6 +2,7 @@ const fs = require('fs').promises;
 const sqlite3 = require('sqlite3').verbose();
 const { VersionUtilities } = require('../../library/version-utilities');
 const ValueSet = require("../library/valueset");
+const row = require("../library/valueset");
 
 // Columns that can be returned directly without parsing JSON
 const INDEXED_COLUMNS = ['id', 'url', 'version', 'date', 'description', 'name', 'publisher', 'status', 'title'];
@@ -399,7 +400,7 @@ class ValueSetDatabase {
    * @param {Array<string>|null} elements - Optional list of elements to return (for optimization)
    * @returns {Promise<Array<Object>>} List of matching ValueSets
    */
-  async search(spaceId, searchParams, elements = null) {
+  async search(spaceId, map, searchParams, elements = null) {
     // Check if we can optimize by selecting only indexed columns
     const canOptimize = elements && elements.length > 0 &&
       elements.every(e => INDEXED_COLUMNS.includes(e));
@@ -445,12 +446,8 @@ class ValueSetDatabase {
             } else {
               // Fall back to parsing JSON
               results = rows.map(row => {
-                const parsed = JSON.parse(row.content);
-                // Prefix id with spaceId if provided
-                if (spaceId && parsed.id) {
-                  parsed.id = `${spaceId}-${parsed.id}`;
-                }
-                return parsed;
+                const vs = map.get(row.id);
+                return vs;
               });
             }
 
@@ -712,7 +709,7 @@ class ValueSetDatabase {
       selectClause = `SELECT DISTINCT ${columns}`;
     } else {
       // Full content needed
-      selectClause = 'SELECT DISTINCT v.content';
+      selectClause = 'SELECT DISTINCT v.id';
     }
 
     const query = `
