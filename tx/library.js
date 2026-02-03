@@ -647,6 +647,21 @@ class Library {
     }
 
   }
+
+  async close() {
+    for (let csp of this.codeSystemProviders) {
+      csp.close();
+    }
+    for (let csp of this.codeSystemFactories.values()) {
+      csp.close();
+    }
+    for (let vsp of this.valueSetProviders) {
+      vsp.close();
+    }
+    for (let cmp of this.conceptMapProviders) {
+      cmp.close();
+    }
+  }
 }
 
 module.exports = { Library };

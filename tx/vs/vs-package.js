@@ -46,6 +46,9 @@ class PackageValueSetProvider extends AbstractValueSetProvider {
     this.initialized = true;
   }
 
+  async close() {
+    await this.database.close();
+  }
   /**
    * Populate the database with value sets from the package
    * @returns {Promise<void>}
