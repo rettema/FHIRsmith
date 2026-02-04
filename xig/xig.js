@@ -2231,7 +2231,6 @@ router.get('/:packagePid/:resourceType/:resourceId', async (req, res) => {
 // Resources list endpoint with control panel
 router.get('/', async (req, res) => {
   const start = Date.now();
-  ;
   try {
 
     const startTime = Date.now(); // Add this at the very beginning
