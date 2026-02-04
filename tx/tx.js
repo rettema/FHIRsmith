@@ -132,6 +132,7 @@ class TXModule {
     // Load the library from YAML
     this.log.info(`Loading library from: ${config.librarySource}`);
     this.library = new Library(config.librarySource);
+    this.log.info(`Load...`);
     await this.library.load();
     this.log.info('Library loaded successfully');
 
