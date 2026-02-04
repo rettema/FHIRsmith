@@ -240,7 +240,6 @@ class LoincServices extends CodeSystemProvider {
   }
 
   async designations(context, displays) {
-console.log('debug at '+new Date().toISOString()+': start-designations');
     const ctxt = await this.#ensureContext(context);
     if (ctxt) {
       // Add main display
@@ -273,13 +272,12 @@ console.log('debug at '+new Date().toISOString()+': start-designations');
       // Add supplement designations
       this._listSupplementDesignations(ctxt.code, displays);
     }
-    console.log('debug at '+new Date().toISOString()+': finish-designations');
+
   }
 
   async extendLookup(ctxt, props, params) {
     validateArrayParameter(props, 'props', String);
     validateArrayParameter(params, 'params', Object);
-    console.log('debug at '+new Date().toISOString()+': extendLookup-1');
 
     if (typeof ctxt === 'string') {
       const located = await this.locate(ctxt);
@@ -288,27 +286,18 @@ console.log('debug at '+new Date().toISOString()+': start-designations');
       }
       ctxt = located.context;
     }
-    console.log('debug at '+new Date().toISOString()+': extendLookup-2');
 
     if (!(ctxt instanceof LoincProviderContext)) {
       throw new Error('Invalid context for LOINC lookup');
     }
-    console.log('debug at '+new Date().toISOString()+': extendLookup-3');
 
-    // Add relationships
-    await this.#addRelationshipProperties(ctxt, params);
-    console.log('debug at '+new Date().toISOString()+': extendLookup-4');
-
-    // Add properties
-    await this.#addConceptProperties(ctxt, params);
-    console.log('debug at '+new Date().toISOString()+': extendLookup-5');
-
-    // Add status
-    console.log('debug at '+new Date().toISOString()+': extendLookup-6');
-    await this.#addStatusProperty(ctxt, params);
-    console.log('debug at '+new Date().toISOString()+': extendLookup-7');
-    await this.#addRelatedNames(ctxt, params);
-    console.log('debug at '+new Date().toISOString()+': extendLookup-8');
+    // Run all property queries in parallel — they're independent reads on the same key
+    await Promise.all([
+      this.#addRelationshipProperties(ctxt, params),
+      this.#addConceptProperties(ctxt, params),
+      this.#addStatusProperty(ctxt, params),
+      this.#addRelatedNames(ctxt, params)
+    ]);
   }
 
   #getDesignationUse(kind) {
@@ -1158,14 +1147,18 @@ class LoincServicesFactory extends CodeSystemFactoryProvider {
   }
 
   async #optimizeDatabase(db) {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       db.serialize(() => {
         db.run('PRAGMA journal_mode = WAL');
         db.run('PRAGMA synchronous = NORMAL');
         db.run('PRAGMA cache_size = 10000');
         db.run('PRAGMA temp_store = MEMORY');
         db.run('PRAGMA mmap_size = 268435456'); // 256MB
-        resolve();
+
+        // Ensure indexes exist for per-request query patterns
+          if (err) reject(err);
+          else resolve();
+        });
       });
     });
   }
@@ -1366,8 +1359,24 @@ class LoincServicesFactory extends CodeSystemFactoryProvider {
     await this.#ensureLoaded();
     this.recordUse();
 
-    // Create fresh database connection for this provider instance
-    const db = new sqlite3.Database(this.dbPath);
+    // Create read-only database connection for this provider instance
+    const db = await new Promise((resolve, reject) => {
+      const conn = new sqlite3.Database(this.dbPath, sqlite3.OPEN_READONLY, (err) => {
+        if (err) reject(err);
+        else resolve(conn);
+      });
+    });
+    // Apply performance PRAGMAs to per-request connection
+    await new Promise((resolve, reject) => {
+      db.serialize(() => {
+        db.run('PRAGMA cache_size = 10000');
+        db.run('PRAGMA temp_store = MEMORY');
+        db.run('PRAGMA mmap_size = 268435456', (err) => {
+          if (err) reject(err);
+          else resolve();
+        });
+      });
+    });
 
     return new LoincServices(opContext, supplements, db, this._sharedData);
   }
