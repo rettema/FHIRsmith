@@ -30,5 +30,5 @@ jobs:
           context: .
           push: true
           tags: |
-            ghcr.io/${{ env.REPO_LC }}/fhirsmith:cibuild
-            ghcr.io/${{ env.REPO_LC }}/fhirsmith:cibuild-${{ github.sha }}
+            ghcr.io/${{ env.REPO_LC }}:cibuild
+            ghcr.io/${{ env.REPO_LC }}:cibuild-${{ github.sha }}
