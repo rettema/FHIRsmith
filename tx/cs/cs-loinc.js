@@ -1147,13 +1147,21 @@ class LoincServicesFactory extends CodeSystemFactoryProvider {
   }
 
   async #optimizeDatabase(db) {
-    return new Promise(() => {
+    return new Promise((resolve, reject) => {
       db.serialize(() => {
         db.run('PRAGMA journal_mode = WAL');
         db.run('PRAGMA synchronous = NORMAL');
         db.run('PRAGMA cache_size = 10000');
         db.run('PRAGMA temp_store = MEMORY');
         db.run('PRAGMA mmap_size = 268435456'); // 256MB
+
+        // Ensure indexes exist for per-request query patterns
+        db.run('CREATE INDEX IF NOT EXISTS idx_descriptions_codekey_typkey ON Descriptions(CodeKey, DescriptionTypeKey)');
+        db.run('CREATE INDEX IF NOT EXISTS idx_relationships_sourcekey ON Relationships(SourceKey)');
+        db.run('CREATE INDEX IF NOT EXISTS idx_properties_codekey ON Properties(CodeKey)', (err) => {
+          if (err) reject(err);
+          else resolve();
+        });
       });
     });
   }
