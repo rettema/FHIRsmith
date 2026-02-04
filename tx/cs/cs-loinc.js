@@ -1154,10 +1154,6 @@ class LoincServicesFactory extends CodeSystemFactoryProvider {
         db.run('PRAGMA cache_size = 10000');
         db.run('PRAGMA temp_store = MEMORY');
         db.run('PRAGMA mmap_size = 268435456'); // 256MB
-
-        // Ensure indexes exist for per-request query patterns
-        if (err) reject(err);
-        else resolve();
       });
     });
   }
