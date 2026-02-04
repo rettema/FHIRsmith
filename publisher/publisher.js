@@ -540,12 +540,7 @@ class PublisherModule {
         stdio: ['pipe', 'pipe', 'pipe']
       });
 
-      let stdout = '';
       let stderr = '';
-
-      git.stdout.on('data', (data) => {
-        stdout += data.toString();
-      });
 
       git.stderr.on('data', (data) => {
         stderr += data.toString();
@@ -589,15 +584,11 @@ class PublisherModule {
       // Create log file stream
       const logStream = fs.createWriteStream(logFile);
 
-      let hasOutput = false;
-
       java.stdout.on('data', (data) => {
-        hasOutput = true;
         logStream.write(data);
       });
 
       java.stderr.on('data', (data) => {
-        hasOutput = true;
         logStream.write(data);
       });
 
@@ -901,7 +892,12 @@ class PublisherModule {
         content += '</div>';
 
         const html = htmlServer.renderPage('publisher', 'FHIR Publisher', content, {
-          taskCount: tasks.length
+          taskCount: tasks.length,
+          templateVars: {
+            loginTitle: req.session.userId ? "Logout" : 'Login',
+            loginPath: req.session.userId ? "logout" : 'login',
+            loginAction: req.session.userId ? "POST" : 'GET'
+          }
         });
 
         res.setHeader('Content-Type', 'text/html');
@@ -938,7 +934,12 @@ class PublisherModule {
       content += '</div>';
       content += '</div>';
 
-      const html = htmlServer.renderPage('publisher', 'Login - FHIR Publisher', content);
+      const html = htmlServer.renderPage('publisher', 'Login - FHIR Publisher', content, {
+        templateVars: {
+          loginTitle: req.session.userId ? "Logout" : 'Login',
+          loginPath: req.session.userId ? "logout" : 'login',
+          loginAction: req.session.userId ? "POST" : 'GET'
+        }});
       res.setHeader('Content-Type', 'text/html');
       res.send(html);
     } finally {
@@ -1116,7 +1117,12 @@ class PublisherModule {
         content += '</div>';
         content += '</div>';
 
-        const html = htmlServer.renderPage('publisher', 'Tasks - FHIR Publisher', content);
+        const html = htmlServer.renderPage('publisher', 'Tasks - FHIR Publisher', content, {
+          templateVars: {
+            loginTitle: req.session.userId ? "Logout" : 'Login',
+            loginPath: req.session.userId ? "logout" : 'login',
+            loginAction: req.session.userId ? "POST" : 'GET'
+          }});
         res.setHeader('Content-Type', 'text/html');
         res.send(html);
       } catch (error) {
@@ -1243,7 +1249,7 @@ class PublisherModule {
         // Remove build output directory
         if (task.local_folder && fs.existsSync(task.local_folder)) {
           const rimraf = require('rimraf');
-          await new Promise((resolve, reject) => {
+          await new Promise((resolve) => {
             rimraf(task.local_folder, (err) => {
               if (err) {
                 this.logger.warn('Failed to remove task directory ' + task.local_folder + ': ' + err.message);
@@ -1345,7 +1351,12 @@ class PublisherModule {
 
           content += '<div class="mt-3"><a href="/publisher/tasks" class="btn btn-secondary">Back to Tasks</a></div>';
 
-          const html = htmlServer.renderPage('publisher', 'Task Output - FHIR Publisher', content);
+          const html = htmlServer.renderPage('publisher', 'Task Output - FHIR Publisher', content, {
+            templateVars: {
+              loginTitle: req.session.userId ? "Logout" : 'Login',
+              loginPath: req.session.userId ? "logout" : 'login',
+              loginAction: req.session.userId ? "POST" : 'GET'
+            }});
           res.setHeader('Content-Type', 'text/html');
           res.send(html);
         } else {
@@ -1552,7 +1563,12 @@ class PublisherModule {
         content += '<a href="/publisher/tasks" class="btn btn-secondary">Back to Tasks</a>';
         content += '</div>';
 
-        const html = htmlServer.renderPage('publisher', 'Task History - FHIR Publisher', content);
+        const html = htmlServer.renderPage('publisher', 'Task History - FHIR Publisher', content, {
+          templateVars: {
+            loginTitle: req.session.userId ? "Logout" : 'Login',
+            loginPath: req.session.userId ? "logout" : 'login',
+            loginAction: req.session.userId ? "POST" : 'GET'
+          }});
         res.setHeader('Content-Type', 'text/html');
         res.send(html);
       } catch (error) {
@@ -1636,7 +1652,12 @@ class PublisherModule {
         content += '</div>';
         content += '</div>';
 
-        const html = htmlServer.renderPage('publisher', 'Websites - FHIR Publisher', content);
+        const html = htmlServer.renderPage('publisher', 'Websites - FHIR Publisher', content, {
+          templateVars: {
+            loginTitle: req.session.userId ? "Logout" : 'Login',
+            loginPath: req.session.userId ? "logout" : 'login',
+            loginAction: req.session.userId ? "POST" : 'GET'
+          }});
         res.setHeader('Content-Type', 'text/html');
         res.send(html);
       } catch (error) {
@@ -1773,7 +1794,12 @@ class PublisherModule {
         content += '</div>';
         content += '</div>';
 
-        const html = htmlServer.renderPage('publisher', 'Users - FHIR Publisher', content);
+        const html = htmlServer.renderPage('publisher', 'Users - FHIR Publisher', content, {
+          templateVars: {
+            loginTitle: req.session.userId ? "Logout" : 'Login',
+            loginPath: req.session.userId ? "logout" : 'login',
+            loginAction: req.session.userId ? "POST" : 'GET'
+          }});
         res.setHeader('Content-Type', 'text/html');
         res.send(html);
       } catch (error) {

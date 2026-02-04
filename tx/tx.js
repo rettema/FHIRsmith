@@ -131,7 +131,8 @@ class TXModule {
 
     // Load the library from YAML
     this.log.info(`Loading library from: ${config.librarySource}`);
-    this.library = new Library(config.librarySource);
+    this.library = new Library(config.librarySource, this.log);
+    this.log.info(`Load...`);
     await this.library.load();
     this.log.info('Library loaded successfully');
 
@@ -412,7 +413,7 @@ class TXModule {
 
     // CodeSystem/$subsumes (GET and POST)
     router.get('/CodeSystem/\\$subsumes', async (req, res) => {
-      const start = Date.now();;
+      const start = Date.now();
       try {
         let worker = new SubsumesWorker(req.txOpContext, this.log, req.txProvider, this.languages, this.i18n);
         await worker.handle(req, res);
@@ -421,7 +422,7 @@ class TXModule {
       }
     });
     router.post('/CodeSystem/\\$subsumes', async (req, res) => {
-      const start = Date.now();;
+      const start = Date.now();
       try {
         let worker = new SubsumesWorker(req.txOpContext, this.log, req.txProvider, this.languages, this.i18n);
         await worker.handle(req, res);
@@ -432,7 +433,7 @@ class TXModule {
 
     // CodeSystem/$validate-code (GET and POST)
     router.get('/CodeSystem/\\$validate-code', async (req, res) => {
-      const start = Date.now();;
+      const start = Date.now();
       try {
         let worker = new ValidateWorker(req.txOpContext, this.log, req.txProvider, this.languages, this.i18n);
         await worker.handleCodeSystem(req, res);
@@ -441,7 +442,7 @@ class TXModule {
       }
     });
     router.post('/CodeSystem/\\$validate-code', async (req, res) => {
-      const start = Date.now();;
+      const start = Date.now();
       try {
         let worker = new ValidateWorker(req.txOpContext, this.log, req.txProvider, this.languages, this.i18n);
         await worker.handleCodeSystem(req, res);
@@ -452,7 +453,7 @@ class TXModule {
 
     // CodeSystem/$batch-validate-code (GET and POST)
     router.get('/CodeSystem/\\$batch-validate-code', async (req, res) => {
-      const start = Date.now();;
+      const start = Date.now();
       try {
         let worker = new BatchValidateWorker(req.txOpContext, this.log, req.txProvider, this.languages, this.i18n);
         await worker.handleCodeSystem(req, res);
@@ -461,7 +462,7 @@ class TXModule {
       }
     });
     router.post('/CodeSystem/\\$batch-validate-code', async (req, res) => {
-      const start = Date.now();;
+      const start = Date.now();
       try {
         let worker = new BatchValidateWorker(req.txOpContext, this.log, req.txProvider, this.languages, this.i18n);
         await worker.handleCodeSystem(req, res);
@@ -471,7 +472,7 @@ class TXModule {
     });
     // ValueSet/$validate-code (GET and POST)
     router.get('/ValueSet/\\$validate-code', async (req, res) => {
-      const start = Date.now();;
+      const start = Date.now();
       try {
         let worker = new ValidateWorker(req.txOpContext, this.log, req.txProvider, this.languages, this.i18n);
         await worker.handleValueSet(req, res);
@@ -480,7 +481,7 @@ class TXModule {
       }
     });
     router.post('/ValueSet/\\$validate-code', async (req, res) => {
-      const start = Date.now();;
+      const start = Date.now();
       try {
         let worker = new ValidateWorker(req.txOpContext, this.log, req.txProvider, this.languages, this.i18n);
         await worker.handleValueSet(req, res);
@@ -491,7 +492,7 @@ class TXModule {
 
     // ValueSet/$batch-validate-code (GET and POST)
     router.get('/ValueSet/\\$batch-validate-code', async (req, res) => {
-      const start = Date.now();;
+      const start = Date.now();
       try {
         let worker = new BatchValidateWorker(req.txOpContext, this.log, req.txProvider, this.languages, this.i18n);
         await worker.handleValueSet(req, res);
@@ -500,7 +501,7 @@ class TXModule {
       }
     });
     router.post('/ValueSet/\\$batch-validate-code', async (req, res) => {
-      const start = Date.now();;
+      const start = Date.now();
       try {
         let worker = new BatchValidateWorker(req.txOpContext, this.log, req.txProvider, this.languages, this.i18n);
         await worker.handleValueSet(req, res);
@@ -511,7 +512,7 @@ class TXModule {
 
     // ValueSet/$expand (GET and POST)
     router.get('/ValueSet/\\$expand', async (req, res) => {
-      const start = Date.now();;
+      const start = Date.now();
       try {
         let worker = new ExpandWorker(req.txOpContext, this.log, req.txProvider, this.languages, this.i18n);
         await worker.handle(req, res, this.log);
@@ -520,7 +521,7 @@ class TXModule {
       }
     });
     router.post('/ValueSet/\\$expand', async (req, res) => {
-      const start = Date.now();;
+      const start = Date.now();
       try {
         let worker = new ExpandWorker(req.txOpContext, this.log, req.txProvider, this.languages, this.i18n);
         await worker.handle(req, res, this.log);
@@ -531,7 +532,7 @@ class TXModule {
 
     // ConceptMap/$translate (GET and POST)
     router.get('/ConceptMap/\\$translate', async (req, res) => {
-      const start = Date.now();;
+      const start = Date.now();
       try {
         let worker = new TranslateWorker(req.txOpContext, this.log, req.txProvider, this.languages, this.i18n);
         await worker.handle(req, res, this.log);
@@ -540,7 +541,7 @@ class TXModule {
       }
     });
     router.post('/ConceptMap/\\$translate', async (req, res) => {
-      const start = Date.now();;
+      const start = Date.now();
       try {
         let worker = new TranslateWorker(req.txOpContext, this.log, req.txProvider, this.languages, this.i18n);
         await worker.handle(req, res, this.log);
@@ -551,7 +552,7 @@ class TXModule {
 
     // ConceptMap/$closure (GET and POST)
     router.get('/ConceptMap/\\$closure', async (req, res) => {
-      const start = Date.now();;
+      const start = Date.now();
       try {
         let worker = new TranslateWorker(req.txOpContext, this.log, req.txProvider, this.languages, this.i18n);
         await worker.handle(req, res, this.log);
@@ -560,7 +561,7 @@ class TXModule {
       }
     });
     router.post('/ConceptMap/\\$closure', async (req, res) => {
-      const start = Date.now();;
+      const start = Date.now();
       try {
         let worker = new TranslateWorker(req.txOpContext, this.log, req.txProvider, this.languages, this.i18n);
         await worker.handle(req, res, this.log);
@@ -573,7 +574,7 @@ class TXModule {
 
     // CodeSystem/[id]/$lookup
     router.get('/CodeSystem/:id/\\$lookup', async (req, res) => {
-      const start = Date.now();;
+      const start = Date.now();
       try {
         let worker = new LookupWorker(req.txOpContext, this.log, req.txProvider, this.languages, this.i18n);
         await worker.handleInstance(req, res);
@@ -582,7 +583,7 @@ class TXModule {
       }
     });
     router.post('/CodeSystem/:id/\\$lookup', async (req, res) => {
-      const start = Date.now();;
+      const start = Date.now();
       try {
         let worker = new LookupWorker(req.txOpContext, this.log, req.txProvider, this.languages, this.i18n);
         await worker.handleInstance(req, res);
@@ -593,7 +594,7 @@ class TXModule {
 
     // CodeSystem/[id]/$subsumes
     router.get('/CodeSystem/:id/\\$subsumes', async (req, res) => {
-      const start = Date.now();;
+      const start = Date.now();
       try {
         let worker = new SubsumesWorker(req.txOpContext, this.log, req.txProvider, this.languages, this.i18n);
         await worker.handleInstance(req, res);
@@ -602,7 +603,7 @@ class TXModule {
       }
     });
     router.post('/CodeSystem/:id/\\$subsumes', async (req, res) => {
-      const start = Date.now();;
+      const start = Date.now();
       try {
         let worker = new SubsumesWorker(req.txOpContext, this.log, req.txProvider, this.languages, this.i18n);
         await worker.handleInstance(req, res);
@@ -613,7 +614,7 @@ class TXModule {
 
     // CodeSystem/[id]/$validate-code
     router.get('/CodeSystem/:id/\\$validate-code', async (req, res) => {
-      const start = Date.now();;
+      const start = Date.now();
       try {
       let worker = new ValidateWorker(req.txOpContext, this.log, req.txProvider, this.languages, this.i18n);
         await worker.handleCodeSystemInstance(req, res, this.log);
@@ -622,7 +623,7 @@ class TXModule {
     }
     });
     router.post('/CodeSystem/:id/\\$validate-code', async (req, res) => {
-      const start = Date.now();;
+      const start = Date.now();
       try {
         let worker = new ValidateWorker(req.txOpContext, this.log, req.txProvider, this.languages, this.i18n);
         await worker.handleCodeSystemInstance(req, res, this.log);
@@ -634,7 +635,7 @@ class TXModule {
 
     // ValueSet/[id]/$validate-code
     router.get('/ValueSet/:id/\\$validate-code', async (req, res) => {
-      const start = Date.now();;
+      const start = Date.now();
       try {
         let worker = new ValidateWorker(req.txOpContext, this.log, req.txProvider, this.languages, this.i18n);
         await worker.handleValueSetInstance(req, res, this.log);
@@ -643,7 +644,7 @@ class TXModule {
       }
     });
     router.post('/ValueSet/:id/\\$validate-code', async (req, res) => {
-      const start = Date.now();;
+      const start = Date.now();
       try {
         let worker = new ValidateWorker(req.txOpContext, this.log, req.txProvider, this.languages, this.i18n);
         await worker.handleValueSetInstance(req, res, this.log);
@@ -654,7 +655,7 @@ class TXModule {
 
     // ValueSet/[id]/$expand
     router.get('/ValueSet/:id/\\$expand', async (req, res) => {
-      const start = Date.now();;
+      const start = Date.now();
       try {
         let worker = new ExpandWorker(req.txOpContext, this.log, req.txProvider, this.languages, this.i18n);
         await worker.handleInstance(req, res, this.log);
@@ -663,7 +664,7 @@ class TXModule {
       }
     });
     router.post('/ValueSet/:id/\\$expand', async (req, res) => {
-      const start = Date.now();;
+      const start = Date.now();
       try {
         let worker = new ExpandWorker(req.txOpContext, this.log, req.txProvider, this.languages, this.i18n);
         await worker.handleInstance(req, res, this.log);
@@ -674,7 +675,7 @@ class TXModule {
 
     // ConceptMap/[id]/$translate
     router.get('/ConceptMap/:id/\\$translate', async (req, res) => {
-      const start = Date.now();;
+      const start = Date.now();
       try {
         let worker = new TranslateWorker(req.txOpContext, this.log, req.txProvider, this.languages, this.i18n);
         await worker.handleInstance(req, res, this.log);
@@ -683,7 +684,7 @@ class TXModule {
       }
     });
     router.post('/ConceptMap/:id/\\$translate', async (req, res) => {
-      const start = Date.now();;
+      const start = Date.now();
       try {
         let worker = new TranslateWorker(req.txOpContext, this.log, req.txProvider, this.languages, this.i18n);
         await worker.handleInstance(req, res, this.log);
@@ -697,7 +698,7 @@ class TXModule {
     // Read: GET /[type]/[id]
     for (const resourceType of resourceTypes) {
       router.get(`/${resourceType}/:id`, async (req, res) => {
-        const start = Date.now();;
+        const start = Date.now();
         try {
           // Skip if id starts with $ (it's an operation)
           if (req.params.id.startsWith('$')) {
@@ -718,7 +719,7 @@ class TXModule {
     // Search: GET /[type]
     for (const resourceType of resourceTypes) {
       router.get(`/${resourceType}`, async (req, res) => {
-        const start = Date.now();;
+        const start = Date.now();
         try {
           let worker = new SearchWorker(req.txOpContext, this.log, req.txProvider, this.languages, this.i18n);
           await worker.handle(req, res, resourceType);
@@ -727,7 +728,7 @@ class TXModule {
         }
       });
       router.post(`/${resourceType}/_search`, async (req, res) => {
-        const start = Date.now();;
+        const start = Date.now();
         try {
           let worker = new SearchWorker(req.txOpContext, this.log, req.txProvider, this.languages, this.i18n);
           await worker.handle(req, res, resourceType);
@@ -740,7 +741,7 @@ class TXModule {
     // Unsupported methods
     for (const resourceType of resourceTypes) {
       router.all(`/${resourceType}/:id`, (req, res) => {
-        const start = Date.now();;
+        const start = Date.now();
         try {
           if (['PUT', 'POST', 'DELETE', 'PATCH'].includes(req.method)) {
             return res.status(405).json(this.operationOutcome(
@@ -756,7 +757,7 @@ class TXModule {
     }
 
     router.get('/op.html',  async(req, res) => {
-      const start = Date.now();;
+      const start = Date.now();
       try {
         let worker = new OperationsWorker(req.txOpContext, this.log, req.txProvider, this.languages, this.i18n);
         await worker.handle(req, res);
@@ -767,7 +768,7 @@ class TXModule {
 
     // Metadata / CapabilityStatement
     router.get('/metadata', async (req, res) => {
-      const start = Date.now();;
+      const start = Date.now();
       try {
         try {
           await this.metadataHandler.handle(req, res);
@@ -782,7 +783,7 @@ class TXModule {
 
     // $versions operation
     router.get('/\\$versions', async (req, res) => {
-      const start = Date.now();;
+      const start = Date.now();
       try {
         try {
           await this.metadataHandler.handleVersions(req, res);
@@ -797,7 +798,7 @@ class TXModule {
 
     // Root endpoint info
     router.get('/', async (req, res) => {
-      const start = Date.now();;
+      const start = Date.now();
       try {
         await res.json({
           resourceType: 'OperationOutcome',
