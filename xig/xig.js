@@ -232,13 +232,14 @@ function buildSecureResourceQuery(queryParams, offset = 0, limit = 50) {
 
   // Text search filter
   if (text && text !== '') {
+    const ftsText = text.replace(/"/g, '""');
     if (type === 'cs') {
-      conditions.push(`AND (ResourceKey IN (SELECT ResourceKey FROM ResourceFTS WHERE Description MATCH ? OR Narrative MATCH ?) 
-                      OR ResourceKey IN (SELECT ResourceKey FROM CodeSystemFTS WHERE Display MATCH ? OR Definition MATCH ?))`);
-      params.push(text, text, text, text);
+      conditions.push(`AND (ResourceKey IN (SELECT ResourceKey FROM ResourceFTS WHERE ResourceFTS MATCH ?)
+                    OR ResourceKey IN (SELECT ResourceKey FROM CodeSystemFTS WHERE CodeSystemFTS MATCH ?))`);
+      params.push(`{Description Narrative} : "${ftsText}"`, `{Display Definition} : "${ftsText}"`);
     } else {
-      conditions.push('AND ResourceKey IN (SELECT ResourceKey FROM ResourceFTS WHERE Description MATCH ? OR Narrative MATCH ?)');
-      params.push(text, text);
+      conditions.push('AND ResourceKey IN (SELECT ResourceKey FROM ResourceFTS WHERE ResourceFTS MATCH ?)');
+      params.push(`{Description Narrative} : "${ftsText}"`);
     }
   }
 
@@ -330,13 +331,14 @@ function buildSecureResourceCountQuery(queryParams) {
   }
 
   if (text && text !== '') {
+    const ftsText = text.replace(/"/g, '""');
     if (type === 'cs') {
-      conditions.push(`AND (ResourceKey IN (SELECT ResourceKey FROM ResourceFTS WHERE Description MATCH ? OR Narrative MATCH ?) 
-                      OR ResourceKey IN (SELECT ResourceKey FROM CodeSystemFTS WHERE Display MATCH ? OR Definition MATCH ?))`);
-      params.push(text, text, text, text);
+      conditions.push(`AND (ResourceKey IN (SELECT ResourceKey FROM ResourceFTS WHERE ResourceFTS MATCH ?)
+                    OR ResourceKey IN (SELECT ResourceKey FROM CodeSystemFTS WHERE CodeSystemFTS MATCH ?))`);
+      params.push(`{Description Narrative} : "${ftsText}"`, `{Display Definition} : "${ftsText}"`);
     } else {
-      conditions.push('AND ResourceKey IN (SELECT ResourceKey FROM ResourceFTS WHERE Description MATCH ? OR Narrative MATCH ?)');
-      params.push(text, text);
+      conditions.push('AND ResourceKey IN (SELECT ResourceKey FROM ResourceFTS WHERE ResourceFTS MATCH ?)');
+      params.push(`{Description Narrative} : "${ftsText}"`);
     }
   }
 
@@ -563,11 +565,11 @@ function buildSqlFilter(queryParams) {
     const escapedText = sqlEscapeString(text);
     if (type === 'cs') {
       // Special handling for CodeSystems - search both resource and CodeSystem-specific fields
-      filter += ` and (ResourceKey in (select ResourceKey from ResourceFTS where Description match '${escapedText}' or Narrative match '${escapedText}') ` +
-        `or ResourceKey in (select ResourceKey from CodeSystemFTS where Display match '${escapedText}' or Definition match '${escapedText}'))`;
+      filter += ` and (ResourceKey in (select ResourceKey from ResourceFTS where Description match '"${escapedText}"' or Narrative match '"${escapedText}"') ` +
+        `or ResourceKey in (select ResourceKey from CodeSystemFTS where Display match '"${escapedText}"' or Definition match '"${escapedText}"'))`;
     } else {
       // Standard resource text search
-      filter += ` and ResourceKey in (select ResourceKey from ResourceFTS where Description match '${escapedText}' or Narrative match '${escapedText}')`;
+      filter += ` and ResourceKey in (select ResourceKey from ResourceFTS where Description match '"${escapedText}"' or Narrative match '"${escapedText}"')`;
     }
   }
 
@@ -1060,6 +1062,7 @@ async function buildSummaryStats(queryParams, baseUrl) {
     html += '</div><p>&nbsp;</p>';
 
   } catch (error) {
+    console.error(error);
     xigLog.error(`Error building summary stats: ${error.message}`);
     html += `<p class="text-warning">Error loading summary statistics: ${escapeHtml(error.message)}</p>`;
   }
@@ -2199,13 +2202,9 @@ function getDatabaseInfo() {
   });
 }
 
-function countRequest(name, tat) {
-  globalStats.stats.stats.stats.stats.countRequest(name, tat);
-}
-
 // Routes
 router.get('/:packagePid/:resourceType/:resourceId', async (req, res) => {
-  const start = Date.now();;
+  const start = Date.now();
   try {
 
   const { packagePid, resourceType, resourceId } = req.params;
@@ -2231,101 +2230,101 @@ router.get('/:packagePid/:resourceType/:resourceId', async (req, res) => {
 
 // Resources list endpoint with control panel
 router.get('/', async (req, res) => {
-  const start = Date.now();;
+  const start = Date.now();
   try {
 
-  const startTime = Date.now(); // Add this at the very beginning
-
-  try {
-    const title = 'FHIR Resources';
-
-    // Parse query parameters
-    const queryParams = {
-      ver: req.query.ver || '',
-      auth: req.query.auth || '',
-      realm: req.query.realm || '',
-      type: req.query.type || '',
-      rt: req.query.rt || '',
-      text: req.query.text || '',
-      offset: req.query.offset || '0'
-    };
-
-    // Parse offset for pagination
-    const offset = parseInt(queryParams.offset) || 0;
-
-    // Build control panel
-    const controlPanel = buildControlPanel('/xig', queryParams);
-
-    // Build dynamic heading
-    const pageHeading = buildPageHeading(queryParams);
-
-    // Get resource count
-    let resourceCount = 0;
-    let countError = null;
+    const startTime = Date.now(); // Add this at the very beginning
 
     try {
-      if (xigDb) {
-        const { query: countQuery, params: countParams } = buildSecureResourceCountQuery(queryParams);
-        resourceCount = await new Promise((resolve, reject) => {
-          xigDb.get(countQuery, countParams, (err, row) => {
-            if (err) {
-              reject(err);
-            } else {
-              resolve(row ? row.total : 0);
-            }
+      const title = 'FHIR Resources';
+
+      // Parse query parameters
+      const queryParams = {
+        ver: req.query.ver || '',
+        auth: req.query.auth || '',
+        realm: req.query.realm || '',
+        type: req.query.type || '',
+        rt: req.query.rt || '',
+        text: req.query.text || '',
+        offset: req.query.offset || '0'
+      };
+
+      // Parse offset for pagination
+      const offset = parseInt(queryParams.offset) || 0;
+
+      // Build control panel
+      const controlPanel = buildControlPanel('/xig', queryParams);
+
+      // Build dynamic heading
+      const pageHeading = buildPageHeading(queryParams);
+
+      // Get resource count
+      let resourceCount = 0;
+      let countError = null;
+
+      try {
+        if (xigDb) {
+          const {query: countQuery, params: countParams} = buildSecureResourceCountQuery(queryParams);
+          resourceCount = await new Promise((resolve, reject) => {
+            xigDb.get(countQuery, countParams, (err, row) => {
+              if (err) {
+                reject(err);
+              } else {
+                resolve(row ? row.total : 0);
+              }
+            });
           });
-        });
+        }
+      } catch (error) {
+        countError = error.message;
+        xigLog.error(`Error getting resource count: ${error.message}`);
       }
+
+      // Build resource count paragraph
+      let countParagraph = '<p>';
+      if (countError) {
+        countParagraph += `<span class="text-warning">Unable to get resource count: ${escapeHtml(countError)}</span>`;
+      } else {
+        countParagraph += `${resourceCount.toLocaleString()} resources`;
+      }
+      countParagraph += '</p>';
+
+      // Build additional form
+      const additionalForm = buildAdditionalForm(queryParams);
+
+      // Build summary statistics
+      const summaryStats = await buildSummaryStats(queryParams, '/xig');
+
+      // Build resource table
+      const resourceTable = await buildResourceTable(queryParams, resourceCount, offset);
+
+      // Build content
+      let content = controlPanel;
+      content += pageHeading;
+      content += countParagraph;
+      content += additionalForm;
+      content += summaryStats;
+      content += resourceTable;
+      // Gather statistics and render
+      const stats = await gatherPageStatistics();
+      stats.processingTime = Date.now() - startTime;
+
+      const html = renderPage(title, content, stats);
+      res.setHeader('Content-Type', 'text/html');
+      res.send(html);
+
     } catch (error) {
-      countError = error.message;
-      xigLog.error(`Error getting resource count: ${error.message}`);
+      xigLog.error(`Error rendering resources page: ${error.message}`);
+      htmlServer.sendErrorResponse(res, 'xig', error);
     }
-
-    // Build resource count paragraph
-    let countParagraph = '<p>';
-    if (countError) {
-      countParagraph += `<span class="text-warning">Unable to get resource count: ${escapeHtml(countError)}</span>`;
-    } else {
-      countParagraph += `${resourceCount.toLocaleString()} resources`;
-    }
-    countParagraph += '</p>';
-
-    // Build additional form
-    const additionalForm = buildAdditionalForm(queryParams);
-
-    // Build summary statistics
-    const summaryStats = await buildSummaryStats(queryParams, '/xig');
-
-    // Build resource table
-    const resourceTable = await buildResourceTable(queryParams, resourceCount, offset);
-
-    // Build content
-    let content = controlPanel;
-    content += pageHeading;
-    content += countParagraph;
-    content += additionalForm;
-    content += summaryStats;
-    content += resourceTable;
-    // Gather statistics and render
-    const stats = await gatherPageStatistics();
-    stats.processingTime = Date.now() - startTime;
-
-    const html = renderPage(title, content, stats);
-    res.setHeader('Content-Type', 'text/html');
-    res.send(html);
-
-  } catch (error) {
-    xigLog.error(`Error rendering resources page: ${error.message}`);
-    htmlServer.sendErrorResponse(res, 'xig', error);
-  }
   } finally {
-    this.stats.countRequest('/', Date.now() - start);
+    globalStats.countRequest('/', Date.now() - start);
   }
 });
 
 // Stats endpoint
 router.get('/stats', async (req, res) => {
-  const start = Date.now();;
+  const start = Date.now();
   try {
 
   const startTime = Date.now(); // Add this at the very beginning
@@ -2397,13 +2396,13 @@ router.get('/stats', async (req, res) => {
     htmlServer.sendErrorResponse(res, 'xig', error);
   }
   } finally {
-    this.stats.countRequest('stats', Date.now() - start);
+    globalStats.countRequest('stats', Date.now() - start);
   }
 });
 
 // Resource detail endpoint - handles individual resource pages
 router.get('/resource/:packagePid/:resourceType/:resourceId', async (req, res) => {
-  const start = Date.now();;
+  const start = Date.now();
   try {
   const startTime = Date.now(); // Add this at the very beginning
   try {
@@ -2456,7 +2455,7 @@ router.get('/resource/:packagePid/:resourceType/:resourceId', async (req, res) =
     htmlServer.sendErrorResponse(res, 'xig', error);
   }
   } finally {
-    this.stats.countRequest(':pid', Date.now() - start);
+    globalStats.countRequest(':pid', Date.now() - start);
   }
 });
 
@@ -2866,7 +2865,7 @@ function fixNarrative(narrativeHtml, baseUrl) {
 
 // JSON endpoints
 router.get('/status', async (req, res) => {
-  const start = Date.now();;
+  const start = Date.now();
   try {
 
   try {
@@ -2891,17 +2890,17 @@ router.get('/status', async (req, res) => {
     });
   }
   } finally {
-    this.stats.countRequest('stats', Date.now() - start);
+    globalStats.countRequest('stats', Date.now() - start);
   }
 });
 
 router.get('/cache', async (req, res) => {
-  const start = Date.now();;
+  const start = Date.now();
   try {
 
     await res.json(getCacheStats());
   } finally {
-    this.stats.countRequest('cacheStats', Date.now() - start);
+    globalStats.countRequest('cacheStats', Date.now() - start);
   }
 });
 
