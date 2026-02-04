@@ -25,6 +25,7 @@ jobs:
 
       - name: Run tests
         run: npm run test:ci
+        timeout-minutes: 20
         env:
           SUPPRESS_LOGS: 'true'
           NODE_OPTIONS: "--max-old-space-size=14000" 
