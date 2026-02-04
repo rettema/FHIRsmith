@@ -901,7 +901,12 @@ class PublisherModule {
         content += '</div>';
 
         const html = htmlServer.renderPage('publisher', 'FHIR Publisher', content, {
-          taskCount: tasks.length
+          taskCount: tasks.length,
+          templateVars: {
+            loginTitle: req.session.userId ? "Logout" : 'Login',
+            loginPath: req.session.userId ? "logout" : 'login',
+            loginAction: req.session.userId ? "POST" : 'GET'
+          }
         });
 
         res.setHeader('Content-Type', 'text/html');
@@ -938,7 +943,12 @@ class PublisherModule {
       content += '</div>';
       content += '</div>';
 
-      const html = htmlServer.renderPage('publisher', 'Login - FHIR Publisher', content);
+      const html = htmlServer.renderPage('publisher', 'Login - FHIR Publisher', content, {
+          templateVars: {
+          loginTitle: req.session.userId ? "Logout" : 'Login',
+            loginPath: req.session.userId ? "logout" : 'login',
+            loginAction: req.session.userId ? "POST" : 'GET'
+        }});
       res.setHeader('Content-Type', 'text/html');
       res.send(html);
     } finally {
@@ -1116,7 +1126,12 @@ class PublisherModule {
         content += '</div>';
         content += '</div>';
 
-        const html = htmlServer.renderPage('publisher', 'Tasks - FHIR Publisher', content);
+        const html = htmlServer.renderPage('publisher', 'Tasks - FHIR Publisher', content, {
+          templateVars: {
+            loginTitle: req.session.userId ? "Logout" : 'Login',
+            loginPath: req.session.userId ? "logout" : 'login',
+            loginAction: req.session.userId ? "POST" : 'GET'
+          }});
         res.setHeader('Content-Type', 'text/html');
         res.send(html);
       } catch (error) {
@@ -1345,7 +1360,12 @@ class PublisherModule {
 
           content += '<div class="mt-3"><a href="/publisher/tasks" class="btn btn-secondary">Back to Tasks</a></div>';
 
-          const html = htmlServer.renderPage('publisher', 'Task Output - FHIR Publisher', content);
+          const html = htmlServer.renderPage('publisher', 'Task Output - FHIR Publisher', content, {
+            templateVars: {
+              loginTitle: req.session.userId ? "Logout" : 'Login',
+              loginPath: req.session.userId ? "logout" : 'login',
+              loginAction: req.session.userId ? "POST" : 'GET'
+            }});
           res.setHeader('Content-Type', 'text/html');
           res.send(html);
         } else {
@@ -1552,7 +1572,12 @@ class PublisherModule {
         content += '<a href="/publisher/tasks" class="btn btn-secondary">Back to Tasks</a>';
         content += '</div>';
 
-        const html = htmlServer.renderPage('publisher', 'Task History - FHIR Publisher', content);
+        const html = htmlServer.renderPage('publisher', 'Task History - FHIR Publisher', content, {
+          templateVars: {
+            loginTitle: req.session.userId ? "Logout" : 'Login',
+            loginPath: req.session.userId ? "logout" : 'login',
+            loginAction: req.session.userId ? "POST" : 'GET'
+          }});
         res.setHeader('Content-Type', 'text/html');
         res.send(html);
       } catch (error) {
@@ -1636,7 +1661,12 @@ class PublisherModule {
         content += '</div>';
         content += '</div>';
 
-        const html = htmlServer.renderPage('publisher', 'Websites - FHIR Publisher', content);
+        const html = htmlServer.renderPage('publisher', 'Websites - FHIR Publisher', content, {
+          templateVars: {
+            loginTitle: req.session.userId ? "Logout" : 'Login',
+            loginPath: req.session.userId ? "logout" : 'login',
+            loginAction: req.session.userId ? "POST" : 'GET'
+          }});
         res.setHeader('Content-Type', 'text/html');
         res.send(html);
       } catch (error) {
@@ -1773,7 +1803,12 @@ class PublisherModule {
         content += '</div>';
         content += '</div>';
 
-        const html = htmlServer.renderPage('publisher', 'Users - FHIR Publisher', content);
+        const html = htmlServer.renderPage('publisher', 'Users - FHIR Publisher', content, {
+          templateVars: {
+            loginTitle: req.session.userId ? "Logout" : 'Login',
+            loginPath: req.session.userId ? "logout" : 'login',
+            loginAction: req.session.userId ? "POST" : 'GET'
+          }});
         res.setHeader('Content-Type', 'text/html');
         res.send(html);
       } catch (error) {
