@@ -1699,6 +1699,7 @@ class PackagesModule {
                           Author,
                           License,
                           Hash,
+                          GUID,
                           Description
                    FROM PackageVersions
                    WHERE Id = ?
@@ -1898,7 +1899,7 @@ class PackagesModule {
 
     for (const pv of sortedVersions) {
       table += '<tr>';
-      table += `<td><strong>${this.escapeHtml(pv.Version)}</strong></td>`;
+      table += `<td title="${this.escapeHtml(pv.GUID)}"><strong>${this.escapeHtml(pv.Version)}</strong></td>`;
       table += `<td>${this.escapeHtml(this.interpretVersion(pv.FhirVersions))}</td>`;
       table += `<td>${this.escapeHtml(this.codeForKind(pv.Kind))}</td>`;
       table += `<td>${new Date(pv.PubDate).toLocaleDateString()}</td>`;

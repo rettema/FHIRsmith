@@ -283,7 +283,7 @@ class VSACValueSetProvider extends AbstractValueSetProvider {
       return [];
     }
 
-    return await this.database.search(this.spaceId, searchParams, elements);
+    return await this.database.search(this.spaceId, this.valueSetMap, searchParams, elements);
   }
 
   /**

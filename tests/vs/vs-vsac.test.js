@@ -23,7 +23,7 @@ describe('VSACValueSetProvider', () => {
     }
 
     try {
-      // Check rate limiting
+      // Check rate limiting - minimise load on vsac
       if (await shouldSkipDueToRateLimit()) {
         console.log(`Skipping VSAC tests due to rate limiting (max once every ${RATE_LIMIT_HOURS} hours)`);
         shouldSkipTests = true;
@@ -274,7 +274,7 @@ describe('VSACValueSetProvider', () => {
       if (results.length > 0) {
         // All results should have publisher containing 'Optum'
         for (const vs of results) {
-          expect(vs.publisher).toContain('Optum');
+          expect(vs.jsonObj.publisher).toContain('Optum');
         }
 
         console.log(`Found ${results.length} ValueSets from Optum`);
