@@ -235,8 +235,10 @@ GitHub Actions will automatically:
 3. Commit your changes:
 ```bash
    git commit -m "Prepare release vX.Y.Z"
-   git push origin main
+   git push origin main:XXXXXX
 ```
+
+do it via a PR
 
 4. Tag and push the release:
 ```bash
