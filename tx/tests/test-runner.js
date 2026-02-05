@@ -7,6 +7,7 @@ const TXModule = require('../tx.js');
 const ServerStats = require("../../stats");
 const Logger = require("../../library/logger");
 const {txTestVersion} = require("./test-cases-version");
+const folders = require('../../library/folder-setup');
 
 let count = 0;
 let error = 0;
@@ -122,13 +123,13 @@ async function stopServer() {
 }
 
 async function loadValidator() {
-    const validatorJarPath = path.join(__dirname, '../../bin/validator_cli.jar');
+    const validatorJarPath = folders.ensureFilePath('bin/validator_cli.jar');
     log =  Logger.getInstance().child({ module: 'test-runner' });
     validator = new FhirValidator(validatorJarPath, log);
     const validatorConfig = {
         version : '4.0',
         txServer : 'http://localhost:'+TEST_PORT+'/r5',
-        txLog : path.join(__dirname, '../logs/text-cases.log'),
+        txLog : path.join(folders.logsDir(), 'tx-test-cases.log'),
         port: VALIDATOR_PORT,
         timeout: 60000
     }

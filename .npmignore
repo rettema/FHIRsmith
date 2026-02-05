@@ -10,11 +10,13 @@ nodemon.json
 # Test files
 test/
 tests/
+bin/
 __tests__/
 *.test.js
 *.spec.js
 test-results/
 coverage/
+tx/fixtures/
 
 # Data and runtime files
 data/
@@ -22,6 +24,7 @@ tx/data/
 logs/
 *.log
 *.sqlite
+passwords.ini
 
 # Build artifacts
 node_modules/
@@ -31,6 +34,7 @@ node_modules/
 # IDE and OS files
 .idea/
 .vscode/
+.eslintignore
 *.swp
 *.swo
 .DS_Store

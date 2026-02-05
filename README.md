@@ -230,24 +230,26 @@ GitHub Actions will automatically:
    ### Fixed
    - Bug fix description
 ```
+2. Update `package.json` to have the same release version
 
-2. Commit your changes:
+3. Commit your changes:
 ```bash
-   git add CHANGELOG.md
    git commit -m "Prepare release vX.Y.Z"
    git push origin main
 ```
 
-3. Tag and push the release:
+4. Tag and push the release:
 ```bash
    git tag vX.Y.Z
    git push origin vX.Y.Z
 ```
 
-4. Monitor the release:
+5. Monitor the release:
    - Check [GitHub Actions](https://github.com/HealthIntersections/fhirsmith/actions) for the Release workflow
    - Verify the [GitHub Release](https://github.com/HealthIntersections/fhirsmith/releases) was created
    - Confirm Docker images are available at [GHCR](https://github.com/HealthIntersections/fhirsmith/pkgs/container/fhirsmith)
+
+6. Update `package.json` to have the next release version -SNAPSHOT
 
 **If a release fails:**
 - Delete the tag: `git tag -d vX.Y.Z && git push origin :refs/tags/vX.Y.Z`
