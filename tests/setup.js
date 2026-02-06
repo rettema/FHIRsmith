@@ -1,5 +1,4 @@
 const fs = require('fs');
-const path = require('path');
 const TestUtils = require('./utils/test-utils');
 const folders = require('../library/folder-setup');
 
@@ -19,7 +18,7 @@ beforeAll(() => {
 });
 
 const testDirs = [
-  folders.ensureFolder('package-cache/vsac')
+  folders.ensureFolder('terminology-cache/vsac')
 ];
 
 for (const dir of testDirs) {

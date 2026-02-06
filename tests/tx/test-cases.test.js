@@ -2196,8 +2196,24 @@ describe('snomed', () => {
     await runTest({"suite":"snomed","test":"snomed-inactive-display"});
   });
 
+  it('snomed-procedure-in-display', async () => {
+    await runTest({"suite":"snomed","test":"snomed-procedure-in-display"});
+  });
+
+  it('snomed-procedure-out-display', async () => {
+    await runTest({"suite":"snomed","test":"snomed-procedure-out-display"});
+  });
+
   it('snomed-expand-inactive', async () => {
     await runTest({"suite":"snomed","test":"snomed-expand-inactive"});
+  });
+
+  it('snomed-expand-diabetes', async () => {
+    await runTest({"suite":"snomed","test":"snomed-expand-diabetes"});
+  });
+
+  it('snomed-expand-procedures', async () => {
+    await runTest({"suite":"snomed","test":"snomed-expand-procedures"});
   });
 
 });
