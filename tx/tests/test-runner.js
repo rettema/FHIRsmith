@@ -23,7 +23,7 @@ async function startTxTests() {
 
 async function  finishTxTests() {
     console.log(txTestSummary());
-    let textfilename = path.join(__dirname, 'test-cases-summary.txt');
+    let textfilename = path.join(__dirname, '../test-cases-summary.txt');
     fs.writeFileSync(textfilename, txTestSummary());
 
     await unloadValidator();

@@ -19,7 +19,7 @@ beforeAll(() => {
 });
 
 const testDirs = [
-  folders.ensureFolder('package-cache/vsac')
+  folders.ensureFolder('terminology-cache/vsac')
 ];
 
 for (const dir of testDirs) {

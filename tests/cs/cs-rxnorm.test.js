@@ -8,10 +8,11 @@ const {Designations} = require("../../tx/library/designations");
 const {Languages, LanguageDefinitions} = require("../../library/languages");
 const {I18nSupport} = require("../../library/i18nsupport");
 const {TestUtilities, testOrSkip} = require("../test-utilities");
+const folders = require('../../library/folder-setup');
 
 describe('RxNorm Import', () => {
   const sourceDir = path.resolve(__dirname, '../../tx/data/rxnorm');
-  const testDbPath = path.resolve(__dirname, '../../data/rxnorm-testing.db');
+  const testDbPath = folders.ensureFilePath('rxnorm-testing.db');
   const expectedCounts = {
     RXNCONSO: 108819,
     RXNCUI: 5982,
