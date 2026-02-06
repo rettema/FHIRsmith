@@ -78,6 +78,12 @@ class SnomedFilterContext {
   }
 }
 
+class SnomedPrep {
+  constructor() {
+    this.filters = [];
+  }
+}
+
 /**
  * Core SNOMED services providing access to structures and expression processing
  */
@@ -728,7 +734,7 @@ class SnomedProvider extends CodeSystemProvider {
   // eslint-disable-next-line no-unused-vars
   async getPrepContext(iterate) {
     
-    return {}; // Simple filter context
+    return new SnomedPrep(); // Simple filter context
   }
 
   async filter(filterContext, prop, op, value) {
@@ -741,14 +747,22 @@ class SnomedProvider extends CodeSystemProvider {
       }
 
       switch (op) {
-        case '=':
-          return this.sct.filterEquals(id);
-        case 'is-a':
-          return this.sct.filterIsA(id, true);
-        case 'descendent-of':
-          return this.sct.filterIsA(id, false);
-        case 'in':
-          return this.sct.filterIn(id);
+        case '=': {
+          filterContext.filters.push(this.sct.filterEquals(id));
+          return null;
+        }
+        case 'is-a': {
+          filterContext.filters.push(this.sct.filterIsA(id, true));
+          return null;
+        }
+        case 'descendent-of': {
+          filterContext.filters.push(this.sct.filterIsA(id, false));
+          return null;
+        }
+        case 'in': {
+          filterContext.filters.push(this.sct.filterIn(id));
+          return null;
+        }
         default:
           throw new Error(`Unsupported filter operation: ${op}`);
       }
@@ -759,7 +773,7 @@ class SnomedProvider extends CodeSystemProvider {
 
   async executeFilters(filterContext) {
     
-    return [filterContext];
+    return filterContext.filters;
   }
 
   async filterSize(filterContext, set) {
