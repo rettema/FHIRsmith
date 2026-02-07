@@ -36,7 +36,7 @@ const {ConceptMapXML} = require("./xml/conceptmap-xml");
 const {TxHtmlRenderer} = require("./tx-html");
 const {Renderer} = require("./library/renderer");
 const {OperationsWorker} = require("./workers/operations");
-const {writeFileSync} = require("fs");
+// const {writeFileSync} = require("fs");
 
 class TXModule {
   timers = [];
@@ -927,7 +927,7 @@ class TXModule {
 
   ec = 0;
 
-  checkProperJson(jsonStr) {
+  checkProperJson() { // jsonStr) {
   //   const errors = [];
   //   if (jsonStr.includes("[]")) errors.push("Found [] in json");
   //   if (jsonStr.includes('""')) errors.push('Found "" in json');
