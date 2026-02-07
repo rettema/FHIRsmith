@@ -938,7 +938,7 @@ class TXModule {
   //     writeFileSync(filename, jsonStr);
   //     throw new Error(errors.join('; '));
   //   }
-  // }
+  }
 }
 
 module.exports = TXModule;
