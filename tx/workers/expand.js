@@ -548,7 +548,7 @@ class ValueSetExpander {
 
   async importValueSet(vs, expansion, imports, offset) {
     this.canBeHierarchy = false;
-    for (let p of vs.expansion.parameter) {
+    for (let p of vs.expansion.parameter || []) {
       let vn = getValueName(p);
       let v = getValuePrimitive(p);
       this.addParam(expansion, p.name, vn, v);
@@ -626,7 +626,7 @@ class ValueSetExpander {
           } else if (cs.contentMode() === 'supplement') {
             throw new Issue('error', 'business-rule', null, null, 'The code system definition for ' + cset.system + ' defines a supplement, so this expansion cannot be performed', 'invalid');
           } else if (this.params.incompleteOK) {
-            exp.addParamUri(cs.contentMode, cs.system + '|' + cs.version);
+            this.addParamUri(cs.contentMode, cs.system + '|' + cs.version);
           } else {
             throw new Issue('error', 'business-rule', null, null, 'The code system definition for ' + cset.system + ' is a ' + cs.contentMode + ', so this expansion is not permitted unless the expansion parameter "incomplete-ok" has a value of "true"', 'invalid');
           }
@@ -1145,7 +1145,7 @@ class ValueSetExpander {
     this.valueSet = source;
 
     const result = structuredClone(source.jsonObj);
-    result.id = '';
+    result.id = undefined;
     let table = null;
     let div_ = null;
 

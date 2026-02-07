@@ -36,6 +36,7 @@ const {ConceptMapXML} = require("./xml/conceptmap-xml");
 const {TxHtmlRenderer} = require("./tx-html");
 const {Renderer} = require("./library/renderer");
 const {OperationsWorker} = require("./workers/operations");
+// const {writeFileSync} = require("fs");
 
 class TXModule {
   timers = [];
@@ -272,6 +273,7 @@ class TXModule {
             }
           } else {
             const jsonStr = JSON.stringify(data);
+            this.checkProperJson(jsonStr);
             responseSize = Buffer.byteLength(jsonStr, 'utf8');
             result = originalJson(data);
           }
@@ -921,6 +923,21 @@ class TXModule {
       count = count + ep.resourceCache.size() + ep.expansionCache.size();
     }
     return count;
+  }
+
+  ec = 0;
+
+  checkProperJson() { // jsonStr) {
+  //   const errors = [];
+  //   if (jsonStr.includes("[]")) errors.push("Found [] in json");
+  //   if (jsonStr.includes('""')) errors.push('Found "" in json');
+  //
+  //   if (errors.length > 0) {
+  //     this.ec++;
+  //     const filename = `/Users/grahamegrieve/temp/tx-err-log/err${this.ec}.json`;
+  //     writeFileSync(filename, jsonStr);
+  //     throw new Error(errors.join('; '));
+  //   }
   }
 }
 
