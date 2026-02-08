@@ -325,7 +325,7 @@ class RelatedWorker extends TerminologyWorker {
           for (let i = 0; i < value.this.length; i++) {
             let t = value.this.get(i);
             let o = value.other.get(i);
-            if (!filtersMatch(t, o)) {
+            if (!this.filtersMatch(t, o)) {
               status.fail = true;
               return;
             }
@@ -404,7 +404,7 @@ class RelatedWorker extends TerminologyWorker {
     );
   }
 
-  compareCodeLists(status, first, first2) {
+  compareCodeLists(status, t, o) {
     const tSet = new Set(t.map(x => x.code));
     const oSet = new Set(o.map(x => x.code));
 
@@ -430,15 +430,19 @@ class RelatedWorker extends TerminologyWorker {
     return !inc.concept && !inc.filter;
   }
 
-  compareExpansions(status, thisC, otherC) {
+  compareExpansions() { // status, thisC, otherC) {
     return false;
   }
 
-  isConcepts(t) {
+  isConcepts() {
     return false;
   }
 
-  isFilter(t) {
+  isFilter() {
+    return false;
+  }
+
+  filtersMatch() {
     return false;
   }
 }
