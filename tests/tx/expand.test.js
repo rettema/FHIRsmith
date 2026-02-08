@@ -373,7 +373,7 @@ describe('Expand Worker', () => {
       // Currently returns 200 with empty expansion (stub behavior)
       // When doExpand is implemented, this should return an error
       // because the CodeSystem can't be found
-      expect(response.status).toBe(404);
+      expect(response.status).toBe(422);
       // expect(response.status).toBe(404); // or 400 when fully implemented
     });
   });

@@ -442,6 +442,17 @@ class Library {
     // Ensure folder exists
     await this.ensureFolderExists(this.cacheFolder);
 
+    if (fileName.includes("|")) {
+      // in this case, we split it into two. if the first file exists, we go with that. Otherwise
+      // fallback to the second.
+      let firstName = fileName.substring(0, fileName.indexOf("|"));
+      fileName = fileName.substring(fileName.indexOf("|")+1);
+
+      const firstPath = path.join(this.cacheFolder, firstName);
+      if (await this.fileExists(firstPath)) {
+        return firstPath;
+      }
+    }
     const filePath = path.join(this.cacheFolder, fileName);
 
     // Check if file already exists

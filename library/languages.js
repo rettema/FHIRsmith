@@ -1,6 +1,6 @@
 const fs = require('fs');
 const os = require('os');
-const {validateParameter, validateOptionalParameter, Utilities} = require("./utilities");
+const {validateOptionalParameter, Utilities} = require("./utilities");
 
 /**
  * Language part types for matching depth
@@ -120,7 +120,7 @@ class Language {
     if (index < parts.length) {
       this.language = parts[index];
       if (this.language != '*' && languageDefinitions && !languageDefinitions.languages.has(this.language)) {
-        throw new Error("The language '"+this.language+"' in the code '"+this.language+"' is not valid");
+        throw new Error("The language '"+this.language+"' in the code '"+this.code+"' is not valid");
       }
       index++;
     }
@@ -130,7 +130,7 @@ class Language {
       const part = parts[index];
       if (part.length === 3 && /^[a-zA-Z]{3}$/.test(part)) {
         if (languageDefinitions && !languageDefinitions.extLanguages.has(part)) {
-          throw new Error("The extLanguage '"+part+"' in the code '"+code+"' is not valid");
+          throw new Error("The extLanguage '"+part+"' in the code '"+this.code+"' is not valid");
         }
         this.extLang.push(part.toLowerCase());
         index++;
@@ -144,7 +144,7 @@ class Language {
       const part = parts[index];
       if (part.length === 4 && /^[a-zA-Z]{4}$/.test(part)) {
         if (languageDefinitions && !languageDefinitions.scripts.has(part)) {
-          throw new Error("The script '"+part+"' in the code '"+code+"' is not valid");
+          throw new Error("The script '"+part+"' in the code '"+this.code+"' is not valid");
         }
         this.script = part.charAt(0).toUpperCase() + part.slice(1).toLowerCase();
         index++;
@@ -157,7 +157,7 @@ class Language {
       if ((part.length === 2 && /^[a-zA-Z]{2}$/.test(part)) ||
         (part.length === 3 && /^[0-9]{3}$/.test(part))) {
         if (languageDefinitions && !languageDefinitions.regions.has(part)) {
-          throw new Error("The region '"+part+"' in the code '"+code+"' is not valid");
+          throw new Error("The region '"+part+"' in the code '"+this.code+"' is not valid");
         }
         this.region = part.toUpperCase();
         index++;
@@ -187,9 +187,10 @@ class Language {
       } else if (part.length === 1 && part !== 'x') {
         // Extension
         this.extension = part + '-' + parts.slice(index + 1).join('-');
+        index++;
         break;
       } else {
-        index++;
+        throw new Error("Unable to recognised '"+parts[index]+"' as a valid part in the language code "+this.code);
       }
     }
   }
@@ -671,29 +672,30 @@ class LanguageDefinitions {
    *
    * @return {Language} parsed language (or null)
    */
-  parse(code) {
-    if (!code) return null;
+  parse(code, msg) {
+    if (!code) {
+      if (msg) {
+        msg.message = 'No code provided';
+      }
+      return null;
+    }
 
     // Check cache first
     if (this.parsed.has(code)) {
       return this.parsed.get(code);
     }
 
-    const parts = code.split('-');
-    let index = 0;
-
-    // Validate language
-    if (index >= parts.length) return null;
-    const langCode = parts[index].toLowerCase();
-    if (!this.languages.has(langCode) && langCode !== '*') {
-      return null; // Invalid language code
+    try {
+      const lang = new Language(code, this);
+      // Cache the result
+      this.parsed.set(code, lang);
+      return lang;
+    } catch (e) {
+      if (msg) {
+        msg.message = e.message;
+      }
+      return null;
     }
-
-    const lang = new Language(code);
-
-    // Cache the result
-    this.parsed.set(code, lang);
-    return lang;
   }
 
   /**

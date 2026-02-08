@@ -520,7 +520,7 @@ class ValueSetChecker {
             result = false;
             cause.value = 'code-invalid';
             this.worker.opContext.addNote(this.valueSet, 'Unknown code', this.indentCount);
-            let msg = this.worker.i18n.translate(Unknown_Code_in_VersionSCT(cs.system), this.params.HTTPLanguages, [code, cs.system(), cs.version(), SCTVersion(cs.system(), cs.version())]);
+            let msg = this.worker.i18n.translate(Unknown_Code_in_VersionSCT(cs.system, cs.version()), this.params.HTTPLanguages, [code, cs.system(), cs.version(), SCTVersion(cs.system(), cs.version())]);
             messages.push(msg);
             op.addIssue(new Issue('error', 'code-invalid', addToPath(path, 'code'), 'Unknown_Code_in_Version', msg, 'invalid-code'));
           }
@@ -612,7 +612,7 @@ class ValueSetChecker {
             result = false;
             cause.value = 'code-invalid';
             this.worker.opContext.addNote(this.valueSet, 'Unknown code', this.indentCount);
-            let msg = this.worker.i18n.translate(Unknown_Code_in_VersionSCT(system), this.params.HTTPLanguages, [code, system, version, SCTVersion(system, version)]);
+            let msg = this.worker.i18n.translate(Unknown_Code_in_VersionSCT(system, version), this.params.HTTPLanguages, [code, system, version, SCTVersion(system, version)]);
             messages.push(msg);
             op.addIssue(new Issue('warning', 'code-invalid', addToPath(path, 'code'), 'Unknown_Code_in_Version', msg, 'invalid-code'));
           }
@@ -748,7 +748,7 @@ class ValueSetChecker {
           for (let cc of this.valueSet.jsonObj.compose.exclude || []) {
             this.worker.deadCheck('check#4');
             let excluded;
-            if (cc.system) {
+            if (!cc.system) {
               excluded = true;
             } else {
               let cs = await this.worker.findCodeSystem(cc.system, cc.version, this.params, ['complete', 'fragment'], op,true, true, false);
@@ -1185,7 +1185,7 @@ class ValueSetChecker {
               ts.push(vs);
               let m;
               if (prov.contentMode() === 'complete') {
-                m = this.worker.i18n.translate(Unknown_Code_in_VersionSCT(ws), this.params.HTTPLanguages, [c.code, ws, prov.version(), SCTVersion(ws, prov.version())]);
+                m = this.worker.i18n.translate(Unknown_Code_in_VersionSCT(ws, prov.version()), this.params.HTTPLanguages, [c.code, ws, prov.version(), SCTVersion(ws, prov.version())]);
                 cause.value = 'code-invalid';
                 msg(m);
                 op.addIssue(new Issue('error', 'code-invalid', addToPath(path, 'code'), 'Unknown_Code_in_Version', m, 'invalid-code'), true);
@@ -1499,8 +1499,8 @@ class ValueSetChecker {
             op.addIssue(new Issue('warning', 'code-invalid', addToPath(path, 'code'), 'UNKNOWN_CODE_IN_FRAGMENT', this.worker.i18n.translate('UNKNOWN_CODE_IN_FRAGMENT', this.params.HTTPLanguages, [code, cs.system(), cs.version()]), 'invalid-code'));
             result = true;
           } else {
-            op.addIssue(new Issue('error', 'code-invalid', addToPath(path, 'code'), 'Unknown_Code_in_Version',
-              this.worker.i18n.translate(Unknown_Code_in_VersionSCT(cs.system()), this.params.HTTPLanguages, [code, cs.system(), cs.version(), SCTVersion(cs.system(), cs.version())]), 'invalid-code'));
+            op.addIssue(new Issue('error', 'code-invalid', addToPath(path, 'code'), cs.version() ? 'Unknown_Code_in_Version' : 'Unknown_Code_in',
+              this.worker.i18n.translate(Unknown_Code_in_VersionSCT(cs.system(), cs.version()), this.params.HTTPLanguages, [code, cs.system(), cs.version(), SCTVersion(cs.system(), cs.version())]), 'invalid-code'));
           }
         }
         if (loc.message && op) {
@@ -1768,7 +1768,7 @@ class ValueSetChecker {
     if (loc === null || loc.context == null) {
       if (!this.params.membershipOnly) {
         op.addIssue(new Issue('error', 'code-invalid', addToPath(path, 'code'), 'Unknown_Code_in_Version',
-          this.worker.i18n.translate(Unknown_Code_in_VersionSCT(cs.system()), this.params.HTTPLanguages, [code, cs.system(), cs.version(), SCTVersion(cs.system(), cs.version())]), 'invalid-code'));
+          this.worker.i18n.translate(Unknown_Code_in_VersionSCT(cs.system(), cs.version()), this.params.HTTPLanguages, [code, cs.system(), cs.version(), SCTVersion(cs.system(), cs.version())]), 'invalid-code'));
       }
     } else if (!(abstractOk || !cs.IsAbstract(loc.context))) {
       if (!this.params.membershipOnly) {
@@ -1801,11 +1801,13 @@ function addToPath(path, name) {
 }
 
 
-function Unknown_Code_in_VersionSCT(url) {
+function Unknown_Code_in_VersionSCT(url, version) {
   if (url === 'http://snomed.info/sct') {
     return 'Unknown_Code_in_Version_SCT';
-  } else {
+  } else if (version) {
     return 'Unknown_Code_in_Version';
+  } else {
+    return 'Unknown_Code_in';
   }
 }
 
@@ -1940,7 +1942,12 @@ class ValidateWorker extends TerminologyWorker {
       // Get the CodeSystem - from parameter or by url
       const codeSystem = await this.resolveCodeSystem(params, txp, coded?.coding?.[0] ?? null, mode);
       if (!codeSystem) {
-        throw new Issue('error', 'invalid', null, null, 'No CodeSystem specified - provide url parameter or codeSystem resource', null, 400);
+        if (!coded?.coding?.[0].system) {
+          let msg = this.i18n.translate('Coding_has_no_system__cannot_validate', txp.HTTPLanguages, []);
+          throw new Issue('warning', 'invalid', mode.issuePath, 'Coding_has_no_system__cannot_validate', msg, 'invalid-data');
+        } else {
+          throw new Issue('error', 'invalid', null, null, 'No CodeSystem specified - provide url parameter or codeSystem resource', null, 400);
+        }
       }
       if (codeSystem.contentMode() == 'supplement') {
         throw new Issue('error', 'invalid', this.systemPath(mode), 'CODESYSTEM_CS_NO_SUPPLEMENT', this.opContext.i18n.translate('CODESYSTEM_CS_NO_SUPPLEMENT', txp.HTTPLanguages, [codeSystem.vurl()]), "invalid-data");
@@ -2481,9 +2488,6 @@ class ValidateWorker extends TerminologyWorker {
       }
       if (coded.coding[0].code) {
         p.addParamCode('code', coded.coding[0].code)
-      }
-      if (coded.coding[0].display) {
-        p.addParamStr('display', coded.coding[0].display)
       }
     }
     if (error.unknownSystem) {
