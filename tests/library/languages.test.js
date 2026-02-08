@@ -10,8 +10,6 @@ const path = require('path');
 const {TestUtilities} = require("../test-utilities");
 
 describe('Language Class', () => {
-  let languageDefinitions;
-
   beforeEach(async () => {
     this.languageDefinitions = await TestUtilities.loadLanguageDefinitions();
   });

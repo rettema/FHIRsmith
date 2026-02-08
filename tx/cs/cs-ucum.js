@@ -4,7 +4,6 @@
  */
 
 const { CodeSystemProvider, FilterExecutionContext, CodeSystemFactoryProvider} = require('./cs-api');
-const { CodeSystem } = require("../library/codesystem");
 const ValueSet = require("../library/valueset");
 const assert = require('assert');
 const {UcumService} = require("../library/ucum-service");

@@ -140,7 +140,7 @@ class RelatedWorker extends TerminologyWorker {
     }
     let otherVS = await this.readValueSet(res, "other", params, txp);
 
-    const result = await this.doRelated(valueSet, txp, logExtraOutput);
+    const result = await this.doRelated(txp, thisVS, otherVS);
     return res.json(this.fixForVersion(result));
   }
   
@@ -162,7 +162,7 @@ class RelatedWorker extends TerminologyWorker {
     };
   }
 
-  async readValueSet(res, prefix, params, txp) {
+  async readValueSet(res, prefix, params) {
     const valueSetParam = this.findParameter(params, prefix+'ValueSet');
     if (valueSetParam && valueSetParam.resource) {
       let valueSet = new ValueSet(valueSetParam.resource);
@@ -252,8 +252,9 @@ class RelatedWorker extends TerminologyWorker {
   async addIncludes(systemMap, includes, side, txp) {
     for (const inc of includes) {
       let key = inc.system || '';
-      if (await this.versionMatters(key, inc.version, txp)) {
-        key = key + "|" + version;
+      let v = {};
+      if (await this.versionMatters(key, inc.version, v, txp)) {
+        key = key + "|" + v.version;
       }
       if (!systemMap.has(key)) {
         systemMap.set(key, {this: [], other: []});
@@ -262,12 +263,16 @@ class RelatedWorker extends TerminologyWorker {
     }
   }
 
-  async versionMatters(key, version, txp) {
+  async versionMatters(key, version, v, txp) {
     let cs = await this.findCodeSystem(key, version, txp, ['complete', 'fragment'], null, true);
-    return cs == null || cs.versionNeeded();
+    let res = cs == null || cs.versionNeeded();
+    if (res) {
+      v.version = version || cs.version();
+    }
+    return res;
   }
 
-  compareNonSystems(status, value) {
+  compareNonSystems(status) {
     // not done yet
     status.fail = true;
   }
@@ -305,14 +310,14 @@ class RelatedWorker extends TerminologyWorker {
         status.common = true;
         status.left = true;
         return;
-      } else if (this.isFullSystem(value.this[0])) {
+      } else if (this.isFullSystem(value.other[0])) {
         status.common = true;
         status.right = true;
         return;
-      } else if (isConcepts(value.this[0]) && isConcepts(value.other[0])) {
+      } else if (this.isConcepts(value.this[0]) && this.isConcepts(value.other[0])) {
         this.compareCodeLists(status, value.this[0], value.other[0]);
         return;
-      } else if (isFilter(value.this[0]) && isFilter(value.other[0])) {
+      } else if (this.isFilter(value.this[0]) && this.isFilter(value.other[0])) {
         if (value.this.length != value.other.length) {
           status.fail = true;
           return;
@@ -426,7 +431,15 @@ class RelatedWorker extends TerminologyWorker {
   }
 
   compareExpansions(status, thisC, otherC) {
-    
+    return false;
+  }
+
+  isConcepts(t) {
+    return false;
+  }
+
+  isFilter(t) {
+    return false;
   }
 }
 

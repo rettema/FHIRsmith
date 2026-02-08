@@ -1,6 +1,6 @@
 const fs = require('fs');
 const os = require('os');
-const {validateParameter, validateOptionalParameter, Utilities} = require("./utilities");
+const {validateOptionalParameter, Utilities} = require("./utilities");
 
 /**
  * Language part types for matching depth
@@ -665,36 +665,6 @@ class LanguageDefinitions {
     }
 
     this.variants.set(variant.code, variant);
-  }
-
-  /**
-   * Parse and validate a language code
-   *
-   * @return {Language} parsed language (or null)
-   */
-  parse(code) {
-    if (!code) return null;
-
-    // Check cache first
-    if (this.parsed.has(code)) {
-      return this.parsed.get(code);
-    }
-
-    const parts = code.split('-');
-    let index = 0;
-
-    // Validate language
-    if (index >= parts.length) return null;
-    const langCode = parts[index].toLowerCase();
-    if (!this.languages.has(langCode) && langCode !== '*') {
-      return null; // Invalid language code
-    }
-
-    const lang = new Language(code);
-
-    // Cache the result
-    this.parsed.set(code, lang);
-    return lang;
   }
 
   /**
