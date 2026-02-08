@@ -9,6 +9,7 @@ const {
   SnomedExpressionServices, SnomedExpression, SnomedConcept,
   SnomedExpressionParser, NO_REFERENCE, SnomedServicesRenderOption
 } = require('../sct/expressions');
+const {DesignationUse} = require("../library/designations");
 
 // Context kinds matching Pascal enum
 const SnomedProviderContextKind = {
@@ -507,7 +508,7 @@ class SnomedProvider extends CodeSystemProvider {
     if (disp) return disp;
 
     if (ctxt.isComplex()) {
-      return this.sct.expressionServices.displayExpression(ctxt.expression);
+      return this.sct.expressionServices.renderExpression(ctxt.expression, SnomedServicesRenderOption.FillMissing);
     } else {
       return this.sct.getDisplayName(ctxt.getReference(), this.sct.defaultLanguage);
     }
@@ -558,7 +559,7 @@ class SnomedProvider extends CodeSystemProvider {
         // For complex expressions, just add the display
         const display = await this.display(context);
         if (display) {
-          displays.addDesignation(true, 'active', new Designation('en-US', null, display));
+          displays.addDesignation(true, 'active', 'en-US', DesignationUse.PREFERRED, display);
         }
       } else {
         // Get all designations for the concept
