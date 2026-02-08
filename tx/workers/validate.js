@@ -597,11 +597,11 @@ class ValueSetChecker {
         defLang.value = cs.defLang();
         this.checkCanonicalStatus(path, op, cs, this.valueSet);
         ver.value = cs.version();
-        contentMode.value = cs.contentMode;
+        contentMode.value = cs.contentMode();
         let ctxt = cs.locate(code);
         if (ctxt.context === null) {
           unkCodes.push(system + '|' + version + '#' + code);
-          if (cs.contentMode !== 'complete') {
+          if (cs.contentMode() !== 'complete') {
             result = true;
             cause.value = 'code-invalid';
             this.worker.opContext.addNote(this.valueSet, 'Not found in Incomplete Code System', this.indentCount);

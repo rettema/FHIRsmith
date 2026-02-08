@@ -626,9 +626,9 @@ class ValueSetExpander {
           } else if (cs.contentMode() === 'supplement') {
             throw new Issue('error', 'business-rule', null, null, 'The code system definition for ' + cset.system + ' defines a supplement, so this expansion cannot be performed', 'invalid');
           } else if (this.params.incompleteOK) {
-            this.addParamUri(cs.contentMode, cs.system + '|' + cs.version);
+            this.addParamUri(cs.contentMode(), cs.system + '|' + cs.version);
           } else {
-            throw new Issue('error', 'business-rule', null, null, 'The code system definition for ' + cset.system + ' is a ' + cs.contentMode + ', so this expansion is not permitted unless the expansion parameter "incomplete-ok" has a value of "true"', 'invalid');
+            throw new Issue('error', 'business-rule', null, null, 'The code system definition for ' + cset.system + ' is a ' + cs.contentMode() + ', so this expansion is not permitted unless the expansion parameter "incomplete-ok" has a value of "true"', 'invalid');
           }
         }
 
