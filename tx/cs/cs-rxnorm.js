@@ -527,7 +527,7 @@ class RxNormServices extends CodeSystemProvider {
         if (err) {
           reject(err);
         } else if (!row) {
-          resolve(`Code ${code} is not in the specified filter`);
+          resolve(null);
         } else {
           const concept = new RxNormConcept(row[this.getCodeField()], row.STR);
           resolve(concept);

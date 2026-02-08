@@ -626,7 +626,7 @@ class SnomedProvider extends CodeSystemProvider {
       } catch (error) {
         return {
           context: null,
-          message: `Code ${code} is not a valid SNOMED CT Term, and could not be parsed as an expression (${error.message})`
+          message: `Code ${code} is not a valid SNOMED CT Term, and neither could it be parsed as an expression (${error.message})`
         };
       }
     } else {
@@ -848,7 +848,7 @@ class SnomedProvider extends CodeSystemProvider {
     if (found) {
       return ctxt;
     } else {
-      return `Code ${code} is not in the specified filter`;
+      return null;
     }
   }
 

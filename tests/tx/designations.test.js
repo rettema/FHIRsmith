@@ -123,7 +123,7 @@ describe('Designations', () => {
 
     test('should find preferred designation without language list', () => {
       const preferred = designations.preferredDesignation();
-      expect(preferred.display).toBe('Base English');
+      expect(preferred.display).toBe('US English Display');
       expect(designations.isDisplay(preferred)).toBe(true);
     });
 
