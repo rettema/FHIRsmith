@@ -1,4 +1,4 @@
-const { CodeSystemProvider, CodeSystemContentMode, Designation, CodeSystemFactoryProvider} = require('./cs-api');
+const { CodeSystemProvider, CodeSystemContentMode, CodeSystemFactoryProvider} = require('./cs-api');
 const {
   SnomedStrings, SnomedWords, SnomedStems, SnomedReferences,
   SnomedDescriptions, SnomedDescriptionIndex, SnomedConceptList,
