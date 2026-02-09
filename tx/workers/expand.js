@@ -1791,8 +1791,6 @@ class ExpandWorker extends TerminologyWorker {
     }
 
     const filter = new SearchFilterText(params.filter);
-    //txResources = processAdditionalResources(context, manager, nil, params);
-    // Create expander and run expansion
     const expander = new ValueSetExpander(this, params);
     expander.logExtraOutput = logExtraOutput;
     return await expander.expand(valueSet, filter);

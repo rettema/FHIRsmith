@@ -249,8 +249,10 @@ class LookupWorker extends TerminologyWorker {
     const locateResult = await csProvider.locate(code);
 
     if (!locateResult || !locateResult.context) {
-      const message = locateResult?.message ||
-        `Unable to find code '${code}' in ${csProvider.system()} version ${csProvider.version() || 'unknown'}`;
+      let message = `Unable to find code '${code}' in ${csProvider.system()} version ${csProvider.version() || 'unknown'}`
+      if (locateResult?.message) {
+        message += ' ('+locateResult.message+')';
+      }
       throw new Issue('error', 'not-found', null, null, message, null, 404);
     }
 

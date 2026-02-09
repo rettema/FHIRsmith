@@ -627,7 +627,7 @@ class SnomedProvider extends CodeSystemProvider {
       } catch (error) {
         return {
           context: null,
-          message: `Code ${code} is not a valid SNOMED CT Term, and neither could it be parsed as an expression (${error.message})`
+          message: Number.isInteger(code) ? undefined : `Not a valid expression: ${error.message}`
         };
       }
     } else {
