@@ -14,8 +14,8 @@ sources:
   - rxnorm:rxnorm_02032025-a.db
   - ndc:ndc-20211101.db
   - unii:unii_20240622.db
-  - snomed!:sct_intl_20250201.cache
   - snomed:sct_intl_20240201.cache
+  - snomed!:sct_intl_20250201.cache
   - snomed:sct_se_20231130.cache
   - snomed:sct_au_20230731.cache
   - snomed:sct_be_20231115.cache
