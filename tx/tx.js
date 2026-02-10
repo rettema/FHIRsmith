@@ -89,9 +89,29 @@ class TXModule {
 
   acceptsXml(req) {
     const accept = req.headers.accept || '';
-    return accept.includes('application/fhir+xml') || accept.includes('application/xml+fhir');
+    if (accept.includes('application/fhir+xml')) {
+      return 'application/fhir+xml';
+    } else if (accept.includes('application/xml+fhir')) {
+      return 'application/xml+fhir';
+    } else if (accept.includes('application/xml')) {
+      return 'application/xml';
+    } else {
+      return null;
+    }
   }
 
+  acceptsJson(req) {
+    const accept = req.headers.accept || '';
+    if (accept.includes('application/fhir+json')) {
+      return 'application/fhir+json';
+    } else if (accept.includes('application/json+fhir')) {
+      return 'application/json+fhir';
+    } else if (accept.includes('application/json')) {
+      return 'application/json';
+    } else {
+      return 'application/fhir+json';
+    }
+  }
 
   /**
    * Initialize the TX module
@@ -263,7 +283,8 @@ class TXModule {
         try {
           const duration = Date.now() - req.txStartTime;
           const isHtml = txhtml.acceptsHtml(req);
-          const isXml = this.acceptsXml(req);
+          const xmlFmt = this.acceptsXml(req);
+          const jsonFmt = this.acceptsJson(req);
           data = this.transformResourceForVersion(data, endpointInfo.fhirVersion);
 
           let responseSize;
@@ -276,31 +297,31 @@ class TXModule {
             responseSize = Buffer.byteLength(html, 'utf8');
             res.setHeader('Content-Type', 'text/html');
             result = res.send(html);
-          } else if (isXml) {
+          } else if (xmlFmt) {
             try {
               const xml = this.convertResourceToXml(data);
               responseSize = Buffer.byteLength(xml, 'utf8');
-              res.setHeader('Content-Type', 'application/fhir+xml');
+              res.setHeader('Content-Type', xmlFmt);
               result = res.send(xml);
             } catch (err) {
               console.error(err);
               // Fall back to JSON if XML conversion not supported
               this.log.warn(`XML conversion failed for ${data.resourceType}: ${err.message}, falling back to JSON`);
-              res.setHeader('Content-Type', 'application/fhir+json');
+              res.setHeader('Content-Type', jsonFmt);
               const jsonStr = JSON.stringify(data);
               responseSize = Buffer.byteLength(jsonStr, 'utf8');
               result = originalJson(data);
             }
           } else {
             const jsonStr = JSON.stringify(data);
-            res.setHeader('Content-Type', 'application/fhir+json');
+            res.setHeader('Content-Type', jsonFmt);
             this.checkProperJson(jsonStr);
             responseSize = Buffer.byteLength(jsonStr, 'utf8');
             result = originalJson(data);
           }
 
           // Log the request with request ID
-          const format = isHtml ? 'html' : (isXml ? 'xml' : 'json');
+          const format = isHtml ? 'html' : (xmlFmt ? 'xml' : 'json');
           let li = req.logInfo ? "(" + req.logInfo + ")" : "";
           this.log.info(`[${requestId}] ${req.method} ${format} ${res.statusCode} ${duration}ms ${responseSize}: ${req.originalUrl} ${li})`);
 
