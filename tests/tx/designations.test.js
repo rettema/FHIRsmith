@@ -16,9 +16,8 @@ describe('Designations', () => {
 
   beforeAll(async () => {
     // Load real language registry
-    const langDataPath = path.join(__dirname, '../../tx/data/lang.dat');
-    const content = fs.readFileSync(langDataPath, 'utf8');
-    languageDefinitions = LanguageDefinitions.fromContent(content);
+    const langDataPath = path.join(__dirname, '../../tx/data');
+    languageDefinitions = LanguageDefinitions.fromFiles(langDataPath);
   });
 
   beforeEach(() => {

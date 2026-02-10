@@ -279,11 +279,10 @@ describe('LanguageDefinitions Class', () => {
 
   beforeAll(() => {
     // Try to load real IETF data, fall back to mock if not available
-    const realDataPath = path.join(__dirname, '../../tx/data/lang.dat');
+    const realDataPath = path.join(__dirname, '../../tx/data');
 
     if (fs.existsSync(realDataPath)) {
-      const realContent = fs.readFileSync(realDataPath, 'utf8');
-      definitions = LanguageDefinitions.fromContent(realContent);
+      definitions = LanguageDefinitions.fromFiles(realDataPath);
       // console.log('Using real IETF language data from lang.dat');
     } else {
       throw new Error('Real data file not found');
@@ -503,7 +502,7 @@ Description: Test
     test('should present language with region', () => {
       const lang = new Language('en-US');
       const presentation = definitions.present(lang);
-      expect(presentation).toBe('English (Region=United States)');
+      expect(presentation).toBe('English (United States)');
     });
 
     test('should present language with script and region', () => {
@@ -553,11 +552,10 @@ describe('Language System Integration Tests', () => {
 
   beforeAll(() => {
     // Try to load real IETF data, fall back to mock if not available
-    const realDataPath = path.join(__dirname, '../../tx/data/lang.dat');
+    const realDataPath = path.join(__dirname, '../../tx/data');
 
     if (fs.existsSync(realDataPath)) {
-      const realContent = fs.readFileSync(realDataPath, 'utf8');
-      definitions = LanguageDefinitions.fromContent(realContent);
+      definitions = LanguageDefinitions.fromFiles(realDataPath);
       // console.log('Using real IETF language data from lang.dat');
     } else {
       throw new Error('Real data file not found');
@@ -598,7 +596,7 @@ describe('Language System Integration Tests', () => {
       expect(validated.isLangRegion()).toBe(true);
       
       const presentation = definitions.present(validated);
-      expect(presentation).toMatch(/\(Region=/);
+      expect(presentation).toMatch(/\(/);
     }
   });
 

@@ -89,7 +89,7 @@ class IETFLanguageCodeProvider extends CodeSystemProvider {
   // ========== Code Information Methods ==========
 
   async code(code) {
-    
+
     const ctxt = await this.#ensureContext(code);
     if (ctxt instanceof Language) {
       return ctxt.code;
@@ -98,13 +98,26 @@ class IETFLanguageCodeProvider extends CodeSystemProvider {
   }
 
   async display(code) {
-    
+
     const ctxt = await this.#ensureContext(code);
     if (!ctxt) {
       return null;
     }
-    if (this.opContext.langs.isEnglishOrNothing()) {
-      return this.languageDefinitions.present(ctxt).trim();
+    if (!this.opContext.langs.isEnglishOrNothing()) {
+      // Try translated display for the primary requested language
+      const primaryLang = this.opContext.langs.getPrimary();
+      if (primaryLang && primaryLang.language) {
+        const langTranslation = this.languageDefinitions.getTranslatedDisplayForLang(ctxt.language, primaryLang.language);
+        if (langTranslation && langTranslation !== ctxt.language) {
+          if (ctxt.isLangRegion()) {
+            const regionTranslation = this.languageDefinitions.getTranslatedDisplayForRegion(ctxt.region, primaryLang.language);
+            if (regionTranslation && regionTranslation !== ctxt.region) {
+              return `${langTranslation} (${regionTranslation})`;
+            }
+          }
+          return langTranslation;
+        }
+      }
     }
     let disp = this._displayFromSupplements(ctxt.code);
     if (disp) {
@@ -166,6 +179,32 @@ class IETFLanguageCodeProvider extends CodeSystemProvider {
           }
         }
       }
+      // add translated designations from CSV data
+      const translationLangs = ['fr', 'de', 'es', 'ar', 'zh', 'ru', 'ja', 'sw'];
+      // languages that don't have upper/lower case distinction
+      const caselessLangs = new Set(['ar', 'zh', 'ja']);
+
+      for (const tLang of translationLangs) {
+        const langTranslation = this.languageDefinitions.getTranslatedDisplayForLang(ctxt.language, tLang);
+        if (langTranslation && langTranslation !== ctxt.language) {
+          if (ctxt.isLangRegion()) {
+            const regionTranslation = this.languageDefinitions.getTranslatedDisplayForRegion(ctxt.region, tLang);
+            if (regionTranslation && regionTranslation !== ctxt.region) {
+              const translatedDisplay = `${langTranslation} (${regionTranslation})`;
+              displays.addDesignation(false, 'active', tLang, CodeSystem.makeUseForDisplay(), translatedDisplay);
+              displays.addDesignation(false, 'active', tLang, CodeSystem.makeUseForDisplay(), `${langTranslation} (Region=${regionTranslation})`);
+              displays.addDesignation(false, 'active', tLang, CodeSystem.makeUseForDisplay(), `${langTranslation}-${regionTranslation}`);
+              if (!caselessLangs.has(tLang)) {
+                displays.addDesignation(false, 'active', tLang, CodeSystem.makeUseForDisplay(), `${langTranslation}-${regionTranslation.toUpperCase()}`);
+              }
+            } else {
+              displays.addDesignation(false, 'active', tLang, CodeSystem.makeUseForDisplay(), langTranslation);
+            }
+          } else {
+            displays.addDesignation(false, 'active', tLang, CodeSystem.makeUseForDisplay(), langTranslation);
+          }
+        }
+      }
       this._listSupplementDesignations(ctxt.code, displays);
     }
     return designations;
@@ -193,7 +232,7 @@ class IETFLanguageCodeProvider extends CodeSystemProvider {
   // ========== Lookup Methods ==========
 
   async locate(code) {
-    
+
     assert(!code || typeof code === 'string', 'code must be string');
     if (!code) return { context: null, message: 'Empty code' };
 
@@ -208,7 +247,7 @@ class IETFLanguageCodeProvider extends CodeSystemProvider {
   // ========== Filter Methods ==========
 
   async doesFilter(prop, op, value) {
-    
+
     assert(prop != null && typeof prop === 'string', 'prop must be a non-null string');
     assert(op != null && typeof op === 'string', 'op must be a non-null string');
     assert(value != null && typeof value === 'string', 'value must be a non-null string');
@@ -221,7 +260,7 @@ class IETFLanguageCodeProvider extends CodeSystemProvider {
   }
 
   async searchFilter(filterContext, filter, sort) {
-    
+
     assert(filterContext && filterContext instanceof FilterExecutionContext, 'filterContext must be a FilterExecutionContext');
     assert(filter && typeof filter === 'string', 'filter must be a non-null string');
     assert(typeof sort === 'boolean', 'sort must be a boolean');
@@ -231,7 +270,7 @@ class IETFLanguageCodeProvider extends CodeSystemProvider {
 
 
   async filter(filterContext, prop, op, value) {
-    
+
     assert(filterContext && filterContext instanceof FilterExecutionContext, 'filterContext must be a FilterExecutionContext');
     assert(prop != null && typeof prop === 'string', 'prop must be a non-null string');
     assert(op != null && typeof op === 'string', 'op must be a non-null string');
@@ -257,13 +296,13 @@ class IETFLanguageCodeProvider extends CodeSystemProvider {
   }
 
   async executeFilters(filterContext) {
-    
+
     assert(filterContext && filterContext instanceof FilterExecutionContext, 'filterContext must be a FilterExecutionContext');
     return filterContext.filters;
   }
 
   async filterSize(filterContext, set) {
-    
+
     assert(filterContext && filterContext instanceof FilterExecutionContext, 'filterContext must be a FilterExecutionContext');
     assert(set && set instanceof IETFLanguageCodeFilter, 'set must be a IETFLanguageCodeFilter');
 
@@ -271,27 +310,27 @@ class IETFLanguageCodeProvider extends CodeSystemProvider {
   }
 
   async filtersNotClosed(filterContext) {
-    
+
     assert(filterContext && filterContext instanceof FilterExecutionContext, 'filterContext must be a FilterExecutionContext');
     return true; // Grammar-based system is not closed
   }
 
   async filterMore(filterContext, set) {
-    
+
     assert(filterContext && filterContext instanceof FilterExecutionContext, 'filterContext must be a FilterExecutionContext');
     assert(set && set instanceof IETFLanguageCodeFilter, 'set must be a IETFLanguageCodeFilter');
     throw new Error('Language valuesets cannot be expanded as they are based on a grammar');
   }
 
   async filterConcept(filterContext, set) {
-    
+
     assert(filterContext && filterContext instanceof FilterExecutionContext, 'filterContext must be a FilterExecutionContext');
     assert(set && set instanceof IETFLanguageCodeFilter, 'set must be a IETFLanguageCodeFilter');
     throw new Error('Language valuesets cannot be expanded as they are based on a grammar');
   }
 
   async filterLocate(filterContext, set, code) {
-    
+
     assert(filterContext && filterContext instanceof FilterExecutionContext, 'filterContext must be a FilterExecutionContext');
     assert(set && set instanceof IETFLanguageCodeFilter, 'set must be a IETFLanguageCodeFilter');
     assert(typeof code === 'string', 'code must be non-null string');
@@ -340,7 +379,7 @@ class IETFLanguageCodeProvider extends CodeSystemProvider {
   }
 
   async filterCheck(filterContext, set, concept) {
-    
+
     assert(filterContext && filterContext instanceof FilterExecutionContext, 'filterContext must be a FilterExecutionContext');
     assert(set && set instanceof IETFLanguageCodeFilter, 'set must be a IETFLanguageCodeFilter');
     const ctxt = await this.#ensureContext(concept);
@@ -385,7 +424,7 @@ class IETFLanguageCodeProvider extends CodeSystemProvider {
   // ========== Additional Methods ==========
 
   async sameConcept(a, b) {
-    
+
     const codeA = await this.code(a);
     const codeB = await this.code(b);
     return codeA === codeB;
