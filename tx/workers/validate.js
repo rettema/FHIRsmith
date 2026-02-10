@@ -2138,13 +2138,13 @@ class ValidateWorker extends TerminologyWorker {
    * Resolve the CodeSystem to validate against
    * @param {Object} params - Parameters resource
    * @param {string|null} id - Instance id (if instance-level request)
-   * @returns {Object|null} CodeSystem resource (wrapper or JSON)
+   * @returns {CodeSystemProvider|null} CodeSystem resource (wrapper or JSON)
    */
   async resolveCodeSystem(params, txParams, coded, mode) {
     // Check for codeSystem resource parameter
     const csResource = this.getResourceParam(params, 'codeSystem');
     if (csResource) {
-      return csResource;
+      return new FhirCodeSystemProvider(this.opContext, new CodeSystem(csResource), []); // todo: supplements
     }
     let path = coded == null ? null : mode.issuePath+".system";
     let fromCoded = false;
