@@ -1024,7 +1024,7 @@ class ValueSetChecker {
     mt = [];
     let i = 0;
     let impliedSystem = { value: '' };
-    for (let c of code.coding) {
+    for (let c of code.coding || []) {
       const csd = await this.worker.findCodeSystem(c.system, null, this.params, ['complete', 'fragment'], false, true);
       this.worker.seeSourceProvider(csd, c.system);
 
