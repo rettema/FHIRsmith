@@ -37,6 +37,22 @@ const {TxHtmlRenderer} = require("./tx-html");
 const {Renderer} = require("./library/renderer");
 const {OperationsWorker} = require("./workers/operations");
 const {RelatedWorker} = require("./workers/related");
+const {CodeSystem} = require("./library/codesystem");
+const {Bundle} = require("./library/bundle");
+const {ValueSet} = require("./library/valueset");
+const {Parameters} = require("./library/parameters");
+const {CapabilityStatement} = require("./library/capabilitystatement");
+const {TerminologyCapabilities} = require("./library/terminologycapabilities");
+const {ConceptMap} = require("./library/conceptmap");
+const {codeSystemFromR5} = require("./xversion/xv-codesystem");
+const {operationOutcomeFromR5} = require("./xversion/xv-operationoutcome");
+const {parametersFromR5} = require("./xversion/xv-parameters");
+const {conceptMapFromR5} = require("./xversion/xv-conceptmap");
+const {valueSetFromR5} = require("./xversion/xv-valueset");
+const {terminologyCapabilitiesFromR5} = require("./xversion/xv-terminologyCapabilities");
+const {capabilityStatementFromR5} = require("./xversion/xv-capabiliityStatement");
+const {bundleFromR5} = require("./xversion/xv-bundle");
+const {convertResourceToR5} = require("./xversion/xv-resource");
 // const {writeFileSync} = require("fs");
 
 class TXModule {
@@ -105,9 +121,9 @@ class TXModule {
     }
 
     // Load language definitions
-    const langPath = path.join(__dirname, 'data', 'lang.dat');
+    const langPath = path.join(__dirname, 'data');
     this.log.info(`Loading language definitions from: ${langPath}`);
-    this.languages = await LanguageDefinitions.fromFile(langPath);
+    this.languages = await LanguageDefinitions.fromFiles(langPath);
     this.log.info('Language definitions loaded');
 
     // Initialize i18n support
@@ -247,6 +263,7 @@ class TXModule {
           const duration = Date.now() - req.txStartTime;
           const isHtml = txhtml.acceptsHtml(req);
           const isXml = this.acceptsXml(req);
+          data = this.transformResourceForVersion(data, endpointInfo.fhirVersion);
 
           let responseSize;
           let result;
@@ -369,6 +386,9 @@ class TXModule {
         }
       }
 
+      if (req.body) {
+        req.body = convertResourceToR5(req.body, req.txEndpoint.fhirVersion);
+      }
       next();
     });
 
@@ -980,6 +1000,45 @@ class TXModule {
   //     writeFileSync(filename, jsonStr);
   //     throw new Error(errors.join('; '));
   //   }
+  }
+
+  transformResourceForVersion(data, fhirVersion) {
+    if (fhirVersion == "5.0" || !data.resourceType) {
+        return data;
+    }
+    switch (data.resourceType) {
+      case "CodeSystem": return codeSystemFromR5(data, fhirVersion);
+      case "CapabilityStatement": return capabilityStatementFromR5(data, fhirVersion);
+      case "TerminologyCapabilities": return terminologyCapabilitiesFromR5(data, fhirVersion);
+      case "ValueSet": return valueSetFromR5(data, fhirVersion);
+      case "ConceptMap": return conceptMapFromR5(data, fhirVersion);
+      case "Parameters": return parametersFromR5(data, fhirVersion);
+      case "OperationOutcome": return operationOutcomeFromR5(data, fhirVersion);
+      case "Bundle": return bundleFromR5(data, fhirVersion);
+      default: return data;
+    }
+  }
+
+
+  fixForVersion(resource) {
+    if (this.provider.fhirVersion >= 5) {
+      return resource;
+    }
+    let rt = resource.resourceType;
+    switch (rt) {
+      case "ValueSet": {
+        let vs = new ValueSet(resource);
+        if (this.provider.fhirVersion == 4) {
+          return vs.convertFromR5(resource, "R4");
+        } else if (this.provider.fhirVersion == 3) {
+          return vs.convertFromR5(resource, "R3");
+        } else {
+          return resource;
+        }
+      }
+      default:
+        return resource;
+    }
   }
 }
 

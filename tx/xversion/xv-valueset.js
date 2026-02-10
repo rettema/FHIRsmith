@@ -1,42 +1,39 @@
 const {VersionUtilities} = require("../../library/version-utilities");
+const {getValueName} = require("../../library/utilities");
 
 /**
- * Converts input CodeSystem to R5 format (modifies input object for performance)
- * @param {Object} jsonObj - The input CodeSystem object
+ * Converts input ValueSet to R5 format (modifies input object for performance)
+ * @param {Object} jsonObj - The input ValueSet object
  * @param {string} version - Source FHIR version
  * @returns {Object} The same object, potentially modified to R5 format
  * @private
  */
 
-function codeSystemToR5(jsonObj, version) {
-  if (version === 'R5') {
-    return jsonObj; // Already R5, no conversion needed
+function valueSetToR5(jsonObj, sourceVersion) {
+  if (VersionUtilities.isR5Ver(sourceVersion)) {
+    return jsonObj; // No conversion needed
   }
-
-  if (version === 'R3') {
-    // R3 to R5: Convert identifier from single object to array
-    if (jsonObj.identifier && !Array.isArray(jsonObj.identifier)) {
-      jsonObj.identifier = [jsonObj.identifier];
+  if (VersionUtilities.isR4Ver(sourceVersion)) {
+    return jsonObj; // No conversion needed
+  }
+  if (VersionUtilities.isR3Ver(sourceVersion)) {
+    // R3 to R5: Remove extensible field (we ignore it completely)
+    if (jsonObj.extensible !== undefined) {
+      delete jsonObj.extensible;
     }
-    return jsonObj;
+    return jsonObj; // No conversion needed
   }
-
-  if (version === 'R4') {
-    // R4 to R5: identifier is already an array, no conversion needed
-    return jsonObj;
-  }
-
-  throw new Error(`Unsupported FHIR version: ${version}`);
+  throw new Error(`Unsupported FHIR version: ${sourceVersion}`);
 }
 
 /**
- * Converts R5 CodeSystem to target version format (clones object first)
- * @param {Object} r5Obj - The R5 format CodeSystem object
+ * Converts R5 ValueSet to target version format (clones object first)
+ * @param {Object} r5Obj - The R5 format ValueSet object
  * @param {string} targetVersion - Target FHIR version
  * @returns {Object} New object in target version format
  * @private
  */
-function codeSystemFromR5(r5Obj, targetVersion) {
+function valueSetFromR5(r5Obj, targetVersion) {
   if (VersionUtilities.isR5Ver(targetVersion)) {
     return r5Obj; // No conversion needed
   }
@@ -45,22 +42,21 @@ function codeSystemFromR5(r5Obj, targetVersion) {
   const cloned = JSON.parse(JSON.stringify(r5Obj));
 
   if (VersionUtilities.isR4Ver(targetVersion)) {
-    return codeSystemR5ToR4(cloned);
+    return valueSetR5ToR4(cloned);
   } else if (VersionUtilities.isR3Ver(targetVersion)) {
-    return codeSystemR5ToR3(cloned);
+    return valueSetR5ToR3(cloned);
   }
 
   throw new Error(`Unsupported target FHIR version: ${targetVersion}`);
 }
 
 /**
- * Converts R5 CodeSystem to R4 format
- * @param {Object} r5Obj - Cloned R5 CodeSystem object
- * @returns {Object} R4 format CodeSystem
+ * Converts R5 ValueSet to R4 format
+ * @param {Object} r5Obj - Cloned R5 ValueSet object
+ * @returns {Object} R4 format ValueSet
  * @private
  */
-function codeSystemR5ToR4(r5Obj) {
-  // Remove R5-specific elements that don't exist in R4
+function valueSetR5ToR4(r5Obj) {
   if (r5Obj.versionAlgorithmString) {
     delete r5Obj.versionAlgorithmString;
   }
@@ -68,69 +64,136 @@ function codeSystemR5ToR4(r5Obj) {
     delete r5Obj.versionAlgorithmCoding;
   }
 
-  // Filter out R5-only filter operators
-  if (r5Obj.filter && Array.isArray(r5Obj.filter)) {
-    r5Obj.filter = r5Obj.filter.map(filter => {
-      if (filter.operator && Array.isArray(filter.operator)) {
-        // Remove R5-only operators like 'generalizes'
-        filter.operator = filter.operator.filter(op =>
-          !isR5OnlyFilterOperator(op)
-        );
+  // Filter out R5-only filter operators in compose
+  if (r5Obj.compose && r5Obj.compose.include) {
+    r5Obj.compose.include = r5Obj.compose.include.map(include => {
+      if (include.filter && Array.isArray(include.filter)) {
+        include.filter = include.filter.map(filter => {
+          if (filter.op && isR5OnlyFilterOperator(filter.op)) {
+            // Remove R5-only operators
+            return null;
+          }
+          return filter;
+        }).filter(filter => filter !== null);
       }
-      return filter;
-    }).filter(filter =>
-      // Remove filters that have no valid operators left
-      !filter.operator || filter.operator.length > 0
-    );
+      return include;
+    });
+  }
+
+  if (r5Obj.compose && r5Obj.compose.exclude) {
+    r5Obj.compose.exclude = r5Obj.compose.exclude.map(exclude => {
+      if (exclude.filter && Array.isArray(exclude.filter)) {
+        exclude.filter = exclude.filter.map(filter => {
+          if (filter.op && isR5OnlyFilterOperator(filter.op)) {
+            // Remove R5-only operators
+            return null;
+          }
+          return filter;
+        }).filter(filter => filter !== null);
+      }
+      return exclude;
+    });
+  }
+
+  if (r5Obj.expansion) {
+    let exp = r5Obj.expansion;
+
+    // Convert ValueSet.expansion.property to extensions
+    if (exp.property && exp.property.length > 0) {
+      exp.extension = exp.extension || [];
+      for (let prop of exp.property) {
+        exp.extension.push({
+          url: "http://hl7.org/fhir/5.0/StructureDefinition/extension-ValueSet.expansion.property",
+          extension: [
+            { url: "code", valueCode: prop.code },
+            { url: "uri", valueUri: prop.uri }
+          ]
+        });
+      }
+      delete exp.property;
+      convertContainsPropertyR5ToR4(exp.contains);
+
+    }
   }
 
   return r5Obj;
 }
 
 /**
- * Converts R5 CodeSystem to R3 format
- * @param {Object} r5Obj - Cloned R5 CodeSystem object
- * @returns {Object} R3 format CodeSystem
+ * Converts R5 ValueSet to R3 format
+ * @param {Object} r5Obj - Cloned R5 ValueSet object
+ * @returns {Object} R3 format ValueSet
  * @private
  */
-function codeSystemR5ToR3(r5Obj) {
+function valueSetR5ToR3(r5Obj) {
   // First apply R4 conversions
-  const r4Obj = codeSystemR5ToR4(r5Obj);
-
-  // R5/R4 to R3: Convert identifier from array back to single object
-  if (r4Obj.identifier && Array.isArray(r4Obj.identifier)) {
-    if (r4Obj.identifier.length > 0) {
-      // Take the first identifier if multiple exist
-      r4Obj.identifier = r4Obj.identifier[0];
-    } else {
-      // Remove empty array
-      delete r4Obj.identifier;
-    }
-  }
-
-  // Remove additional R4-specific elements that don't exist in R3
-  if (r4Obj.supplements) {
-    delete r4Obj.supplements;
-  }
+  const r4Obj = valueSetR5ToR4(r5Obj);
 
   // R3 has more limited filter operator support
-  if (r4Obj.filter && Array.isArray(r4Obj.filter)) {
-    r4Obj.filter = r4Obj.filter.map(filter => {
-      if (filter.operator && Array.isArray(filter.operator)) {
-        // Keep only R3-compatible operators
-        filter.operator = filter.operator.filter(op =>
-          isR3CompatibleFilterOperator(op)
-        );
+  if (r4Obj.compose && r4Obj.compose.include) {
+    r4Obj.compose.include = r4Obj.compose.include.map(include => {
+      if (include.filter && Array.isArray(include.filter)) {
+        include.filter = include.filter.map(filter => {
+          if (filter.op && !isR3CompatibleFilterOperator(filter.op)) {
+            // Remove non-R3-compatible operators
+            return null;
+          }
+          return filter;
+        }).filter(filter => filter !== null);
       }
-      return filter;
-    }).filter(filter =>
-      // Remove filters that have no valid operators left
-      !filter.operator || filter.operator.length > 0
-    );
+      return include;
+    });
   }
 
+  if (r4Obj.compose && r4Obj.compose.exclude) {
+    r4Obj.compose.exclude = r4Obj.compose.exclude.map(exclude => {
+      if (exclude.filter && Array.isArray(exclude.filter)) {
+        exclude.filter = exclude.filter.map(filter => {
+          if (filter.op && !isR3CompatibleFilterOperator(filter.op)) {
+            // Remove non-R3-compatible operators
+            return null;
+          }
+          return filter;
+        }).filter(filter => filter !== null);
+      }
+      return exclude;
+    });
+  }
   return r4Obj;
 }
+
+
+
+// Recursive function to convert contains.property
+function convertContainsPropertyR5ToR4(containsList) {
+  if (!containsList) return;
+
+  for (let item of containsList) {
+    if (item.property && item.property.length > 0) {
+      item.extension = item.extension || [];
+      for (let prop of item.property) {
+        let ext = {
+          url: "http://hl7.org/fhir/5.0/StructureDefinition/extension-ValueSet.expansion.contains.property",
+          extension: [
+            { url: "code", valueCode: prop.code }
+          ]
+        };
+        let pn = getValueName(prop);
+        let subExt = { url: "value" };
+        subExt[pn] = prop[pn];
+        ext.extension.push(subExt);
+        item.extension.push(ext);
+      }
+      delete item.property;
+    }
+
+    // Recurse into nested contains
+    if (item.contains) {
+      convertContainsPropertyR5ToR4(item.contains);
+    }
+  }
+}
+
 
 /**
  * Checks if a filter operator is R5-only
@@ -166,4 +229,6 @@ function isR3CompatibleFilterOperator(operator) {
   return r3CompatibleOperators.includes(operator);
 }
 
-module.exports = { codeSystemToR5, codeSystemFromR5 };
+
+module.exports = { valueSetToR5, valueSetFromR5 };
+

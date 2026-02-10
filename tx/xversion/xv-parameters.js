@@ -1,28 +1,28 @@
 const {VersionUtilities} = require("../../library/version-utilities");
 
 /**
- * Converts input ValueSet to R5 format (modifies input object for performance)
- * @param {Object} jsonObj - The input ValueSet object
+ * Converts input Parameters to R5 format (modifies input object for performance)
+ * @param {Object} jsonObj - The input Parameters object
  * @param {string} version - Source FHIR version
  * @returns {Object} The same object, potentially modified to R5 format
  * @private
  */
 
-function valueSetToR5(jsonObj, sourceVersion) {
+function parametersToR5(jsonObj, sourceVersion) {
   if (VersionUtilities.isR5Ver(sourceVersion)) {
     return jsonObj; // No conversion needed
   }
-  return jsonObj;
+  throw new Error(`Unsupported FHIR version: ${sourceVersion}`);
 }
 
 /**
- * Converts R5 ValueSet to target version format (clones object first)
- * @param {Object} r5Obj - The R5 format ValueSet object
+ * Converts R5 Parameters to target version format (clones object first)
+ * @param {Object} r5Obj - The R5 format Parameters object
  * @param {string} targetVersion - Target FHIR version
  * @returns {Object} New object in target version format
  * @private
  */
-function valueSetFromR5(r5Obj, targetVersion) {
+function parametersFromR5(r5Obj, targetVersion) {
   if (VersionUtilities.isR5Ver(targetVersion)) {
     return r5Obj; // No conversion needed
   }
@@ -31,36 +31,57 @@ function valueSetFromR5(r5Obj, targetVersion) {
   const cloned = JSON.parse(JSON.stringify(r5Obj));
 
   if (VersionUtilities.isR4Ver(targetVersion)) {
-    return valueSetR5ToR4(cloned);
+    return parametersR5ToR4(cloned);
   } else if (VersionUtilities.isR3Ver(targetVersion)) {
-    return valueSetR5ToR3(cloned);
+    return parametersR5ToR3(cloned);
   }
 
   throw new Error(`Unsupported target FHIR version: ${targetVersion}`);
 }
 
 /**
- * Converts R5 ValueSet to R4 format
- * @param {Object} r5Obj - Cloned R5 ValueSet object
- * @returns {Object} R4 format ValueSet
+ * Converts R5 Parameters to R4 format
+ * @param {Object} r5Obj - Cloned R5 Parameters object
+ * @returns {Object} R4 format Parameters
  * @private
  */
-function valueSetR5ToR4(r5Obj) {
+function parametersR5ToR4(r5Obj) {
+  const {convertResourceFromR5} = require("./xv-resource");
 
+  for (let p of r5Obj.parameter) {
+    if (p.resource) {
+      p.resource = convertResourceFromR5(p.resource, "R4");
+    }
+  }
   return r5Obj;
 }
 
-/**
- * Converts R5 ValueSet to R3 format
- * @param {Object} r5Obj - Cloned R5 ValueSet object
- * @returns {Object} R3 format ValueSet
- * @private
- */
-function valueSetR5ToR3(r5Obj) {
-  // First apply R4 conversions
-  const r4Obj = valueSetR5ToR4(r5Obj);
-
-  return r4Obj;
+function convertParameterR5ToR3(p) {
+  if (p.valueCanonical) {
+    p.valueUri = p.valueCanonical;
+    delete p.valueCanonical;
+  }
+  for (const pp of p.part || []) {
+    convertParameterR5ToR3(pp)
+  }
 }
 
-module.exports = { valueSetToR5, valueSetFromR5 };
+/**
+ * Converts R5 Parameters to R3 format
+ * @param {Object} r5Obj - Cloned R5 Parameters object
+ * @returns {Object} R3 format Parameters
+ * @private
+ */
+function parametersR5ToR3(r5Obj) {
+  const {convertResourceFromR5} = require("./xv-resource");
+
+  for (let p of r5Obj.parameter) {
+    if (p.resource) {
+      p.resource = convertResourceFromR5(p.resource, "R3");
+    }
+    convertParameterR5ToR3(p);
+  }
+  return r5Obj;
+}
+
+module.exports = { parametersToR5, parametersFromR5 };
