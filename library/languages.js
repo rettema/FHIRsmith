@@ -1,6 +1,7 @@
 const fs = require('fs');
 const os = require('os');
 const {validateOptionalParameter, Utilities} = require("./utilities");
+const {join} = require("node:path");
 
 /**
  * Language part types for matching depth
@@ -22,6 +23,7 @@ class LanguageEntry {
   constructor() {
     this.code = '';
     this.displays = [];
+    this.translations = new Map(); // language code -> translated display name
   }
 }
 
@@ -497,10 +499,12 @@ class LanguageDefinitions {
   /**
    * Load definitions from IETF language subtag registry file
    */
-  static async fromFile(filePath) {
+  static async fromFiles(filePath) {
     const definitions = new LanguageDefinitions();
-    const content = fs.readFileSync(filePath, 'utf8');
+    const content = fs.readFileSync(join(filePath, "lang.dat"), 'utf8');
     definitions._load(content);
+    definitions._loadTranslations(join(filePath, "languages.csv"), definitions.languages);
+    definitions._loadTranslations(join(filePath, "regions.csv"), definitions.regions);
     return definitions;
   }
 
@@ -588,6 +592,88 @@ class LanguageDefinitions {
     }
 
     return [vars, i];
+  }
+
+  /**
+   * Load translations from a CSV file into an existing map of entries.
+   * CSV format: code,english,french,german,spanish,arabic,chinese,russian,japanese,swahili
+   * The language codes for the translation columns:
+   */
+  _loadTranslations(csvPath, targetMap) {
+    if (!fs.existsSync(csvPath)) {
+      return;
+    }
+    const content = fs.readFileSync(csvPath, 'utf8');
+    const lines = content.split('\n');
+    if (lines.length < 2) return;
+
+    const header = this._parseCsvLine(lines[0]);
+    // header[0] = 'code', header[1..] = language names mapped to codes
+    const langCodeMap = {
+      'english': 'en',
+      'french': 'fr',
+      'german': 'de',
+      'spanish': 'es',
+      'arabic': 'ar',
+      'chinese': 'zh',
+      'russian': 'ru',
+      'japanese': 'ja',
+      'swahili': 'sw'
+    };
+
+    const columnLangs = header.slice(1).map(h => langCodeMap[h.toLowerCase()] || h.toLowerCase());
+
+    for (let i = 1; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line) continue;
+      const fields = this._parseCsvLine(line);
+      if (fields.length < 2) continue;
+
+      const code = fields[0];
+      const entry = targetMap.get(code);
+      if (!entry) continue;
+
+      for (let j = 1; j < fields.length && j < header.length; j++) {
+        const langCode = columnLangs[j - 1];
+        const value = fields[j];
+        if (value) {
+          entry.translations.set(langCode, value);
+        }
+      }
+    }
+  }
+
+  /**
+   * Parse a single CSV line, handling quoted fields with commas
+   */
+  _parseCsvLine(line) {
+    const fields = [];
+    let current = '';
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (inQuotes) {
+        if (ch === '"' && i + 1 < line.length && line[i + 1] === '"') {
+          current += '"';
+          i++;
+        } else if (ch === '"') {
+          inQuotes = false;
+        } else {
+          current += ch;
+        }
+      } else {
+        if (ch === '"') {
+          inQuotes = true;
+        } else if (ch === ',') {
+          fields.push(current);
+          current = '';
+        } else {
+          current += ch;
+        }
+      }
+    }
+    fields.push(current);
+    return fields;
   }
 
   /**
@@ -699,11 +785,27 @@ class LanguageDefinitions {
   }
 
   /**
-   * Get display name for language
+   * Get display name for language, optionally translated
    */
   getDisplayForLang(code, displayIndex = 0) {
     const lang = this.languages.get(code);
     return lang && lang.displays[displayIndex] ? lang.displays[displayIndex] : code;
+  }
+
+  /**
+   * Get translated display name for a language code
+   * @param {string} code - the language subtag
+   * @param {string} displayLang - the language to translate into (e.g. 'fr', 'de')
+   * @returns {string} translated name, or English name, or the code itself
+   */
+  getTranslatedDisplayForLang(code, displayLang) {
+    const lang = this.languages.get(code);
+    if (!lang) return code;
+    if (displayLang) {
+      const translated = lang.translations.get(displayLang);
+      if (translated) return translated;
+    }
+    return lang.displays[0] || code;
   }
 
   /**
@@ -712,6 +814,22 @@ class LanguageDefinitions {
   getDisplayForRegion(code, displayIndex = 0) {
     const region = this.regions.get(code);
     return region && region.displays[displayIndex] ? region.displays[displayIndex] : code;
+  }
+
+  /**
+   * Get translated display name for a region code
+   * @param {string} code - the region subtag
+   * @param {string} displayLang - the language to translate into (e.g. 'fr', 'de')
+   * @returns {string} translated name, or English name, or the code itself
+   */
+  getTranslatedDisplayForRegion(code, displayLang) {
+    const region = this.regions.get(code);
+    if (!region) return code;
+    if (displayLang) {
+      const translated = region.translations.get(displayLang);
+      if (translated) return translated;
+    }
+    return region.displays[0] || code;
   }
 
   /**
@@ -736,18 +854,21 @@ class LanguageDefinitions {
     }
 
     let result = this.getDisplayForLang(lang.language, displayIndex);
-
     const parts = [];
-    if (lang.script) {
-      parts.push(`Script=${this.getDisplayForScript(lang.script, 0)}`);
-    }
-    if (lang.region) {
-      parts.push(`Region=${this.getDisplayForRegion(lang.region, 0)}`);
-    }
-    if (lang.variant) {
-      const variant = this.variants.get(lang.variant);
-      const variantDisplay = variant && variant.displays[0] ? variant.displays[0] : lang.variant;
-      parts.push(`Variant=${variantDisplay}`);
+    if (lang.region && !lang.script && !lang.variant) {
+      parts.push(`${this.getDisplayForRegion(lang.region, 0)}`);
+    } else {
+      if (lang.script) {
+        parts.push(`Script=${this.getDisplayForScript(lang.script, 0)}`);
+      }
+      if (lang.region) {
+        parts.push(`Region=${this.getDisplayForRegion(lang.region, 0)}`);
+      }
+      if (lang.variant) {
+        const variant = this.variants.get(lang.variant);
+        const variantDisplay = variant && variant.displays[0] ? variant.displays[0] : lang.variant;
+        parts.push(`Variant=${variantDisplay}`);
+      }
     }
 
     if (parts.length > 0) {

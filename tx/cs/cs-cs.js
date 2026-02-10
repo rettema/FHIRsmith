@@ -385,6 +385,10 @@ class FhirCodeSystemProvider extends CodeSystemProvider {
     return ctxt ? (ctxt.concept.definition || null) : null;
   }
 
+  isCaseSensitive() {
+    return !this.codeSystem.caseInsensitive();
+  }
+
   /**
    * @param {string|FhirCodeSystemProviderContext} context - Code or context
    * @returns {Promise<boolean>} If the concept is abstract

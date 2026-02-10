@@ -126,7 +126,8 @@ class LookupWorker extends TerminologyWorker {
 
       } else if (params.has('system') && params.has('code')) {
         // system + code parameters
-        csProvider = await this.findCodeSystem(params.get('system'), params.get('version') || '', txp, ['complete', 'fragment'], true);
+        csProvider = await this.findCodeSystem(params.get('system'), params.get('version') || '', txp, ['complete', 'fragment'],
+          null, true, false, false, txp.supplements);
         this.seeSourceProvider(csProvider, params.get('system'));
         code = params.get('code');
 
@@ -141,7 +142,15 @@ class LookupWorker extends TerminologyWorker {
         const msg = versionStr
           ? `CodeSystem not found: ${systemUrl} version ${versionStr}`
           : `CodeSystem not found: ${systemUrl}`;
-        return res.status(404).json(this.operationOutcome('error', 'not-found', msg));
+        return res.status(422).json(this.operationOutcome('error', 'not-found', msg));
+      }
+
+      // check supplements
+      const used = new Set();
+      this.checkSupplements(csProvider, null, txp.supplements, used);
+      const unused = new Set([...txp.supplements].filter(s => !used.has(s)));
+      if (unused.size > 0) {
+        throw new Issue('error', 'not-found', null, 'VALUESET_SUPPLEMENT_MISSING', this.i18n.translatePlural(unused.size, 'VALUESET_SUPPLEMENT_MISSING', txp.HTTPLanguages, [[...unused].join(',')]), 'not-found').handleAsOO(400);
       }
 
       // Perform the lookup
@@ -202,7 +211,7 @@ class LookupWorker extends TerminologyWorker {
       }
 
       // Load any supplements
-      const supplements = this.loadSupplements(codeSystem.url, codeSystem.version);
+      const supplements = this.loadSupplements(codeSystem.url, codeSystem.version, txp.supplements);
 
       // Create a FhirCodeSystemProvider for this CodeSystem
       const csProvider = new FhirCodeSystemProvider(this.opContext, codeSystem, supplements);
@@ -233,6 +242,8 @@ class LookupWorker extends TerminologyWorker {
    */
   async doLookup(csProvider, code, params) {
     this.deadCheck('doLookup');
+
+    await this.checkSupplements(csProvider, null, params.supplements);
 
     // Helper to check if a property should be included
     const hasProp = (name, defaultValue = true) => {
@@ -386,7 +397,6 @@ class LookupWorker extends TerminologyWorker {
     });
   }
 
-
   /**
    * Build an OperationOutcome
    * @param {string} severity - error, warning, information
@@ -400,7 +410,7 @@ class LookupWorker extends TerminologyWorker {
       issue: [{
         severity,
         code,
-        diagnostics: message
+        details: {text : message}
       }]
     };
   }

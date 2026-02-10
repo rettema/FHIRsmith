@@ -140,7 +140,7 @@ class Library {
 
   async load() {
     this.startTime = Date.now();
-    this.languageDefinitions = await LanguageDefinitions.fromFile(path.join(__dirname, '../tx/data/lang.dat'));
+    this.languageDefinitions = await LanguageDefinitions.fromFiles(path.join(__dirname, '../tx/data'));
     this.i18n = new I18nSupport(path.join(__dirname, '../translations'), this.languageDefinitions);
     await this.i18n.load();
 

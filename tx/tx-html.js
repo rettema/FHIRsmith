@@ -102,8 +102,20 @@ class TxHtmlRenderer {
    * Check if request accepts HTML
    */
   acceptsHtml(req) {
-    const accept = req.headers.accept || '';
-    return accept.includes('text/html');
+    let _fmt = req.query._format;
+    if (_fmt && typeof _fmt !== 'string') {
+      _fmt = null
+    }
+    if (_fmt && _fmt == 'html') {
+      return true;
+    }
+    if (!_fmt) {
+      _fmt = req.headers.accept || '';
+    }
+    if (typeof _fmt !== 'string') {
+      return false;
+    }
+    return _fmt.includes('text/html');
   }
 
   /**

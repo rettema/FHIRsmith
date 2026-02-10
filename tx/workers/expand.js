@@ -200,6 +200,8 @@ class ValueSetExpander {
   params;
   excluded = new Set();
   hasExclusions = false;
+  requiredSupplements = new Set();
+  usedSupplements = new Set();
 
   constructor(worker, params) {
     this.worker = worker;
@@ -615,7 +617,8 @@ class ValueSetExpander {
     }
 
     if (cset.system) {
-      const cs = await this.worker.findCodeSystem(cset.system, cset.version, this.params, ['complete', 'fragment'], false, true, true, null);
+      const cs = await this.worker.findCodeSystem(cset.system, cset.version, this.params, ['complete', 'fragment'],
+        false, true, true, null, this.requiredSupplements);
       this.worker.seeSourceProvider(cs, cset.system);
       if (cs == null) {
         // nothing
@@ -677,13 +680,13 @@ class ValueSetExpander {
     } else {
       const filters = [];
       const prep = null;
-      const cs = await this.worker.findCodeSystem(cset.system, cset.version, this.params, ['complete', 'fragment'], false, false, true, null);
+      const cs = await this.worker.findCodeSystem(cset.system, cset.version, this.params, ['complete', 'fragment'],
+        false, false, true, null, this.requiredSupplements);
 
       if (cs == null) {
         // nothing
       } else {
-
-        this.worker.checkSupplements(cs, cset, this.requiredSupplements);
+        this.worker.checkSupplements(cs, cset, this.requiredSupplements, this.usedSupplements);
         this.checkProviderCanonicalStatus(expansion, cs, this.valueSet);
         const sv = this.canonical(await cs.system(), await cs.version());
         this.addParamUri(expansion, 'used-codesystem', sv);
@@ -815,8 +818,7 @@ class ValueSetExpander {
           const fset = await cs.executeFilters(prep);
           if (await cs.filtersNotClosed(prep)) {
             notClosed.value = true;
-          }
-          if (fset.length === 1 && !excludeInactive && !this.params.activeOnly) {
+          } else if (fset.length === 1 && !excludeInactive && !this.params.activeOnly) {
             this.addToTotal(await cs.filterSize(prep, fset[0]));
           }
 
@@ -900,9 +902,10 @@ class ValueSetExpander {
     } else {
       const filters = [];
       const prep = null;
-      const cs = await this.worker.findCodeSystem(cset.system, cset.version, this.params, ['complete', 'fragment'], false, true, true, null);
+      const cs = await this.worker.findCodeSystem(cset.system, cset.version, this.params, ['complete', 'fragment'], false,
+        true, true, null, this.requiredSupplements);
 
-      this.worker.checkSupplements(cs, cset, this.requiredSupplements);
+      this.worker.checkSupplements(cs, cset, this.requiredSupplements, this.usedSupplements);
       this.checkResourceCanonicalStatus(expansion, cs, this.valueSet);
       const sv = this.canonical(await cs.system(), await cs.version());
       this.addParamUri(expansion, 'used-codesystem', sv);
@@ -1160,9 +1163,9 @@ class ValueSetExpander {
       result.text = undefined;
     }
 
-    this.requiredSupplements = [];
+    for (let s of this.params.supplements) this.requiredSupplements.add(s);
     for (const ext of Extensions.list(source.jsonObj, 'http://hl7.org/fhir/StructureDefinition/valueset-supplement')) {
-      this.requiredSupplements.push(getValuePrimitive(ext));
+      this.requiredSupplements.add(getValuePrimitive(ext));
     }
 
     if (result.expansion) {
@@ -1261,8 +1264,9 @@ class ValueSetExpander {
         await this.handleCompose(source, filter, exp, notClosed);
       }
 
-      if (this.requiredSupplements.length > 0) {
-        throw new Issue('error', 'not-found', null, 'VALUESET_SUPPLEMENT_MISSING',  this.worker.opContext.i18n.translatePlural(this.requiredSupplements.length, 'VALUESET_SUPPLEMENT_MISSING', this.params.httpLanguages, [this.requiredSupplements.join(', ')]), 'not-found', 400);
+      const unused = new Set([...this.requiredSupplements].filter(s => !this.usedSupplements.has(s)));
+      if (unused.size > 0) {
+        throw new Issue('error', 'not-found', null, 'VALUESET_SUPPLEMENT_MISSING', this.worker.i18n.translatePlural(unused.size, 'VALUESET_SUPPLEMENT_MISSING', this.params.HTTPLanguages, [[...unused].join(',')]), 'not-found').handleAsOO(400);
       }
     } catch (e) {
       if (e instanceof Issue) {
@@ -1517,6 +1521,7 @@ class ValueSetExpander {
 }
 
 class ExpandWorker extends TerminologyWorker {
+
   /**
    * @param {OperationContext} opContext - Operation context
    * @param {Logger} log - Logger instance
@@ -1552,10 +1557,10 @@ class ExpandWorker extends TerminologyWorker {
       if (error instanceof Issue) {
         let oo = new OperationOutcome();
         oo.addIssue(error);
-        return res.status(error.statusCode || 500).json(this.fixForVersion(oo.jsonObj));
+        return res.status(error.statusCode || 500).json(oo.jsonObj);
       } else {
         const issueCode = error.issueCode || 'exception';
-        return res.status(statusCode).json(this.fixForVersion({
+        return res.status(statusCode).json({
           resourceType: 'OperationOutcome',
           issue: [{
             severity: 'error',
@@ -1565,7 +1570,7 @@ class ExpandWorker extends TerminologyWorker {
             },
             diagnostics: error.message
           }]
-        }));
+        });
       }
     }
   }
@@ -1584,7 +1589,7 @@ class ExpandWorker extends TerminologyWorker {
       this.log.error(error);
       const statusCode = error.statusCode || 500;
       const issueCode = error.issueCode || 'exception';
-      return res.status(statusCode).json(this.fixForVersion({
+      return res.status(statusCode).json({
         resourceType: 'OperationOutcome',
         issue: [{
           severity: 'error',
@@ -1594,7 +1599,7 @@ class ExpandWorker extends TerminologyWorker {
           },
           diagnostics: error.message
         }]
-      }));
+      });
     }
   }
 
@@ -1675,7 +1680,7 @@ class ExpandWorker extends TerminologyWorker {
     // Perform the expansion
     const result = await this.doExpand(valueSet, txp, logExtraOutput);
     req.logInfo = this.usedSources.join("|")+txp.logInfo();
-    return res.json(this.fixForVersion(result));
+    return res.json(result);
   }
   
   /**
@@ -1725,7 +1730,7 @@ class ExpandWorker extends TerminologyWorker {
     // Perform the expansion
     const result = await this.doExpand(valueSet, txp, logExtraOutput);
     req.logInfo = this.usedSources.join("|")+txp.logInfo();
-    return res.json(this.fixForVersion(result));
+    return res.json(result);
   }
 
   // Note: setupAdditionalResources, queryToParameters, formToParameters,

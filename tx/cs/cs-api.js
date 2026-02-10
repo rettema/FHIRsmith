@@ -122,6 +122,17 @@ class CodeSystemProvider {
   isNotClosed() {
     return false;
   }
+
+  /**
+   * returns true if the code system is case sensitive when comparing codes.
+   * this is true by default
+   *
+   * @returns {boolean}
+   */
+  isCaseSensitive() {
+    return true;
+  }
+
   /**
    * @param {Languages} languages language specification
    * @returns {boolean} defined properties for the code system

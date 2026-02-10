@@ -37,6 +37,16 @@ const {TxHtmlRenderer} = require("./tx-html");
 const {Renderer} = require("./library/renderer");
 const {OperationsWorker} = require("./workers/operations");
 const {RelatedWorker} = require("./workers/related");
+const {codeSystemFromR5} = require("./xversion/xv-codesystem");
+const {operationOutcomeFromR5} = require("./xversion/xv-operationoutcome");
+const {parametersFromR5} = require("./xversion/xv-parameters");
+const {conceptMapFromR5} = require("./xversion/xv-conceptmap");
+const {valueSetFromR5} = require("./xversion/xv-valueset");
+const {terminologyCapabilitiesFromR5} = require("./xversion/xv-terminologyCapabilities");
+const {capabilityStatementFromR5} = require("./xversion/xv-capabiliityStatement");
+const {bundleFromR5} = require("./xversion/xv-bundle");
+const {convertResourceToR5} = require("./xversion/xv-resource");
+const ClosureWorker = require("./workers/closure");
 // const {writeFileSync} = require("fs");
 
 class TXModule {
@@ -71,10 +81,49 @@ class TXModule {
   }
 
   acceptsXml(req) {
-    const accept = req.headers.accept || '';
-    return accept.includes('application/fhir+xml') || accept.includes('application/xml+fhir');
+    let _fmt = req.query._format;
+    if (_fmt && typeof _fmt !== 'string') {
+      _fmt = null
+    }
+
+    if (_fmt && _fmt == 'xml') {
+      return 'application/fhir+xml';
+    }
+    if (!_fmt) {
+      _fmt = req.headers.accept || '';
+    }
+    if (_fmt.includes('application/fhir+xml')) {
+      return 'application/fhir+xml';
+    } else if (_fmt.includes('application/xml+fhir')) {
+      return 'application/xml+fhir';
+    } else if (_fmt.includes('application/xml')) {
+      return 'application/xml';
+    } else {
+      return null;
+    }
   }
 
+  acceptsJson(req) {
+    let _fmt = req.query._format;
+    if (_fmt && typeof _fmt !== 'string') {
+      _fmt = null
+    }
+    if (_fmt && _fmt == 'json') {
+      return 'application/fhir+json';
+    }
+    if (!_fmt) {
+      _fmt = req.headers.accept || '';
+    }
+    if (_fmt.includes('application/fhir+json')) {
+      return 'application/fhir+json';
+    } else if (_fmt.includes('application/json+fhir')) {
+      return 'application/json+fhir';
+    } else if (_fmt.includes('application/json')) {
+      return 'application/json';
+    } else {
+      return 'application/fhir+json';
+    }
+  }
 
   /**
    * Initialize the TX module
@@ -105,9 +154,9 @@ class TXModule {
     }
 
     // Load language definitions
-    const langPath = path.join(__dirname, 'data', 'lang.dat');
+    const langPath = path.join(__dirname, 'data');
     this.log.info(`Loading language definitions from: ${langPath}`);
-    this.languages = await LanguageDefinitions.fromFile(langPath);
+    this.languages = await LanguageDefinitions.fromFiles(langPath);
     this.log.info('Language definitions loaded');
 
     // Initialize i18n support
@@ -246,7 +295,9 @@ class TXModule {
         try {
           const duration = Date.now() - req.txStartTime;
           const isHtml = txhtml.acceptsHtml(req);
-          const isXml = this.acceptsXml(req);
+          const xmlFmt = this.acceptsXml(req);
+          const jsonFmt = this.acceptsJson(req);
+          data = this.transformResourceForVersion(data, endpointInfo.fhirVersion);
 
           let responseSize;
           let result;
@@ -258,29 +309,31 @@ class TXModule {
             responseSize = Buffer.byteLength(html, 'utf8');
             res.setHeader('Content-Type', 'text/html');
             result = res.send(html);
-          } else if (isXml) {
+          } else if (xmlFmt) {
             try {
               const xml = this.convertResourceToXml(data);
               responseSize = Buffer.byteLength(xml, 'utf8');
-              res.setHeader('Content-Type', 'application/fhir+xml');
+              res.setHeader('Content-Type', xmlFmt);
               result = res.send(xml);
             } catch (err) {
               console.error(err);
               // Fall back to JSON if XML conversion not supported
               this.log.warn(`XML conversion failed for ${data.resourceType}: ${err.message}, falling back to JSON`);
+              res.setHeader('Content-Type', jsonFmt);
               const jsonStr = JSON.stringify(data);
               responseSize = Buffer.byteLength(jsonStr, 'utf8');
               result = originalJson(data);
             }
           } else {
             const jsonStr = JSON.stringify(data);
+            res.setHeader('Content-Type', jsonFmt);
             this.checkProperJson(jsonStr);
             responseSize = Buffer.byteLength(jsonStr, 'utf8');
             result = originalJson(data);
           }
 
           // Log the request with request ID
-          const format = isHtml ? 'html' : (isXml ? 'xml' : 'json');
+          const format = isHtml ? 'html' : (xmlFmt ? 'xml' : 'json');
           let li = req.logInfo ? "(" + req.logInfo + ")" : "";
           this.log.info(`[${requestId}] ${req.method} ${format} ${res.statusCode} ${duration}ms ${responseSize}: ${req.originalUrl} ${li})`);
 
@@ -367,8 +420,20 @@ class TXModule {
             });
           }
         }
+      } else if (contentType != 'application/x-www-form-urlencoded') {
+        return res.status(415).json({
+          resourceType: 'OperationOutcome',
+          issue: [{
+            severity: 'error',
+            code: 'invalid',
+            diagnostics: `Unsupported Media Type: ${contentType}`
+          }]
+        });
       }
 
+      if (req.body) {
+        req.body = convertResourceToR5(req.body, req.txEndpoint.fhirVersion);
+      }
       next();
     });
 
@@ -577,7 +642,7 @@ class TXModule {
     router.get('/ConceptMap/\\$closure', async (req, res) => {
       const start = Date.now();
       try {
-        let worker = new TranslateWorker(req.txOpContext, this.log, req.txProvider, this.languages, this.i18n);
+        let worker = new ClosureWorker(req.txOpContext, this.log, req.txProvider, this.languages, this.i18n);
         await worker.handle(req, res, this.log);
       } finally {
         this.countRequest('$closure', Date.now() - start);
@@ -586,7 +651,7 @@ class TXModule {
     router.post('/ConceptMap/\\$closure', async (req, res) => {
       const start = Date.now();
       try {
-        let worker = new TranslateWorker(req.txOpContext, this.log, req.txProvider, this.languages, this.i18n);
+        let worker = new ClosureWorker(req.txOpContext, this.log, req.txProvider, this.languages, this.i18n);
         await worker.handle(req, res, this.log);
       } finally {
         this.countRequest('$closure', Date.now() - start);
@@ -981,6 +1046,24 @@ class TXModule {
   //     throw new Error(errors.join('; '));
   //   }
   }
+
+  transformResourceForVersion(data, fhirVersion) {
+    if (fhirVersion == "5.0" || !data.resourceType) {
+        return data;
+    }
+    switch (data.resourceType) {
+      case "CodeSystem": return codeSystemFromR5(data, fhirVersion);
+      case "CapabilityStatement": return capabilityStatementFromR5(data, fhirVersion);
+      case "TerminologyCapabilities": return terminologyCapabilitiesFromR5(data, fhirVersion);
+      case "ValueSet": return valueSetFromR5(data, fhirVersion);
+      case "ConceptMap": return conceptMapFromR5(data, fhirVersion);
+      case "Parameters": return parametersFromR5(data, fhirVersion);
+      case "OperationOutcome": return operationOutcomeFromR5(data, fhirVersion);
+      case "Bundle": return bundleFromR5(data, fhirVersion);
+      default: return data;
+    }
+  }
+
 }
 
 module.exports = TXModule;

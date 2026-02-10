@@ -34,6 +34,8 @@ class TxParameters {
   limit = -1;
   offset = -1;
   validating = false;
+  abstractOk = true; // note true!
+  inferSystem = false;
 
   constructor(languages, i18n, validating) {
     validateParameter(languages, 'languages', LanguageDefinitions);
@@ -45,6 +47,7 @@ class TxParameters {
     this.FVersionRules = [];
     this.FProperties = [];
     this.FDesignations = [];
+    this.supplements = new Set;
     this.FGenerateNarrative = true;
 
     this.FHTTPLanguages = null;
@@ -118,7 +121,7 @@ class TxParameters {
           try {
             this.DisplayLanguages = Languages.fromAcceptLanguage(getValuePrimitive(p), this.languageDefinitions, !this.validating);
           } catch (error) {
-            throw new Issue("error", "processing", null, 'INVALID_DISPLAY_NAME', this.i18n.translate('INVALID_DISPLAY_NAME', this.HTTPLanguages, getValuePrimitive(p))).handleAsOO(400);
+            throw new Issue("error", "processing", null, 'INVALID_DISPLAY_NAME', this.i18n.translate('INVALID_DISPLAY_NAME', this.HTTPLanguages, [getValuePrimitive(p)])).handleAsOO(400);
           }
           break;
         }
@@ -198,6 +201,7 @@ class TxParameters {
           if (value && (value.resourceType === 'Parameters' || value.resourceType === 'ExpansionProfile')) {
             this.readParams(value);
           }
+          break;
         }
         // eslint-disable-next-line no-fallthrough
         case 'term': // jQuery support
@@ -216,6 +220,24 @@ class TxParameters {
 
         case 'limit' : {
           this.limit = Utilities.parseIntOrDefault(getValuePrimitive(p), -1);
+          break;
+        }
+
+        case 'useSupplement' : {
+          this.supplements.add(getValuePrimitive(p));
+          break;
+        }
+
+        case 'abstract': {
+          if (getValuePrimitive(p) == true) {
+            this.abstractOk = true;
+          } else if (getValuePrimitive(p) == false) {
+            this.abstractOk = false;
+          }
+          break;
+        }
+        case 'inferSystem': {
+          if (getValuePrimitive(p) == true) this.inferSystem = true;
           break;
         }
       }
