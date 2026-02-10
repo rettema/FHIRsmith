@@ -114,31 +114,26 @@ class IETFLanguageCodeProvider extends CodeSystemProvider {
   }
 
   async definition(code) {
-    
     await this.#ensureContext(code);
     return null; // No definitions for language codes
   }
 
   async isAbstract(code) {
-    
     await this.#ensureContext(code);
     return false; // Language codes are not abstract
   }
 
   async isInactive(code) {
-    
     await this.#ensureContext(code);
     return false; // We don't track inactive language codes
   }
 
   async isDeprecated(code) {
-    
     await this.#ensureContext(code);
     return false; // We don't track deprecated language codes
   }
 
   async designations(code, displays) {
-    
     const ctxt = await this.#ensureContext(code);
     const designations = [];
     if (ctxt != null) {
@@ -149,8 +144,12 @@ class IETFLanguageCodeProvider extends CodeSystemProvider {
         const regionDisplay = this.languageDefinitions.getDisplayForRegion(ctxt.region);
         const regionVariant = `${langDisplay} (${regionDisplay})`;
         const regionVariant2 = `${langDisplay} (Region=${regionDisplay})`;
-        displays.addDesignation(false, 'active', 'en', CodeSystem.makeUseForDisplay(), regionVariant);
+        const regionVariant3 = `${langDisplay}-${regionDisplay}`;
+        const regionVariant4 = `${langDisplay}-${regionDisplay.toUpperCase()}`;
         displays.addDesignation(false, 'active', 'en', CodeSystem.makeUseForDisplay(), regionVariant2);
+        displays.addDesignation(false, 'active', 'en', CodeSystem.makeUseForDisplay(), regionVariant3);
+        displays.addDesignation(false, 'active', 'en', CodeSystem.makeUseForDisplay(), regionVariant4);
+        displays.addDesignation(false, 'active', 'en', CodeSystem.makeUseForDisplay(), regionVariant);
       }
       // add alternative displays if available
       const displayCount = this.languageDefinitions.displayCount(ctxt);
