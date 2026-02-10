@@ -268,7 +268,7 @@ class TerminologyWorker {
         }
 
         // we consider either language packs or specified supplements
-        if (!(cs.isLangPack() || statedSupplements.has(cs.url) || statedSupplements.has(cs.vurl))) {
+        if (!(cs.isLangPack() || (statedSupplements && (statedSupplements.has(cs.url) || statedSupplements.has(cs.vurl))))) {
           continue;
         }
         // Handle exact URL match (no version specified in supplements)

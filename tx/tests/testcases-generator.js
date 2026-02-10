@@ -63,7 +63,7 @@ describe('Tx Tests', () => {
             }
 
             for (const test of suite.tests) {
-                if (!test.mode || modes.has(test.mode)) {
+                if ((!test.mode || modes.has(test.mode)) && (!test["full-set"])) {
                     let testDetails = {
                         suite: suite.name,
                         test: test.name

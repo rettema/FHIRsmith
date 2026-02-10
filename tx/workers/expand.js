@@ -818,8 +818,7 @@ class ValueSetExpander {
           const fset = await cs.executeFilters(prep);
           if (await cs.filtersNotClosed(prep)) {
             notClosed.value = true;
-          }
-          if (fset.length === 1 && !excludeInactive && !this.params.activeOnly) {
+          } else if (fset.length === 1 && !excludeInactive && !this.params.activeOnly) {
             this.addToTotal(await cs.filterSize(prep, fset[0]));
           }
 

@@ -251,7 +251,7 @@ class UcumCodeSystemProvider extends CodeSystemProvider {
     assert(value != null && typeof value === 'string', 'value must be a non-null string');
 
     // Support canonical unit filters
-    return (prop === 'canonical' && op === 'equals');
+    return (prop === 'canonical' && op === '=');
   }
 
   async searchFilter(filterContext, filter, sort) {
@@ -285,7 +285,7 @@ class UcumCodeSystemProvider extends CodeSystemProvider {
       throw new Error(`Unsupported filter property: ${prop}`);
     }
 
-    if (op !== 'equals') {
+    if (op !== '=') {
       throw new Error(`Unsupported filter operator for canonical: ${op}`);
     }
 

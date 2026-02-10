@@ -420,7 +420,7 @@ class TXModule {
             });
           }
         }
-      } else {
+      } else if (contentType != 'application/x-www-form-urlencoded') {
         return res.status(415).json({
           resourceType: 'OperationOutcome',
           issue: [{

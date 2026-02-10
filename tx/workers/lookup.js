@@ -142,7 +142,7 @@ class LookupWorker extends TerminologyWorker {
         const msg = versionStr
           ? `CodeSystem not found: ${systemUrl} version ${versionStr}`
           : `CodeSystem not found: ${systemUrl}`;
-        return res.status(404).json(this.operationOutcome('error', 'not-found', msg));
+        return res.status(422).json(this.operationOutcome('error', 'not-found', msg));
       }
 
       // check supplements

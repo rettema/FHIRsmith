@@ -277,12 +277,12 @@ describe('Languages Class', () => {
 describe('LanguageDefinitions Class', () => {
   let definitions;
 
-  beforeAll(() => {
+  beforeAll(async () => {
     // Try to load real IETF data, fall back to mock if not available
     const realDataPath = path.join(__dirname, '../../tx/data');
 
     if (fs.existsSync(realDataPath)) {
-      definitions = LanguageDefinitions.fromFiles(realDataPath);
+      definitions = await LanguageDefinitions.fromFiles(realDataPath);
       // console.log('Using real IETF language data from lang.dat');
     } else {
       throw new Error('Real data file not found');
@@ -550,12 +550,12 @@ Description: Test
 describe('Language System Integration Tests', () => {
   let definitions;
 
-  beforeAll(() => {
+  beforeAll(async () => {
     // Try to load real IETF data, fall back to mock if not available
     const realDataPath = path.join(__dirname, '../../tx/data');
 
     if (fs.existsSync(realDataPath)) {
-      definitions = LanguageDefinitions.fromFiles(realDataPath);
+      definitions = await LanguageDefinitions.fromFiles(realDataPath);
       // console.log('Using real IETF language data from lang.dat');
     } else {
       throw new Error('Real data file not found');
