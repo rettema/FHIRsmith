@@ -2339,6 +2339,88 @@ describe('omop', () => {
   });
 
 });
+//
+// describe('related', () => {
+//   // Tests for candidate new 'related' operation
+//
+//   it('related-all', async () => {
+//     await runTest({"suite":"related","test":"related-all"});
+//   });
+//
+// });
+
+describe('bugs', () => {
+  // A series of tests that deal with discovered bugs in FHIRsmith. These tests are specific to FHIRsmith - internal QA
+
+  it('country-codes', async () => {
+    await runTest({"suite":"bugs","test":"country-codes"});
+  });
+
+  it('cpt', async () => {
+    await runTest({"suite":"bugs","test":"cpt"});
+  });
+
+  it('sct-ver-ex', async () => {
+    await runTest({"suite":"bugs","test":"sct-ver-ex"});
+  });
+
+  it('undefined', async () => {
+    await runTest({"suite":"bugs","test":"undefined"});
+  });
+
+  it('no-system', async () => {
+    await runTest({"suite":"bugs","test":"no-system"});
+  });
+
+  it('sct-parse', async () => {
+    await runTest({"suite":"bugs","test":"sct-parse"});
+  });
+
+  it('sct-parse-pc', async () => {
+    await runTest({"suite":"bugs","test":"sct-parse-pc"});
+  });
+
+  it('lang-case', async () => {
+    await runTest({"suite":"bugs","test":"lang-case"});
+  });
+
+  it('provenance', async () => {
+    await runTest({"suite":"bugs","test":"provenance"});
+  });
+
+  it('country-code', async () => {
+    await runTest({"suite":"bugs","test":"country-code"});
+  });
+
+  it('sct-isa', async () => {
+    await runTest({"suite":"bugs","test":"sct-isa"});
+  });
+
+  it('sct-ver', async () => {
+    await runTest({"suite":"bugs","test":"sct-ver"});
+  });
+
+  it('sct-msg', async () => {
+    await runTest({"suite":"bugs","test":"sct-msg"});
+  });
+
+  it('sct-display-1', async () => {
+    await runTest({"suite":"bugs","test":"sct-display-1"});
+  });
+
+  it('sct-display-2', async () => {
+    await runTest({"suite":"bugs","test":"sct-display-2"});
+  });
+
+  it('ndc', async () => {
+    await runTest({"suite":"bugs","test":"ndc"});
+  });
+
+  it('x12-bad', async () => {
+    await runTest({"suite":"bugs","test":"x12-bad"});
+  });
+
+});
 
 });
 

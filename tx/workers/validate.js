@@ -765,7 +765,7 @@ class ValueSetChecker {
                 messages.push(msg);
               }
             }
-            for (let u of cc.valueSets || []) {
+            for (let u of cc.valueSet || []) {
               this.worker.deadCheck('check#5');
               let s = this.worker.pinValueSet(u);
               let checker = this.others.get(s);
@@ -1936,7 +1936,7 @@ class ValidateWorker extends TerminologyWorker {
       mode = {mode: null};
       coded = this.extractCodedValue(params, true, mode);
       if (!coded) {
-        throw new Issue('error', 'invalid', null, null, 'Unable to find code to validate (looked for coding | codeableConcept | code in parameters =codingX:Coding)', null, 400);
+        throw new Issue('error', 'invalid', null, null, 'Unable to find code to validate (looked for coding | codeableConcept | code in parameters =codingX:Coding)', null, 400).handleAsOO(400);
       }
 
       // Get the CodeSystem - from parameter or by url
@@ -2477,7 +2477,9 @@ class ValidateWorker extends TerminologyWorker {
     p.addParamResource('issues', op.jsonObj);
     p.addParamBool('result', false);
     p.addParamStr('message', error.message);
-    if (mode == 'codeableConcept') {
+    if (!mode || !coded) {
+      // nothing to add
+    } else if (mode == 'codeableConcept') {
       p.addParam('codeableConcept', 'valueCodeableConcept', coded);
     } else if (coded.coding) {
       if (coded.coding[0].system) {
