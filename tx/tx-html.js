@@ -109,6 +109,9 @@ class TxHtmlRenderer {
     if (!_fmt) {
       _fmt = req.headers.accept || '';
     }
+    if (typeof _fmt !== 'string') {
+      return false;
+    }
     return _fmt.includes('text/html');
   }
 
