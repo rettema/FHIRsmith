@@ -285,12 +285,14 @@ class TXModule {
               console.error(err);
               // Fall back to JSON if XML conversion not supported
               this.log.warn(`XML conversion failed for ${data.resourceType}: ${err.message}, falling back to JSON`);
+              res.setHeader('Content-Type', 'application/fhir+json');
               const jsonStr = JSON.stringify(data);
               responseSize = Buffer.byteLength(jsonStr, 'utf8');
               result = originalJson(data);
             }
           } else {
             const jsonStr = JSON.stringify(data);
+            res.setHeader('Content-Type', 'application/fhir+json');
             this.checkProperJson(jsonStr);
             responseSize = Buffer.byteLength(jsonStr, 'utf8');
             result = originalJson(data);
