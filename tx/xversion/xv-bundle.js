@@ -1,5 +1,5 @@
 const {VersionUtilities} = require("../../library/version-utilities");
-const {convertResourceFromR5} = require("./xv-resource");
+const { convertResourceToR5 } = require("./xv-resource");
 
 /**
  * Converts input Bundle to R5 format (modifies input object for performance)
