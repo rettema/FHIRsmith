@@ -1,6 +1,7 @@
 const fs = require('fs');
 const os = require('os');
 const {validateOptionalParameter, Utilities} = require("./utilities");
+const {join} = require("node:path");
 
 /**
  * Language part types for matching depth
@@ -497,9 +498,9 @@ class LanguageDefinitions {
   /**
    * Load definitions from IETF language subtag registry file
    */
-  static async fromFile(filePath) {
+  static async fromFiles(filePath) {
     const definitions = new LanguageDefinitions();
-    const content = fs.readFileSync(filePath, 'utf8');
+    const content = fs.readFileSync(join(filePath, "lang.dat"), 'utf8');
     definitions._load(content);
     return definitions;
   }
@@ -736,18 +737,21 @@ class LanguageDefinitions {
     }
 
     let result = this.getDisplayForLang(lang.language, displayIndex);
-
     const parts = [];
-    if (lang.script) {
-      parts.push(`Script=${this.getDisplayForScript(lang.script, 0)}`);
-    }
-    if (lang.region) {
-      parts.push(`Region=${this.getDisplayForRegion(lang.region, 0)}`);
-    }
-    if (lang.variant) {
-      const variant = this.variants.get(lang.variant);
-      const variantDisplay = variant && variant.displays[0] ? variant.displays[0] : lang.variant;
-      parts.push(`Variant=${variantDisplay}`);
+    if (lang.region && !lang.script && !lang.variant) {
+      parts.push(`${this.getDisplayForRegion(lang.region, 0)}`);
+    } else {
+      if (lang.script) {
+        parts.push(`Script=${this.getDisplayForScript(lang.script, 0)}`);
+      }
+      if (lang.region) {
+        parts.push(`Region=${this.getDisplayForRegion(lang.region, 0)}`);
+      }
+      if (lang.variant) {
+        const variant = this.variants.get(lang.variant);
+        const variantDisplay = variant && variant.displays[0] ? variant.displays[0] : lang.variant;
+        parts.push(`Variant=${variantDisplay}`);
+      }
     }
 
     if (parts.length > 0) {
