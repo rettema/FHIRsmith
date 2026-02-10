@@ -34,6 +34,8 @@ class TxParameters {
   limit = -1;
   offset = -1;
   validating = false;
+  abstractOk = true; // note true!
+  inferSystem = false;
 
   constructor(languages, i18n, validating) {
     validateParameter(languages, 'languages', LanguageDefinitions);
@@ -199,6 +201,7 @@ class TxParameters {
           if (value && (value.resourceType === 'Parameters' || value.resourceType === 'ExpansionProfile')) {
             this.readParams(value);
           }
+          break;
         }
         // eslint-disable-next-line no-fallthrough
         case 'term': // jQuery support
@@ -222,6 +225,16 @@ class TxParameters {
 
         case 'useSupplement' : {
           this.supplements.add(getValuePrimitive(p));
+          break;
+        }
+
+        case 'abstract': {
+          if (getValuePrimitive(p) == true) this.abstractOk = true;
+          break;
+        }
+        case 'inferSystem': {
+          if (getValuePrimitive(p) == true) this.inferSystem = true;
+          break;
         }
       }
     }

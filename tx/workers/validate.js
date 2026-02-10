@@ -413,9 +413,9 @@ class ValueSetChecker {
     }
   }
 
-  async checkSimple(issuePath, system, version, code, abstractOk, inferSystem, op) {
+  async checkSimple(issuePath, system, version, code, op) {
     this.worker.opContext.clearContexts();
-    if (inferSystem) {
+    if (this.params.inferSystem) {
       this.worker.opContext.addNote(this.valueSet, 'Validate "' + code + '" and infer system', this.indentCount);
     } else {
       this.worker.opContext.addNote(this.valueSet, 'Validate "' + this.worker.renderer.displayCoded(system, version, code) + '"', this.indentCount);
@@ -431,13 +431,13 @@ class ValueSetChecker {
     let contentMode = {value: null};
     let impliedSystem = {value: ''};
     let defLang = {value: null};
-    return await this.check(issuePath, system, version, code, abstractOk, inferSystem, null, unknownSystems, ver, inactive, normalForm, vstatus, it, op, null, null, contentMode, impliedSystem, ts, msgs, defLang);
+    return await this.check(issuePath, system, version, code, null, unknownSystems, ver, inactive, normalForm, vstatus, it, op, null, null, contentMode, impliedSystem, ts, msgs, defLang);
   }
 
-  async check(path, system, version, code, abstractOk, inferSystem, displays, unknownSystems, ver, inactive, normalForm, vstatus, cause, op, vcc, params, contentMode, impliedSystem, unkCodes, messages, defLang) {
+  async check(path, system, version, code, displays, unknownSystems, ver, inactive, normalForm, vstatus, cause, op, vcc, params, contentMode, impliedSystem, unkCodes, messages, defLang) {
     defLang.value = new Language('en');
     this.worker.opContext.addNote(this.valueSet, 'Check "' + this.worker.renderer.displayCoded(system, version, code) + '"', this.indentCount);
-    if (!system && !inferSystem) {
+    if (!system && !this.params.inferSystem) {
       let msg = this.worker.i18n.translate('Coding_has_no_system__cannot_validate', this.params.HTTPLanguages, []);
       messages.push(msg);
       op.addIssue(new Issue('warning', 'invalid', path, 'Coding_has_no_system__cannot_validate', msg, 'invalid-data'));
@@ -526,7 +526,7 @@ class ValueSetChecker {
             vcc.addCoding(cs.system(), cs.version(), await cs.code(ctxt), cs.display(ctxt, this.params.workingLanguages()));
           }
           cause.value = 'null';
-          if (!(abstractOk || !(await cs.IsAbstract(ctxt)))) {
+          if (!(this.params.abstractOk || !(await cs.isAbstract(ctxt)))) {
             result = false;
             this.worker.opContext.addNote(this.valueSet, 'Abstract code when not allowed', this.indentCount);
             cause.value = 'business-rule';
@@ -616,7 +616,7 @@ class ValueSetChecker {
         } else {
           ctxt = ctxt.context;
           cause.value = 'null';
-          if (!(abstractOk || !cs.IsAbstract(ctxt))) {
+          if (!(this.params.abstractOk || !(await cs.isAbstract(ctxt)))) {
             result = false;
             this.worker.opContext.addNote(this.valueSet, 'Abstract code when not allowed', this.indentCount);
             cause.value = 'business-rule';
@@ -638,7 +638,7 @@ class ValueSetChecker {
         }
       }
     } else {
-      if (!system && inferSystem) {
+      if (!system && this.params.inferSystem) {
         let systems = new Set();
         system = await this.determineSystem(this.worker.opContext, code, systems, op);
         if (!system) {
@@ -714,7 +714,7 @@ class ValueSetChecker {
             contentMode.value = cs.contentMode();
 
             let msg = '';
-            if ((system === '%%null%%' || cs.system() === system) && await this.checkConceptSet(path, 'in', cs, cc, code, abstractOk, displays, this.valueSet, msg, inactive, normalForm, vstatus, op, vcc, messages)) {
+            if ((system === '%%null%%' || cs.system() === system) && await this.checkConceptSet(path, 'in', cs, cc, code, displays, this.valueSet, msg, inactive, normalForm, vstatus, op, vcc, messages)) {
               result = true;
             } else {
               result = false;
@@ -735,7 +735,7 @@ class ValueSetChecker {
             }
             this.checkCanonicalStatus(path, op, checker.valueSet, this.valueSet);
             if (result === true) {
-              result = await checker.check(path, system, version, code, abstractOk, inferSystem, displays, unknownSystems, ver, inactive, normalForm, vstatus, cause, op, null, params, contentMode, impliedSystem, unkCodes, messages, defLang);
+              result = await checker.check(path, system, version, code, displays, unknownSystems, ver, inactive, normalForm, vstatus, cause, op, null, params, contentMode, impliedSystem, unkCodes, messages, defLang);
             }
           }
           if (result === true) {
@@ -758,7 +758,7 @@ class ValueSetChecker {
               ver.value = cs.version();
               contentMode.value = cs.contentMode();
               let msg = '';
-              excluded = (system === '%%null%%' || cs.system() === system) && await this.checkConceptSet(path, 'not in', cs, cc, code, abstractOk, displays, this.valueSet, msg, inactive, normalForm, vstatus, op, vcc);
+              excluded = (system === '%%null%%' || cs.system() === system) && await this.checkConceptSet(path, 'not in', cs, cc, code, displays, this.valueSet, msg, inactive, normalForm, vstatus, op, vcc);
               if (msg) {
                 messages.push(msg);
               }
@@ -771,7 +771,7 @@ class ValueSetChecker {
                 throw new Issue('error', 'unknown', null, null, 'No Match for ' + cc.system + '|' + cc.version + ' in ' + Array.from(this.others.keys()).join(','));
               }
               this.checkCanonicalStatus(path, op, checker.valueSet, this.valueSet);
-              excluded = excluded && (await checker.check(path, system, version, code, abstractOk, inferSystem, displays, unknownSystems, ver, inactive, normalForm, vstatus, cause, op, null, params, contentMode, impliedSystem, unkCodes, messages, defLang) === true);
+              excluded = excluded && (await checker.check(path, system, version, code, displays, unknownSystems, ver, inactive, normalForm, vstatus, cause, op, null, params, contentMode, impliedSystem, unkCodes, messages, defLang) === true);
             }
             if (excluded) {
               return false;
@@ -836,7 +836,7 @@ class ValueSetChecker {
           ver.value = cs.version();
           contentMode.value = cs.contentMode();
           let msg = '';
-          if ((system === '%%null%%' || cs.system() === system) && await this.checkExpansion(path, cs, ccc, code, abstractOk, displays, this.valueSet, msg, inactive, vstatus, op)) {
+          if ((system === '%%null%%' || cs.system() === system) && await this.checkExpansion(path, cs, ccc, code, displays, this.valueSet, msg, inactive, vstatus, op)) {
             result = true;
           } else {
             result = false;
@@ -853,7 +853,7 @@ class ValueSetChecker {
     return result;
   }
 
-  async checkCoding(issuePath, coding, abstractOk, inferSystem) {
+  async checkCoding(issuePath, coding) {
     let inactive = false;
     let path = issuePath;
     let unknownSystems = new Set();
@@ -862,7 +862,7 @@ class ValueSetChecker {
     let result = new Parameters();
 
     this.worker.opContext.clearContexts();
-    if (inferSystem) {
+    if (this.params.inferSystem) {
       this.worker.opContext.addNote(this.valueSet, 'Validate "' + this.worker.renderer.displayCoded(coding) + '" and infer system', this.indentCount);
     } else {
       this.worker.opContext.addNote(this.valueSet, 'Validate "' + this.worker.renderer.displayCoded(coding) + '"', this.indentCount);
@@ -880,7 +880,7 @@ class ValueSetChecker {
     let impliedSystem = {value: ''};
     let defLang = {value: null};
 
-    let ok = await this.check(path, coding.system, coding.version, coding.code, abstractOk, inferSystem, list, unknownSystems, ver, inactive, normalForm, vstatus, cause, op, null, result, contentMode, impliedSystem, unkCodes, messages, defLang);
+    let ok = await this.check(path, coding.system, coding.version, coding.code, list, unknownSystems, ver, inactive, normalForm, vstatus, cause, op, null, result, contentMode, impliedSystem, unkCodes, messages, defLang);
     if (ok === true) {
       result.AddParamBool('result', true);
       if ((cause.value === 'not-found' && contentMode.value !== 'complete') || contentMode.value === 'example') {
@@ -969,9 +969,9 @@ class ValueSetChecker {
     }
   }
 
-  async checkCodeableConcept(issuePath, code, abstractOk, inferSystem, mode) {
+  async checkCodeableConcept(issuePath, code, mode) {
     this.worker.opContext.clearContexts();
-    if (inferSystem) {
+    if (this.params.inferSystem) {
       this.worker.opContext.addNote(this.valueSet, 'Validate "' + this.worker.renderer.displayCoded(code) + '" and infer system', this.indentCount);
     } else {
       this.worker.opContext.addNote(this.valueSet, 'Validate "' + this.worker.renderer.displayCoded(code) + '"', this.indentCount);
@@ -1037,7 +1037,7 @@ class ValueSetChecker {
       let ver = { value: '' };
       let contentMode = { value: null };
       let defLang = { value: null };
-      let v = await this.check(path, c.system, c.version, c.code, abstractOk, inferSystem, list, unknownSystems, ver, inactive, normalForm, vstatus, cause, op, vcc, result, contentMode, impliedSystem, ts, mt, defLang);
+      let v = await this.check(path, c.system, c.version, c.code, list, unknownSystems, ver, inactive, normalForm, vstatus, cause, op, vcc, result, contentMode, impliedSystem, ts, mt, defLang);
       if (v === false) {
         cause.value = 'code-invalid';
       }
@@ -1411,9 +1411,9 @@ class ValueSetChecker {
     }
   }
 
-  async checkSystemCode(issuePath, system, version, code, inferSystem) {
+  async checkSystemCode(issuePath, system, version, code) {
     this.worker.opContext.clearContexts();
-    if (inferSystem) {
+    if (this.params.inferSystem) {
       this.worker.opContext.addNote(this.valueSet, 'Validate "' + code + '" and infer system', this.indentCount);
     } else {
       this.worker.opContext.addNote(this.valueSet, 'Validate "' + this.worker.renderer.displayCoded(system, version, code) + '"', this.indentCount);
@@ -1434,7 +1434,7 @@ class ValueSetChecker {
     let impliedSystem = {value: ''};
     let defLang = {value: null};
 
-    let ok = await this.check(issuePath, system, version, code, true, inferSystem, list, unknownSystems, ver, inactive, normalForm, vstatus, cause, op, null, result, contentMode, impliedSystem, unkCodes, messages, defLang);
+    let ok = await this.check(issuePath, system, version, code, true, list, unknownSystems, ver, inactive, normalForm, vstatus, cause, op, null, result, contentMode, impliedSystem, unkCodes, messages, defLang);
     if (ok === true) {
       result.AddParamBool('result', true);
       let pd = list.preferredDisplay(this.params.workingLanguages());
@@ -1483,7 +1483,7 @@ class ValueSetChecker {
     return result;
   }
 
-  async checkConceptSet(path, role, cs, cset, code, abstractOk, displays, vs, message, inactive, normalForm, vstatus, op, vcc, messages) {
+  async checkConceptSet(path, role, cs, cset, code, displays, vs, message, inactive, normalForm, vstatus, op, vcc, messages) {
     this.worker.opContext.addNote(vs, 'check code ' + role + ' ' + this.worker.renderer.displayValueSetInclude(cset) + ' at ' + path, this.indentCount);
     inactive.value = false;
     let result = false;
@@ -1504,7 +1504,7 @@ class ValueSetChecker {
         if (loc.message && op) {
           op.addIssue(new Issue('information', 'code-invalid', addToPath(path, 'code'), null, loc.message, 'invalid-code'));
         }
-      } else if (!(abstractOk || !cs.IsAbstract(loc.context))) {
+      } else if (!(this.params.abstractOk || !(await cs.isAbstract(loc.context)))) {
         this.worker.opContext.addNote(this.valueSet, 'Code "' + code + '" found in ' + this.worker.renderer.displayCoded(cs) + ' but is abstract', this.indentCount);
         if (!this.params.membershipOnly) {
           op.addIssue(new Issue('error', 'business-rule', addToPath(path, 'code'), 'ABSTRACT_CODE_NOT_ALLOWED', this.worker.i18n.translate('ABSTRACT_CODE_NOT_ALLOWED', this.params.HTTPLanguages, [cs.system(), code]), 'code-rule'));
@@ -1578,7 +1578,7 @@ class ValueSetChecker {
           this.worker.opContext.addNote(this.valueSet, 'Code "' + code + '" found in ' + this.worker.renderer.displayCoded(cs), this.indentCount);
           await this.worker.listDisplaysFromCodeSystem(displays, cs, loc);
           this.worker.listDisplaysFromIncludeConcept(displays, cc, vs);
-          if (!(abstractOk || !cs.IsAbstract(loc))) {
+          if (!(this.params.abstractOk || !(await cs.isAbstract(loc)))) {
             if (!this.params.membershipOnly) {
               op.addIssue(new Issue('error', 'business-rule', addToPath(path, 'code'), 'ABSTRACT_CODE_NOT_ALLOWED', this.worker.i18n.translate('ABSTRACT_CODE_NOT_ALLOWED', this.params.HTTPLanguages, [cs.system(), code]), 'code-rule'));
             }
@@ -1631,7 +1631,7 @@ class ValueSetChecker {
         let loc = await cs.filterLocate(prep, ctxt, code);
         if (loc != null && !(typeof loc === 'string')) {
           await this.worker.listDisplaysFromCodeSystem(displays, cs, loc);
-          if (!(abstractOk || !cs.IsAbstract(loc))) {
+          if (!(this.params.abstractOk || !(await cs.isAbstract(loc)))) {
             this.worker.opContext.addNote(this.valueSet, 'Filter ' + ctxt.summary + ': Code "' + code + '" found in ' + this.worker.renderer.displayCoded(cs) + ' but is abstract', this.indentCount);
             if (!this.params.membershipOnly) {
               op.addIssue(new Issue('error', 'business-rule', addToPath(path, 'code'), 'ABSTRACT_CODE_NOT_ALLOWED', this.worker.i18n.translate('ABSTRACT_CODE_NOT_ALLOWED', this.params.HTTPLanguages, [cs.system(), code]), 'code-rule'));
@@ -1668,7 +1668,7 @@ class ValueSetChecker {
             let loc = await cs.locateIsA(code, fc.value, fc.op === "descendent-of");
             if (loc !== null) {
               await this.worker.listDisplaysFromCodeSystem(displays, cs, loc);
-              if (!(abstractOk || !cs.IsAbstract(loc))) {
+              if (!(this.params.abstractOk || !(await cs.isAbstract(loc)))) {
                 this.worker.opContext.addNote(this.valueSet, 'Filter "' + fc.property + '' + fc.op + '' + fc.value + '": Code "' + code + '" found in ' + this.worker.renderer.displayCoded(cs) + ' but is abstract', this.indentCount);
                 if (!this.params.membershipOnly) {
                   op.addIssue(new Issue('error', 'business-rule', addToPath(path, 'code'), 'ABSTRACT_CODE_NOT_ALLOWED', this.worker.i18n.translate('ABSTRACT_CODE_NOT_ALLOWED', this.params.HTTPLanguages, [cs.system(), code]), 'code-rule'));
@@ -1693,7 +1693,7 @@ class ValueSetChecker {
               loc = await cs.locate(code, null, msg);
               if (loc !== null) {
                 await this.worker.listDisplaysFromCodeSystem(displays, cs, loc);
-                if (!(abstractOk || !cs.IsAbstract(loc))) {
+                if (!(this.params.abstractOk || !(await cs.isAbstract(loc)))) {
                   this.worker.opContext.addNote(this.valueSet, 'Filter ' + fc.property + fc.op + fc.value + ': Code "' + code + '" found in ' + this.worker.renderer.displayCoded(cs) + ' but is abstract', this.indentCount);
                   if (!this.params.membershipOnly) {
                     op.addIssue(new Issue('error', 'business-rule', addToPath(path, 'code'), 'ABSTRACT_CODE_NOT_ALLOWED', this.worker.i18n.translate('ABSTRACT_CODE_NOT_ALLOWED', this.params.HTTPLanguages, [cs.system(), code]), 'code-rule'));
@@ -1724,7 +1724,7 @@ class ValueSetChecker {
             let loc = await cs.filterLocate(prep, ctxt, code);
             if (!(typeof loc === 'string')) {
               await this.worker.listDisplaysFromCodeSystem(displays, cs, loc);
-              if (!(abstractOk || !cs.IsAbstract(loc))) {
+              if (!(this.params.abstractOk || !(await cs.isAbstract(loc)))) {
                 this.worker.opContext.addNote(this.valueSet, 'Filter ' + ctxt.summary + ': Code "' + code + '" found in ' + this.worker.renderer.displayCoded(cs) + ' but is abstract', this.indentCount);
                 if (!this.params.membershipOnly) {
                   op.addIssue(new Issue('error', 'business-rule', addToPath(path, 'code'), 'ABSTRACT_CODE_NOT_ALLOWED', this.worker.i18n.translate('ABSTRACT_CODE_NOT_ALLOWED', this.params.HTTPLanguages, [cs.system(), code]), 'code-rule'));
@@ -1759,7 +1759,7 @@ class ValueSetChecker {
     return result;
   }
 
-  async checkExpansion(path, cs, cset, code, abstractOk, displays, vs, message, inactive, vstatus, op) {
+  async checkExpansion(path, cs, cset, code, displays, vs, message, inactive, vstatus, op) {
     let result = false;
     let loc = await cs.locate(code, null, message);
     result = false;
@@ -1768,7 +1768,7 @@ class ValueSetChecker {
         op.addIssue(new Issue('error', 'code-invalid', addToPath(path, 'code'), 'Unknown_Code_in_Version',
           this.worker.i18n.translate(Unknown_Code_in_VersionSCT(cs.system(), cs.version()), this.params.HTTPLanguages, [code, cs.system(), cs.version(), SCTVersion(cs.system(), cs.version())]), 'invalid-code'));
       }
-    } else if (!(abstractOk || !cs.IsAbstract(loc.context))) {
+    } else if (!(this.params.abstractOk || !(await cs.isAbstract(loc.context)))) {
       if (!this.params.membershipOnly) {
         op.addIssue(new Issue('error', 'business-rule', addToPath(path, 'code'), 'ABSTRACT_CODE_NOT_ALLOWED', this.worker.i18n.translate('ABSTRACT_CODE_NOT_ALLOWED', this.params.HTTPLanguages, [cs.system(), code]), 'code-rule'));
       }
@@ -2301,14 +2301,11 @@ class ValidateWorker extends TerminologyWorker {
 
     let vs = this.makeVsForCS(codeSystem);
 
-    // Get parameters
-    const abstractOk = this._getBoolParam(params, 'abstract', true);
-
     // Create and prepare checker
     const checker = new ValueSetChecker(this, vs, params);
 
     // Perform validation
-    const result = await checker.checkCodeableConcept(mode.issuePath, coded, abstractOk, false, mode.mode);
+    const result = await checker.checkCodeableConcept(mode.issuePath, coded, mode.mode);
 
     // Add diagnostics if requested
     if (params.diagnostics) {
@@ -2348,10 +2345,6 @@ class ValidateWorker extends TerminologyWorker {
     this.deadCheck('doValidationVS');
     this.params = params;
 
-    // Get parameters
-    const abstractOk = this._getBoolParam(params, 'abstract', true);
-    const inferSystem = this._getBoolParam(params, 'inferSystem', false) || (mode === 'code' && !coded.coding[0].system)
-
     for (let ext of Extensions.list(valueSet.jsonObj, 'http://hl7.org/fhir/StructureDefinition/valueset-supplement')) {
       this.requiredSupplements.add(getValuePrimitive(ext));
     }
@@ -2371,7 +2364,7 @@ class ValidateWorker extends TerminologyWorker {
     }
 
     // Perform validation
-    const result = await checker.checkCodeableConcept(issuePath, coded, abstractOk, inferSystem, mode);
+    const result = await checker.checkCodeableConcept(issuePath, coded, mode);
 
     // Add diagnostics if requested
     if (params.diagnostics) {
