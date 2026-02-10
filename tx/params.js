@@ -229,7 +229,11 @@ class TxParameters {
         }
 
         case 'abstract': {
-          if (getValuePrimitive(p) == true) this.abstractOk = true;
+          if (getValuePrimitive(p) == true) {
+            this.abstractOk = true;
+          } else if (getValuePrimitive(p) == false) {
+            this.abstractOk = false;
+          }
           break;
         }
         case 'inferSystem': {

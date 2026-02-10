@@ -492,6 +492,10 @@ class TerminologyWorker {
           // Assume it's a complex type like Coding or CodeableConcept
           params.parameter.push(this.buildComplexParameter(name, value));
         }
+      } else if (value == 'true') {
+        params.parameter.push({name, valueBoolean: true});
+      } else if (value == 'false') {
+        params.parameter.push({name, valueBoolean: false});
       } else {
         params.parameter.push({name, valueString: String(value)});
       }
