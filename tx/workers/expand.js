@@ -335,6 +335,7 @@ class ValueSetExpander {
 
     if (this.limitCount > 0 && this.fullList.length >= this.limitCount && !this.hasExclusions) {
       if (this.count > -1 && this.offset > -1 && this.count + this.offset > 0 && this.fullList.length >= this.count + this.offset) {
+        this.noTotal();
         throw new Issue('information', 'informational', null, null, null, null).setFinished();
       } else {
         if (!srcURL) {
@@ -592,6 +593,7 @@ class ValueSetExpander {
           this.fullList.splice(idx, 1);
         }
         this.map.delete(s);
+        this.decTotal();
       }
     }
   }
@@ -766,7 +768,7 @@ class ValueSetExpander {
         if (cset.concept) {
           this.worker.opContext.log('iterate concepts');
           const cds = new Designations(this.worker.i18n.languageDefinitions);
-          let tcount = 0;
+
           for (const cc of cset.concept) {
             this.worker.deadCheck('processCodes#3');
             cds.clear();
@@ -776,17 +778,18 @@ class ValueSetExpander {
               await this.listDisplaysFromProvider(cds, cs, cctxt.context);
               this.listDisplaysFromIncludeConcept(cds, cc, vsSrc);
               if (filter.passesDesignations(cds) || filter.passes(cc.code)) {
-                tcount++;
                 let ov = Extensions.readString(cc, 'http://hl7.org/fhir/StructureDefinition/itemWeight');
                 if (!ov) {
                   ov = await cs.itemWeight(cctxt.context);
                 }
-                await this.includeCode(cs, null, cs.system(), cs.version(), cc.code, await cs.isAbstract(cctxt.context), await cs.isInactive(cctxt.context), await cs.isDeprecated(cctxt.context), await cs.getStatus(cctxt.context), cds,
+                let added = await this.includeCode(cs, null, cs.system(), cs.version(), cc.code, await cs.isAbstract(cctxt.context), await cs.isInactive(cctxt.context), await cs.isDeprecated(cctxt.context), await cs.getStatus(cctxt.context), cds,
                   await cs.definition(cctxt.context), ov, expansion, valueSets, await cs.extensions(cctxt.context), cc.extension, await cs.properties(cctxt.context), null, excludeInactive, vsSrc.url);
+                if (added) {
+                  this.addToTotal();
+                }
               }
             }
           }
-          this.addToTotal(tcount);
           this.worker.opContext.log('iterate concepts done');
         }
 
@@ -817,10 +820,9 @@ class ValueSetExpander {
           if (await cs.filtersNotClosed(prep)) {
             notClosed.value = true;
           } else if (fset.length === 1 && !excludeInactive && !this.params.activeOnly) {
-            this.addToTotal(await cs.filterSize(prep, fset[0]));
+            // this.addToTotal(await cs.filterSize(prep, fset[0]));
           }
 
-          // let count = 0;
           this.worker.opContext.log('iterate filters');
           while (await cs.filterMore(prep, fset[0])) {
             this.worker.deadCheck('processCodes#5');
@@ -837,16 +839,17 @@ class ValueSetExpander {
                 } else {
                   this.canBeHierarchy = false;
                 }
-                await this.includeCode(cs, parent, await cs.system(), await cs.version(), await cs.code(c), await cs.isAbstract(c), await cs.isInactive(c),
+                let added = await this.includeCode(cs, parent, await cs.system(), await cs.version(), await cs.code(c), await cs.isAbstract(c), await cs.isInactive(c),
                   await cs.isDeprecated(c), await cs.getStatus(c), cds, await cs.definition(c), await cs.itemWeight(c),
                   expansion, null, await cs.extensions(c), null, await cs.properties(c), null, excludeInactive, vsSrc.url);
-
+                if (added) {
+                  this.addToTotal();
+                }
               }
             }
           }
           this.worker.opContext.log('iterate filters done');
         }
-
       }
     }
   }
@@ -1489,9 +1492,16 @@ class ValueSetExpander {
     pdv[valueName] = value;
   }
 
-  addToTotal(t) {
+  addToTotal(t = 1) {
     if (this.total > -1 && this.totalStatus != "off") {
       this.total = this.total + t;
+      this.totalStatus = 'set';
+    }
+  }
+
+  decTotal(t= 1) {
+    if (this.total > -1 && this.totalStatus != "off") {
+      this.total = this.total - t;
       this.totalStatus = 'set';
     }
   }
