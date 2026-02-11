@@ -619,6 +619,12 @@ class Library {
     provider.valueSetProviders.push(...this.valueSetProviders);
     provider.conceptMapProviders.push(...this.conceptMapProviders);
 
+    // bind UCUM common value set
+    let ucum = provider.codeSystemFactories.get("http://unitsofmeasure.org");
+    let vs = await provider.findValueSet(null, "http://hl7.org/fhir/ValueSet/ucum-common", null);
+    if (ucum && vs) {
+      ucum.processCommonUnits(vs);
+    }
     return provider;
   }
 

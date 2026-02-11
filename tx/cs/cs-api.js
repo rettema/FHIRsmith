@@ -11,6 +11,11 @@ const {VersionUtilities} = require("../../library/version-utilities");
 
 class FilterExecutionContext {
   filters = [];
+  forIterate = false;
+
+  constructor(forIterate) {
+    this.forIterate = forIterate;
+  }
 }
 
 class CodeSystemProvider {
@@ -500,7 +505,7 @@ class CodeSystemProvider {
    * @param {boolean} iterate true if the conceptSets that result from this will be iterated, and false if they'll be used to locate a single code
    * @returns {FilterExecutionContext} filter (or null, it no use for this)
    * */
-  async getPrepContext(iterate) { return new FilterExecutionContext(); }
+  async getPrepContext(iterate) { return new FilterExecutionContext(iterate); }
 
   /**
    * executes a text search filter (whatever that means) and returns a FilterConceptSet

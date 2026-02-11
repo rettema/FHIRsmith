@@ -107,7 +107,7 @@ class PackageValueSetProvider extends AbstractValueSetProvider {
     }
 
     // Finally try just the URL
-    if (this.valueSetMap.has(url)) {
+    if (!version && this.valueSetMap.has(url)) {
       return this.valueSetMap.get(url);
     }
 
@@ -325,6 +325,7 @@ class PackageValueSetProvider extends AbstractValueSetProvider {
     // Get all current entries - we'll iterate and modify
     const entries = Array.from(this.valueSetMap.entries());
 
+    // eslint-disable-next-line no-unused-vars
     for (const [key, vs] of entries) {
       // Skip if we've already processed this ValueSet instance
       if (alreadyPrefixed.has(vs)) {

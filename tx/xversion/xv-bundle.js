@@ -1,5 +1,4 @@
 const {VersionUtilities} = require("../../library/version-utilities");
-const { convertResourceToR5 } = require("./xv-resource");
 
 /**
  * Converts input Bundle to R5 format (modifies input object for performance)
@@ -10,6 +9,8 @@ const { convertResourceToR5 } = require("./xv-resource");
  */
 
 function bundleToR5(jsonObj, sourceVersion) {
+  const { convertResourceToR5 } = require("./xv-resource");
+
   if (VersionUtilities.isR5Ver(sourceVersion)) {
     return jsonObj; // No conversion needed
   }

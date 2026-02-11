@@ -7,7 +7,7 @@ const { CodeSystemProvider, FilterExecutionContext, CodeSystemFactoryProvider} =
 const ValueSet = require("../library/valueset");
 const assert = require('assert');
 const {UcumService} = require("../library/ucum-service");
-const {validateArrayParameter} = require("../../library/utilities");
+const {validateArrayParameter, validateParameter, validateOptionalParameter} = require("../../library/utilities");
 const {DesignationUse} = require("../library/designations");
 
 /**
@@ -21,13 +21,13 @@ class UcumContext {
 }
 
 /**
- * Filter context for UCUM canonical unit filters
+ * UCUM canonical unit filters
  */
-class UcumFilterContext {
+class UcumFilter {
   constructor(canonical = '') {
     this.canonical = canonical;
     this.cursor = -1; // Used for iteration
-    this.filters = [];
+    this.codes = undefined;
   }
 }
 
@@ -36,28 +36,18 @@ class UcumFilterContext {
  * Provides validation and lookup for UCUM unit expressions
  */
 class UcumCodeSystemProvider extends CodeSystemProvider {
+  ucumService;
+  commonUnits;
+
   constructor(opContext, supplements, ucumService, commonUnits = null) {
     super(opContext, supplements);
     assert(ucumService != null && ucumService instanceof UcumService, 'ucumService must be a UcumService');
-    assert(!commonUnits || commonUnits instanceof ValueSet, 'if provided, commonUnits must be a ValueSet');
+    validateOptionalParameter(commonUnits, 'commonUnits', Object);
 
     this.ucumService = ucumService;
-    this.commonUnits = commonUnits; // ValueSet for common units
-    this.commonUnitList = null;
-
-    this._setupCommonUnits();
+    this.commonUnits = commonUnits;
   }
 
-  _setupCommonUnits() {
-    if (this.commonUnits) {
-      // Extract concept list from common units ValueSet
-      // This would depend on your ValueSet implementation
-      // For now, assuming it has a getConcepts() method
-      // if (typeof this.commonUnits.getConcepts === 'function') {
-      //   this.commonUnitList = this.commonUnits.getConcepts();
-      // }
-    }
-  }
 
   // ========== Metadata Methods ==========
 
@@ -129,8 +119,8 @@ class UcumCodeSystemProvider extends CodeSystemProvider {
 
     if (this.opContext.langs.isEnglishOrNothing()) {
       // Check for common units display first
-      if (this.commonUnitList) {
-        for (const concept of this.commonUnitList) {
+      if (this.commonUnits) {
+        for (const concept of this.commonUnits.units) {
           if (concept.code === ctxt.code && concept.display) {
             return concept.display.trim();
           }
@@ -191,12 +181,12 @@ class UcumCodeSystemProvider extends CodeSystemProvider {
     displays.addDesignation(true, 'active', 'en', DesignationUse.SYNONYM, analysis);
 
     // Common unit display if available
-    if (this.commonUnitList) {
-      for (const concept of this.commonUnitList) {
+    if (this.commonUnits) {
+      for (const concept of this.commonUnits.units) {
         if (concept.code === ctxt.code && concept.display) {
           const display = concept.display.trim();
           if (display !== ctxt.code) {
-            displays.addDesignation(false, 'active', 'en', DesignationUse.PREFERRED, display);
+            displays.addDesignation(false, 'active', 'en', DesignationUse.SYNONYM, display);
           }
         }
       }
@@ -275,7 +265,6 @@ class UcumCodeSystemProvider extends CodeSystemProvider {
   }
 
   async filter(filterContext, prop, op, value) {
-    
     assert(filterContext && filterContext instanceof FilterExecutionContext, 'filterContext must be a FilterExecutionContext');
     assert(prop != null && typeof prop === 'string', 'prop must be a non-null string');
     assert(op != null && typeof op === 'string', 'op must be a non-null string');
@@ -289,63 +278,62 @@ class UcumCodeSystemProvider extends CodeSystemProvider {
       throw new Error(`Unsupported filter operator for canonical: ${op}`);
     }
 
-    const ucumFilter = new UcumFilterContext(value);
+    const ucumFilter = new UcumFilter(value);
     filterContext.filters.push(ucumFilter);
+    if (filterContext.forIterate) {
+      if (!this.commonUnits) {
+        throw new Error(`Cannot expand a UCUM filter unless the common units value set is available`);
+      }
+      let set = [];
+      for (let concept of this.commonUnits.units) {
+        try {
+          if (concept.canonical === value) {
+            set.push(concept);
+          }
+        } catch (error) {
+          // nothing
+        }
+      }
+      ucumFilter.codes = set;
+    }
   }
 
   async executeFilters(filterContext) {
-    
     assert(filterContext && filterContext instanceof FilterExecutionContext, 'filterContext must be a FilterExecutionContext');
     return filterContext.filters;
   }
 
   async filterSize(filterContext, set) {
-    
     assert(filterContext && filterContext instanceof FilterExecutionContext, 'filterContext must be a FilterExecutionContext');
-    assert(set && set instanceof UcumFilterContext, 'set must be a UcumFilterContext');
+    assert(set && set instanceof UcumFilter, 'set must be a UcumFilter');
 
-    if (!set.canonical && this.commonUnitList) {
-      return this.commonUnitList.length;
-    }
-    throw new Error('UCUM filter sets cannot be sized as they are based on a grammar');
+    return set.codes.length;
   }
 
   async filtersNotClosed(filterContext) {
-    
     assert(filterContext && filterContext instanceof FilterExecutionContext, 'filterContext must be a FilterExecutionContext');
-    return true; // Grammar-based system is not closed
+    return true; // Grammar-based system is never closed
   }
 
   async filterMore(filterContext, set) {
     
     assert(filterContext && filterContext instanceof FilterExecutionContext, 'filterContext must be a FilterExecutionContext');
-    assert(set && set instanceof UcumFilterContext, 'set must be a UcumFilterContext');
+    assert(set && set instanceof UcumFilter, 'set must be a UcumFilter');
 
-    if (!set.canonical && this.commonUnitList) {
-      // Iterating common units
-      set.cursor++;
-      return set.cursor < this.commonUnitList.length;
-    }
-    throw new Error('UCUM filter sets cannot be iterated as they are based on a grammar');
+    set.cursor++;
+    return set.cursor < set.codes.length;
   }
 
   async filterConcept(filterContext, set) {
-    
     assert(filterContext && filterContext instanceof FilterExecutionContext, 'filterContext must be a FilterExecutionContext');
-    assert(set && set instanceof UcumFilterContext, 'set must be a UcumFilterContext');
-
-    if (!set.canonical && this.commonUnitList) {
-      // Return current common unit
-      const concept = this.commonUnitList[set.cursor];
-      return new UcumContext(concept.code);
-    }
-    throw new Error('UCUM filter sets cannot be iterated as they are based on a grammar');
+    assert(set && set instanceof UcumFilter, 'set must be a UcumFilter');
+    return new UcumContext(set.codes[set.cursor].code);
   }
 
   async filterLocate(filterContext, set, code) {
     
     assert(filterContext && filterContext instanceof FilterExecutionContext, 'filterContext must be a FilterExecutionContext');
-    assert(set && set instanceof UcumFilterContext, 'set must be a UcumFilterContext');
+    assert(set && set instanceof UcumFilter, 'set must be a UcumFilter');
     assert(typeof code === 'string', 'code must be non-null string');
 
     // Validate the code first
@@ -356,15 +344,16 @@ class UcumCodeSystemProvider extends CodeSystemProvider {
 
     if (!set.canonical) {
       // Special enumeration case - check if in common units
-      if (this.commonUnitList) {
-        const found = this.commonUnitList.find(concept => concept.code === code);
+      if (this.commonUnits) {
+        const found = this.commonUnits.units.find(concept => concept.code == code);
         if (found) {
           return new UcumContext(code);
         } else {
           return `Code ${code} is not in the common units enumeration`;
         }
+      } else {
+        return new UcumContext(code); // Valid code
       }
-      return new UcumContext(code); // Valid code
     } else {
       // Check canonical units
       try {
@@ -383,7 +372,7 @@ class UcumCodeSystemProvider extends CodeSystemProvider {
   async filterCheck(filterContext, set, concept) {
     
     assert(filterContext && filterContext instanceof FilterExecutionContext, 'filterContext must be a FilterExecutionContext');
-    assert(set && set instanceof UcumFilterContext, 'set must be a UcumFilterContext');
+    assert(set && set instanceof UcumFilter, 'set must be a UcumFilter');
 
     const ctxt = await this.#ensureContext(concept);
 
@@ -459,13 +448,38 @@ class UcumCodeSystemProvider extends CodeSystemProvider {
  * Factory for creating UCUM CodeSystem providers
  */
 class UcumCodeSystemFactory extends CodeSystemFactoryProvider {
-  constructor(i18n, ucumService, commonUnits = null) {
+  constructor(i18n, ucumService, commonUnitVS = null) {
     super(i18n);
     assert(ucumService != null && ucumService instanceof UcumService, 'ucumService must be a UcumService');
-    assert(!commonUnits || commonUnits instanceof ValueSet, 'if provided, commonUnits must be a ValueSet');
+    assert(!commonUnitVS || commonUnitVS instanceof ValueSet, 'if provided, commonUnits must be a ValueSet');
     this.ucumService = ucumService;
-    this.commonUnits = commonUnits;
     this.uses = 0;
+
+    if (commonUnitVS) {
+      this.processCommonUnits(commonUnitVS);
+    }
+  }
+
+  processCommonUnits(vs) {
+    validateParameter(vs, 'vs', ValueSet);
+    if (vs) {
+      this.commonUnits = { units : [] };
+      this.commonUnits.url = vs.url;
+      for (let c of vs.jsonObj.compose.include[0].concept) {
+        let concept = { code: c.code, display : c.display };
+        try {
+          let canonical = this.ucumService.getCanonicalUnits(c.code);
+          if (canonical) {
+            concept.canonical = canonical;
+          }
+        } catch (err) {
+          // nothing
+        }
+        this.commonUnits.units.push(concept);
+      }
+    } else {
+      this.commonUnits = null;
+    }
   }
 
   system() {
@@ -515,5 +529,5 @@ module.exports = {
   UcumCodeSystemProvider,
   UcumCodeSystemFactory,
   UcumContext,
-  UcumFilterContext
+  UcumFilter
 };

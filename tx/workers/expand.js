@@ -335,6 +335,7 @@ class ValueSetExpander {
 
     if (this.limitCount > 0 && this.fullList.length >= this.limitCount && !this.hasExclusions) {
       if (this.count > -1 && this.offset > -1 && this.count + this.offset > 0 && this.fullList.length >= this.count + this.offset) {
+        this.noTotal();
         throw new Issue('information', 'informational', null, null, null, null).setFinished();
       } else {
         if (!srcURL) {
@@ -506,7 +507,7 @@ class ValueSetExpander {
     this.excluded.add(system + '|' + version + '#' + code);
   }
 
-  async checkCanExpandValueset(uri, version) {
+  async checkCanExpandValueSet(uri, version) {
     const vs = await this.worker.findValueSet(uri, version);
     if (vs == null) {
       if (!version && uri.includes('|')) {
@@ -592,6 +593,7 @@ class ValueSetExpander {
           this.fullList.splice(idx, 1);
         }
         this.map.delete(s);
+        this.decTotal();
       }
     }
   }
@@ -603,7 +605,7 @@ class ValueSetExpander {
     for (const u of cset.valueSet || []) {
       this.worker.deadCheck('checkSource');
       const s = this.worker.pinValueSet(u);
-      await this.checkCanExpandValueset(s, '');
+      await this.checkCanExpandValueSet(s, '');
       imp = true;
     }
 
@@ -628,26 +630,25 @@ class ValueSetExpander {
             throw new Issue('error', 'business-rule', null, null, 'The code system definition for ' + cset.system + ' has no content, so this expansion cannot be performed', 'invalid');
           } else if (cs.contentMode() === 'supplement') {
             throw new Issue('error', 'business-rule', null, null, 'The code system definition for ' + cset.system + ' defines a supplement, so this expansion cannot be performed', 'invalid');
-          } else if (this.params.incompleteOK) {
-            this.addParamUri(cs.contentMode(), cs.system + '|' + cs.version);
           } else {
-            throw new Issue('error', 'business-rule', null, null, 'The code system definition for ' + cset.system + ' is a ' + cs.contentMode() + ', so this expansion is not permitted unless the expansion parameter "incomplete-ok" has a value of "true"', 'invalid', 422);
+            this.addParamUri(cs.contentMode(), cs.system + '|' + cs.version);
+            Extensions.addString(exp, "http://hl7.org/fhir/StructureDefinition/valueset-unclosed",
+              "This extension is based on a fragment of the code system " + cset.system);
           }
         }
 
         if (!cset.concept && !cset.filter) {
-          if (cs.specialEnumeration() && this.params.limitedExpansion) {
-            this.checkCanExpandValueSet(cs.specialEnumeration(), '');
+          if (cs.specialEnumeration()) {
+            await this.checkCanExpandValueSet(cs.specialEnumeration(), '');
           } else if (filter.isNull) {
             if (cs.isNotClosed()) {
               if (cs.specialEnumeration()) {
-                throw new Issue("error", "too-costly", null, null, 'The code System "' + cs.system() + '" has a grammar, and cannot be enumerated directly. If an incomplete expansion is requested, a limited enumeration will be returned', null, 400).withDiagnostics(this.worker.opContext.diagnostics());
+                Extensions.addString(exp, "http://hl7.org/fhir/StructureDefinition/valueset-unclosed", 'The code System "' + cs.system() + " has a grammar and so has infinite members. This extension is based on " + cs.specialEnumeration());
               } else {
                 throw new Issue("error", "too-costly", null, null, 'The code System "' + cs.system() + '" has a grammar, and cannot be enumerated directly', null, 400).withDiagnostics(this.worker.opContext.diagnostics());
               }
             }
-
-            if (!imp && this.limitCount > 0 && cs.totalCount > this.limitCount && !this.params.limitedExpansion) {
+            if (!imp && this.limitCount > 0 && cs.totalCount > this.limitCount) {
               throw new Issue("error", "too-costly", null, 'VALUESET_TOO_COSTLY', this.worker.i18n.translate('VALUESET_TOO_COSTLY', this.params.httpLanguages, [srcURL, '>' + this.limitCount]), null, 400).withDiagnostics(this.worker.opContext.diagnostics());
             }
           }
@@ -708,25 +709,25 @@ class ValueSetExpander {
         }
 
         if (!cset.concept && !cset.filter) {
-          if (cs.specialEnumeration() && this.params.limitedExpansion && filters.length === 0) {
+          if (cs.specialEnumeration() && filters.length === 0) {
             this.worker.opContext.log('import special value set ' + cs.specialEnumeration());
             const base = await this.expandValueSet(cs.specialEnumeration(), '', filter, notClosed);
-            Extensions.addBoolean(expansion, 'http://hl7.org/fhir/StructureDefinition/valueset-toocostly', true);
+            Extensions.addString(expansion, "http://hl7.org/fhir/StructureDefinition/valueset-unclosed", 'The code System "' + cs.system() + " has a grammar and so has infinite members. This extension is based on " + cs.specialEnumeration());
             await this.importValueSet(base, expansion, valueSets, 0);
             notClosed.value = true;
           } else if (filter.isNull) {
             this.worker.opContext.log('add whole code system');
             if (cs.isNotClosed()) {
               if (cs.specialEnumeration()) {
-                throw new Issue("error", "too-costly", null, null, 'The code System "' + cs.system() + '" has a grammar, and cannot be enumerated directly. If an incomplete expansion is requested, a limited enumeration will be returned', null, 400).withDiagnostics(this.worker.opContext.diagnostics());
-
+                Extensions.addString(expansion, "http://hl7.org/fhir/StructureDefinition/valueset-unclosed", 'The code System "' + cs.system() + " has a grammar and so has infinite members. This extension is based on " + cs.specialEnumeration());
               } else {
                 throw new Issue("error", "too-costly", null, null, 'The code System "' + cs.system() + '" has a grammar, and cannot be enumerated directly', null, 400).withDiagnostics(this.worker.opContext.diagnostics());
               }
+              notClosed.value = true;
             }
 
             const iter = await cs.iterator(null);
-            if (valueSets.length === 0 && this.limitCount > 0 && (iter && iter.total > this.limitCount) && !this.params.limitedExpansion && this.offset < 0)  {
+            if (valueSets.length === 0 && this.limitCount > 0 && (iter && iter.total > this.limitCount) && this.offset < 0)  {
               throw new Issue("error", "too-costly", null, 'VALUESET_TOO_COSTLY', this.worker.i18n.translate('VALUESET_TOO_COSTLY', this.params.httpLanguages, [vsSrc.vurl, '>' + this.limitCount]), null, 400).withDiagnostics(this.worker.opContext.diagnostics());
 
             }
@@ -767,7 +768,7 @@ class ValueSetExpander {
         if (cset.concept) {
           this.worker.opContext.log('iterate concepts');
           const cds = new Designations(this.worker.i18n.languageDefinitions);
-          let tcount = 0;
+
           for (const cc of cset.concept) {
             this.worker.deadCheck('processCodes#3');
             cds.clear();
@@ -777,17 +778,18 @@ class ValueSetExpander {
               await this.listDisplaysFromProvider(cds, cs, cctxt.context);
               this.listDisplaysFromIncludeConcept(cds, cc, vsSrc);
               if (filter.passesDesignations(cds) || filter.passes(cc.code)) {
-                tcount++;
                 let ov = Extensions.readString(cc, 'http://hl7.org/fhir/StructureDefinition/itemWeight');
                 if (!ov) {
                   ov = await cs.itemWeight(cctxt.context);
                 }
-                await this.includeCode(cs, null, cs.system(), cs.version(), cc.code, await cs.isAbstract(cctxt.context), await cs.isInactive(cctxt.context), await cs.isDeprecated(cctxt.context), await cs.getStatus(cctxt.context), cds,
+                let added = await this.includeCode(cs, null, cs.system(), cs.version(), cc.code, await cs.isAbstract(cctxt.context), await cs.isInactive(cctxt.context), await cs.isDeprecated(cctxt.context), await cs.getStatus(cctxt.context), cds,
                   await cs.definition(cctxt.context), ov, expansion, valueSets, await cs.extensions(cctxt.context), cc.extension, await cs.properties(cctxt.context), null, excludeInactive, vsSrc.url);
+                if (added) {
+                  this.addToTotal();
+                }
               }
             }
           }
-          this.addToTotal(tcount);
           this.worker.opContext.log('iterate concepts done');
         }
 
@@ -800,8 +802,7 @@ class ValueSetExpander {
           }
 
           if (cs.specialEnumeration()) {
-            await cs.specialFilter(prep, true);
-            Extensions.addBoolean(expansion, 'http://hl7.org/fhir/StructureDefinition/valueset-toocostly', true);
+            Extensions.addString(expansion, "http://hl7.org/fhir/StructureDefinition/valueset-unclosed", 'The code System "' + cs.system() + " has a grammar and so has infinite members. This extension is based on " + cs.specialEnumeration());
             notClosed.value = true;
           }
 
@@ -819,10 +820,9 @@ class ValueSetExpander {
           if (await cs.filtersNotClosed(prep)) {
             notClosed.value = true;
           } else if (fset.length === 1 && !excludeInactive && !this.params.activeOnly) {
-            this.addToTotal(await cs.filterSize(prep, fset[0]));
+            // this.addToTotal(await cs.filterSize(prep, fset[0]));
           }
 
-          // let count = 0;
           this.worker.opContext.log('iterate filters');
           while (await cs.filterMore(prep, fset[0])) {
             this.worker.deadCheck('processCodes#5');
@@ -839,16 +839,17 @@ class ValueSetExpander {
                 } else {
                   this.canBeHierarchy = false;
                 }
-                await this.includeCode(cs, parent, await cs.system(), await cs.version(), await cs.code(c), await cs.isAbstract(c), await cs.isInactive(c),
+                let added = await this.includeCode(cs, parent, await cs.system(), await cs.version(), await cs.code(c), await cs.isAbstract(c), await cs.isInactive(c),
                   await cs.isDeprecated(c), await cs.getStatus(c), cds, await cs.definition(c), await cs.itemWeight(c),
                   expansion, null, await cs.extensions(c), null, await cs.properties(c), null, excludeInactive, vsSrc.url);
-
+                if (added) {
+                  this.addToTotal();
+                }
               }
             }
           }
           this.worker.opContext.log('iterate filters done');
         }
-
       }
     }
   }
@@ -927,7 +928,7 @@ class ValueSetExpander {
 
       if (!cset.concept && !cset.filter) {
         this.opContext.log('handle system');
-        if (cs.specialEnumeration() && this.params.limitedExpansion && filters.length === 0) {
+        if (cs.specialEnumeration() && filters.length === 0) {
           const base = await this.expandValueSet(cs.specialEnumeration(), '', filter, notClosed);
           Extensions.addBoolean(expansion, 'http://hl7.org/fhir/StructureDefinition/valueset-toocostly', true);
           this.excludeValueSet(base, expansion, valueSets, 0);
@@ -935,14 +936,14 @@ class ValueSetExpander {
         } else if (filter.isNull) {
           if (cs.isNotClosed(filter)) {
             if (cs.specialEnumeration()) {
-              throw new Issue("error", "too-costly", null, null, 'The code System "' + cs.system() + '" has a grammar, and cannot be enumerated directly. If an incomplete expansion is requested, a limited enumeration will be returned', null, 400).withDiagnostics(this.worker.opContext.diagnostics());
+              Extensions.addString(expansion, "http://hl7.org/fhir/StructureDefinition/valueset-unclosed", 'The code System "' + cs.system() + " has a grammar and so has infinite members. This extension is based on " + cs.specialEnumeration());
             } else {
-              throw new Issue("error", "too-costly", null, null, 'The code System "' + cs.system + '" has a grammar, and cannot be enumerated directly', null, 400).withDiagnostics(this.worker.opContext.diagnostics());
+              throw new Issue("error", "too-costly", null, null, 'The code System "' + cs.system() + '" has a grammar, and cannot be enumerated directly', null, 400).withDiagnostics(this.worker.opContext.diagnostics());
             }
           }
 
           const iter = await cs.getIterator(null);
-          if (valueSets.length === 0 && this.limitCount > 0 && iter.count > this.limitCount && !this.params.limitedExpansion) {
+          if (valueSets.length === 0 && this.limitCount > 0 && iter.count > this.limitCount) {
             throw new Issue("error", "too-costly", null, 'VALUESET_TOO_COSTLY', this.worker.i18n.translate('VALUESET_TOO_COSTLY', this.params.httpLanguages, [vsSrc.url, '>' + this.limitCount]), null, 400).withDiagnostics(this.worker.opContext.diagnostics());
           }
           while (iter.more()) {
@@ -999,8 +1000,7 @@ class ValueSetExpander {
 
         if (cs.specialEnumeration()) {
           await cs.specialFilter(prep, true);
-          Extensions.addBoolean(expansion, 'http://hl7.org/fhir/StructureDefinition/valueset-toocostly', true);
-          notClosed.value = true;
+          Extensions.addString(expansion, "http://hl7.org/fhir/StructureDefinition/valueset-unclosed", 'The code System "' + cs.system() + " has a grammar and so has infinite members. This extension is based on " + cs.specialEnumeration());
         }
 
         for (let fc of cset.filter) {
@@ -1208,9 +1208,6 @@ class ValueSetExpander {
       this.addParamStr(exp, 'filter', filter.filter);
     }
 
-    if (this.params.hasLimitedExpansion) {
-      this.addParamBool(exp, 'limitedExpansion', this.params.limitedExpansion);
-    }
     if (this.params.DisplayLanguages) {
       this.addParamCode(exp, 'displayLanguage', this.params.DisplayLanguages.asString(true));
     } else if (this.params.HTTPLanguages) {
@@ -1275,13 +1272,9 @@ class ValueSetExpander {
           if (this.totalStatus === 'uninitialised') {
             this.totalStatus = 'off';
           } else if (e.toocostly) {
-            if (this.params.limitedExpansion) {
-              Extensions.addBoolean(exp, 'http://hl7.org/fhir/StructureDefinition/valueset-toocostly', 'value', true);
-              if (table != null) {
-                div_.p().style('color: Maroon').tx(e.message);
-              }
-            } else {
-              throw e;
+            Extensions.addBoolean(exp, 'http://hl7.org/fhir/StructureDefinition/valueset-toocostly', 'value', true);
+            if (table != null) {
+              div_.p().style('color: Maroon').tx(e.message);
             }
           } else {
             // nothing- swallow it
@@ -1298,7 +1291,9 @@ class ValueSetExpander {
 
     let list;
     if (notClosed.value) {
+      if (!Extensions.has(exp, 'http://hl7.org/fhir/StructureDefinition/valueset-unclosed')) {
       Extensions.addBoolean(exp, 'http://hl7.org/fhir/StructureDefinition/valueset-unclosed', true);
+      }
       list = this.fullList;
       for (const c of this.fullList) {
         c.contains = undefined;
@@ -1315,7 +1310,7 @@ class ValueSetExpander {
         exp.total = this.fullList.length;
       }
 
-      if (this.canBeHierarchy && (this.count <= 0 || this.count > this.fullList.length)) {
+      if (this.canBeHierarchy && (this.count < 0 || this.count > this.fullList.length)) {
         list = this.rootList;
       } else {
         list = this.fullList;
@@ -1336,7 +1331,7 @@ class ValueSetExpander {
         const c = list[i];
         if (this.map.has(this.keyC(c))) {
           o++;
-          if (o > this.offset && (this.count <= 0 || t < this.count)) {
+          if (o > this.offset && (this.count < 0 || t < this.count)) {
             t++;
             if (!exp.contains) {
               exp.contains = [];
@@ -1497,9 +1492,16 @@ class ValueSetExpander {
     pdv[valueName] = value;
   }
 
-  addToTotal(t) {
+  addToTotal(t = 1) {
     if (this.total > -1 && this.totalStatus != "off") {
       this.total = this.total + t;
+      this.totalStatus = 'set';
+    }
+  }
+
+  decTotal(t= 1) {
+    if (this.total > -1 && this.totalStatus != "off") {
+      this.total = this.total - t;
       this.totalStatus = 'set';
     }
   }
